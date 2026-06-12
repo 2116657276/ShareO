@@ -44,3 +44,4 @@ vendor/
 test_*.sh
 start.sh
 Makefile
+*.docx
