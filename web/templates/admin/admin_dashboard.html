@@ -1,0 +1,173 @@
+{{ template "header" . }}
+{{ $stats := .Stats }}
+<div x-data="adminPanel()">
+    <h4 class="mb-3">管理仪表盘</h4>
+
+    <!-- Compact Stats Row -->
+    <div class="d-flex flex-wrap gap-2 mb-4">
+        <span class="badge fs-6 px-3 py-2 rounded-pill" style="background:var(--cream);color:var(--text)">用户 {{ $stats.TotalUsers }}</span>
+        <span class="badge fs-6 px-3 py-2 rounded-pill" style="background:var(--cream);color:var(--text)">帖子 {{ $stats.TotalPosts }}</span>
+        <span class="badge fs-6 px-3 py-2 rounded-pill" style="background:#FFF0F0;color:var(--like)">待审 {{ $stats.PendingPosts }}</span>
+        <span class="badge fs-6 px-3 py-2 rounded-pill" style="background:var(--cream);color:var(--text)">点赞 {{ $stats.TotalLikes }}</span>
+        <span class="badge fs-6 px-3 py-2 rounded-pill" style="background:var(--cream);color:var(--text)">评论 {{ $stats.TotalComments }}</span>
+        <span class="badge fs-6 px-3 py-2 rounded-pill" style="background:var(--cream);color:var(--text)">封禁 {{ $stats.BannedUsers }}</span>
+    </div>
+
+    <!-- Panel: Post Review -->
+    <div class="card border-0 shadow-sm rounded-4 mb-3">
+        <div class="card-header bg-white border-0 rounded-4 d-flex align-items-center cursor-pointer"
+             @click="toggle('review')" style="cursor:pointer">
+            <i class="bi bi-check2-square me-2" style="color:var(--primary)"></i>
+            <span class="fw-semibold">帖子审核</span>
+            {{ if gt $stats.PendingPosts 0 }}
+            <span class="badge bg-danger ms-2 rounded-pill">{{ $stats.PendingPosts }}</span>
+            {{ end }}
+            <i class="bi ms-auto" :class="open === 'review' ? 'bi-chevron-up' : 'bi-chevron-down'"></i>
+        </div>
+        <div class="card-body pt-0" x-show="open === 'review'" x-collapse>
+            <div id="reviewContent">
+                <div class="text-center py-3 text-muted" x-show="reviewLoading">加载中...</div>
+                <div x-show="!reviewLoading">
+                    <template x-if="reviewPosts.length === 0">
+                        <p class="text-muted text-center py-2">暂无待审核帖子</p>
+                    </template>
+                    <template x-for="p in reviewPosts" :key="p.id">
+                        <div class="d-flex align-items-center gap-3 py-2 border-bottom">
+                            <img :src="p.cover_image" width="56" height="56" style="object-fit:cover;border-radius:8px"
+                                 onerror="this.style.background='var(--cream-dark)'">
+                            <div class="flex-grow-1" style="min-width:0">
+                                <div class="small fw-semibold" x-text="p.user?.username || ''"></div>
+                                <div class="text-muted small text-truncate" x-text="p.content || '无标题'"></div>
+                            </div>
+                            <div class="d-flex gap-1 flex-shrink-0">
+                                <button class="btn btn-sm btn-success" @click="doReview(p.id, 'approved')">通过</button>
+                                <button class="btn btn-sm btn-outline-danger" @click="doReview(p.id, 'rejected', prompt('驳回理由(选填):')||'')">驳回</button>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Panel: User Management -->
+    <div class="card border-0 shadow-sm rounded-4 mb-3">
+        <div class="card-header bg-white border-0 rounded-4 d-flex align-items-center"
+             @click="toggle('users')" style="cursor:pointer">
+            <i class="bi bi-people me-2" style="color:var(--primary)"></i>
+            <span class="fw-semibold">用户管理</span>
+            <i class="bi ms-auto" :class="open === 'users' ? 'bi-chevron-up' : 'bi-chevron-down'"></i>
+        </div>
+        <div class="card-body pt-0" x-show="open === 'users'" x-collapse>
+            <div x-show="usersLoading" class="text-center py-3 text-muted">加载中...</div>
+            <div x-show="!usersLoading" class="table-responsive" style="max-height:400px;overflow-y:auto">
+                <table class="table table-sm table-hover">
+                    <thead><tr><th>ID</th><th>用户名</th><th>角色</th><th>状态</th><th>操作</th></tr></thead>
+                    <tbody>
+                        <template x-for="u in users" :key="u.id">
+                            <tr>
+                                <td x-text="u.id"></td>
+                                <td x-text="u.username"></td>
+                                <td><span class="badge" :class="u.role==='admin'?'bg-danger':'bg-secondary'" x-text="u.role"></span></td>
+                                <td><span class="badge" :class="u.status===1?'bg-success':'bg-dark'" x-text="u.status===1?'正常':'封禁'"></span></td>
+                                <td>
+                                    <button class="btn btn-sm" :class="u.status===1?'btn-outline-danger':'btn-outline-success'"
+                                        x-show="u.role !== 'admin'"
+                                        @click="toggleUser(u.id, u.status===1?0:1)"
+                                        x-text="u.status===1?'封禁':'解封'"></button>
+                                </td>
+                            </tr>
+                        </template>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Panel: System Logs -->
+    <div class="card border-0 shadow-sm rounded-4 mb-3">
+        <div class="card-header bg-white border-0 rounded-4 d-flex align-items-center"
+             @click="toggle('logs')" style="cursor:pointer">
+            <i class="bi bi-journal-text me-2" style="color:var(--primary)"></i>
+            <span class="fw-semibold">系统日志</span>
+            <i class="bi ms-auto" :class="open === 'logs' ? 'bi-chevron-up' : 'bi-chevron-down'"></i>
+        </div>
+        <div class="card-body pt-0" x-show="open === 'logs'" x-collapse>
+            <div x-show="logsLoading" class="text-center py-3 text-muted">加载中...</div>
+            <div x-show="!logsLoading" class="table-responsive" style="max-height:400px;overflow-y:auto">
+                <table class="table table-sm table-hover">
+                    <thead><tr><th>时间</th><th>用户</th><th>操作</th><th>详情</th></tr></thead>
+                    <tbody>
+                        <template x-for="l in logs" :key="l.id">
+                            <tr>
+                                <td class="text-muted small" x-text="new Date(l.created_at).toLocaleString()"></td>
+                                <td x-text="l.user_id ? '#'+l.user_id : '-'"></td>
+                                <td><code x-text="l.action"></code></td>
+                                <td class="text-muted small" x-text="l.detail || ''"></td>
+                            </tr>
+                        </template>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function adminPanel() {
+    return {
+        open: null,
+        reviewPosts: [], reviewLoading: false,
+        users: [], usersLoading: false,
+        logs: [], logsLoading: false,
+
+        async toggle(section) {
+            this.open = this.open === section ? null : section;
+            if (section === 'review' && this.reviewPosts.length === 0) await this.loadReview();
+            if (section === 'users' && this.users.length === 0) await this.loadUsers();
+            if (section === 'logs' && this.logs.length === 0) await this.loadLogs();
+        },
+
+        async loadReview() {
+            this.reviewLoading = true;
+            const r = await fetch('/api/v1/admin/pending-posts?page_size=50');
+            const d = await r.json();
+            if (d.code === 0) this.reviewPosts = d.data.list || [];
+            this.reviewLoading = false;
+        },
+
+        async loadUsers() {
+            this.usersLoading = true;
+            const r = await fetch('/api/v1/admin/users?page=1&page_size=100');
+            const d = await r.json();
+            if (d.code === 0) this.users = d.data.list || [];
+            this.usersLoading = false;
+        },
+
+        async loadLogs() {
+            this.logsLoading = true;
+            const r = await fetch('/api/v1/admin/logs?page=1&page_size=50');
+            const d = await r.json();
+            if (d.code === 0) this.logs = d.data.list || [];
+            this.logsLoading = false;
+        },
+
+        async doReview(id, status, comment = '') {
+            const url = '/api/v1/admin/posts/' + id + '/' + (status === 'approved' ? 'approve' : 'reject');
+            const r = await fetch(url, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({comment})});
+            const d = await r.json();
+            if (d.code === 0) { this.reviewPosts = this.reviewPosts.filter(p => p.id !== id); location.reload(); }
+            else alert(d.message);
+        },
+
+        async toggleUser(id, status) {
+            if (!confirm('确认'+(status===0?'封禁':'解封')+'该用户?')) return;
+            const r = await fetch('/api/v1/admin/users/'+id+'/status', {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({status})});
+            const d = await r.json();
+            if (d.code === 0) location.reload();
+            else alert(d.message);
+        }
+    }
+}
+</script>
+{{ template "footer" . }}

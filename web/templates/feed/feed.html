@@ -1,0 +1,212 @@
+{{ template "header" . }}
+<div class="mb-4" x-data="feedPage({{ .Page }}, {{ .Total }}, '{{ .Sort }}')">
+    <h3>发现美好</h3>
+    <p class="text-muted">浏览社区作品，发现灵感和创意</p>
+
+    <div class="feed-tabs">
+        <a href="/home?sort=latest" class="feed-tab {{ if ne .Sort "hot" }}active{{ end }}">最新</a>
+        <a href="/home?sort=hot" class="feed-tab {{ if eq .Sort "hot" }}active{{ end }}">热门</a>
+    </div>
+
+    <!-- Search Bar -->
+    <div class="search-bar mb-4" x-data="{ q: '' }">
+        <div class="input-group">
+            <span class="input-group-text bg-white border-end-0 rounded-start-pill"><i class="bi bi-search text-muted"></i></span>
+            <input type="text" class="form-control border-start-0 rounded-end-pill" placeholder="搜索作品..."
+                   x-model="q" @keyup.enter="doSearch(q)" style="border-left:0">
+            <button class="btn btn-primary rounded-pill ms-2 px-4" @click="doSearch(q)" x-show="q.length > 0">搜索</button>
+        </div>
+        <div x-show="searchActive" class="mt-2">
+            <small class="text-muted" @click="clearSearch()" style="cursor:pointer">搜索: "<span x-text="searchQuery"></span>" &middot; <span x-text="searchTotal"></span> 条结果 &middot; 点击清除</small>
+        </div>
+    </div>
+
+    {{ if .Error }}<div class="alert alert-danger">{{ .Error }}</div>{{ end }}
+
+    {{ if not .Posts }}
+    <div class="text-center py-5">
+        <div style="font-size:4rem; color: var(--text-muted)">···</div>
+        <h4 class="text-muted mt-3">还没有作品</h4>
+        <p class="text-muted">成为第一个分享作品的人吧</p>
+        <a href="/post/create" class="btn btn-primary btn-lg mt-2"><i class="bi bi-plus-square"></i> 发布作品</a>
+    </div>
+    {{ else }}
+    <div class="feed-grid" id="feedGrid">
+        {{ range $idx, $p := .Posts }}
+        <a href="/post/{{ $p.ID }}" class="text-decoration-none feed-item">
+            <div class="feed-card">
+                <div class="card-img-container skeleton-bg">
+                    <img src="{{ $p.CoverImage }}" alt="cover" decoding="async"
+                         {{ if lt $idx 6 }}loading="eager"{{ else }}loading="lazy"{{ end }}
+                         onload="this.parentElement.classList.remove('skeleton-bg')"
+                         onerror="this.parentElement.classList.remove('skeleton-bg');this.parentElement.classList.add('img-error')">
+                    {{ if gt (len $p.Images) 1 }}<span class="card-img-badge"><i class="bi bi-images"></i> {{ len $p.Images }}</span>{{ end }}
+                </div>
+                <div class="card-body">
+                    <div class="card-title">{{ if $p.Content }}{{ $p.Content }}{{ else }}无标题{{ end }}</div>
+                    <div class="card-meta">
+                        <img src="{{ if $p.User }}{{ $p.User.AvatarURL }}{{ end }}" class="author-avatar" onerror="this.src='/static/img/default-avatar.svg'">
+                        <span>{{ if $p.User }}{{ $p.User.Username }}{{ end }}</span>
+                        <span class="ms-auto"><i class="bi {{ if $p.IsLiked }}bi-heart-fill liked{{ else }}bi-heart{{ end }}"></i> {{ $p.LikeCount }}</span>
+                    </div>
+                </div>
+            </div>
+        </a>
+        {{ end }}
+    </div>
+
+    <!-- Load More -->
+    <div class="text-center mt-4" id="loadMoreArea">
+        <div x-show="loading" class="py-3">
+            <div class="spinner-border text-warning" style="width:2rem;height:2rem"></div>
+            <p class="text-muted mt-2 small">加载中...</p>
+        </div>
+        <button class="btn btn-outline-secondary btn-lg px-5"
+            x-show="(hasMore || searchHasMore) && !loading" @click="loadMore()">加载更多</button>
+        <p class="text-muted mt-3 small" x-show="!hasMore && !searchHasMore && !loading">已展示全部作品</p>
+    </div>
+    {{ end }}
+</div>
+
+<script>
+function renderPostCard(post) {
+    const imgCount = post.images ? post.images.length : 1;
+    const content = post.content || '';
+    const username = post.user ? post.user.username : '';
+    const avatar = post.user && post.user.avatar_url ? post.user.avatar_url : '/static/img/default-avatar.svg';
+    const likeIcon = post.is_liked ? 'bi-heart-fill liked' : 'bi-heart';
+    const badgeHtml = imgCount > 1 ? `<span class="card-img-badge"><i class="bi bi-images"></i> ${imgCount}</span>` : '';
+
+    if (post.is_repost && post.repost_of) {
+        return renderRepostCard(post, likeIcon);
+    }
+
+    return `<a href="/post/${post.id}" class="text-decoration-none feed-item">
+        <div class="feed-card">
+            <div class="card-img-container skeleton-bg">
+                <img src="${post.cover_image}" alt="cover" decoding="async" loading="lazy"
+                     onload="this.parentElement.classList.remove('skeleton-bg')"
+                     onerror="this.parentElement.classList.remove('skeleton-bg');this.parentElement.classList.add('img-error')">
+                ${badgeHtml}
+            </div>
+            <div class="card-body">
+                <div class="card-title">${content || '无标题'}</div>
+                <div class="card-meta">
+                    <img src="${avatar}" class="author-avatar" onerror="this.src='/static/img/default-avatar.svg'">
+                    <span>${username}</span>
+                    <span class="ms-auto"><i class="bi ${likeIcon}"></i> ${post.like_count}</span>
+                </div>
+            </div>
+        </div></a>`;
+}
+
+function renderRepostCard(post, likeIcon) {
+    const orig = post.repost_of;
+    const origUser = orig.user ? orig.user.username : '';
+    const origAvatar = orig.user && orig.user.avatar_url ? orig.user.avatar_url : '/static/img/default-avatar.svg';
+    const username = post.user ? post.user.username : '';
+    const avatar = post.user && post.user.avatar_url ? post.user.avatar_url : '/static/img/default-avatar.svg';
+    const origImgCount = orig.images ? orig.images.length : 0;
+    const repostImgCount = post.images ? post.images.length : 0;
+    const hasBothImages = repostImgCount > 0 && origImgCount > 0;
+
+    let imageSection = '';
+    if (hasBothImages) {
+        imageSection = `<div class="pip-container">
+            <div class="pip-main"><img src="${post.cover_image}" decoding="async" loading="lazy" onload="this.parentElement.classList.remove('skeleton-bg')" onerror="this.parentElement.classList.add('img-error')"></div>
+            <div class="pip-original"><img src="${orig.cover_image}" decoding="async" loading="lazy" onload="this.parentElement.classList.remove('skeleton-bg')" onerror="this.parentElement.classList.add('img-error')"></div>
+        </div>`;
+    } else if (repostImgCount > 0) {
+        imageSection = `<div class="card-img-container skeleton-bg"><img src="${post.cover_image}" decoding="async" loading="lazy" onload="this.parentElement.classList.remove('skeleton-bg')" onerror="this.parentElement.classList.add('img-error')"></div>`;
+    } else if (origImgCount > 0) {
+        imageSection = `<div class="card-img-container skeleton-bg"><img src="${orig.cover_image}" decoding="async" loading="lazy" onload="this.parentElement.classList.remove('skeleton-bg')" onerror="this.parentElement.classList.add('img-error')"></div>`;
+    }
+
+    return `<a href="/post/${post.id}" class="text-decoration-none feed-item">
+        <div class="feed-card repost-card">
+            <div class="repost-header">
+                <img src="${avatar}" class="author-avatar" onerror="this.src='/static/img/default-avatar.svg'">
+                <span class="repost-indicator"><i class="bi bi-repeat"></i> ${username} 转帖</span>
+            </div>
+            ${post.content ? `<div class="repost-main-text">${post.content}</div>` : ''}
+            ${imageSection}
+            <div class="repost-original">
+                <div class="repost-original-header">
+                    <img src="${origAvatar}" class="author-avatar" onerror="this.src='/static/img/default-avatar.svg'">
+                    <span>${origUser}</span>
+                </div>
+                <div class="repost-original-body">${orig.content || '无标题'}</div>
+            </div>
+            <div class="card-body" style="padding:8px 12px">
+                <div class="card-meta">
+                    <span class="ms-auto"><i class="bi ${likeIcon}"></i> ${post.like_count}</span>
+                </div>
+            </div>
+        </div></a>`;
+}
+}
+
+function feedPage(currentPage, totalCount, sort) {
+    const pageSize = 12;
+    const totalPages = Math.ceil(totalCount / pageSize);
+    return {
+        page: currentPage, total: totalCount, tab: sort || 'latest',
+        loading: false, hasMore: currentPage < totalPages && totalCount > 0,
+        searchActive: false, searchQuery: '', searchTotal: 0, searchPage: 1, searchHasMore: false,
+
+        async doSearch(q) {
+            if (!q || q.trim() === '') return this.clearSearch();
+            this.searchActive = true; this.searchQuery = q; this.searchPage = 1;
+            const resp = await fetch(`/api/v1/search?q=${encodeURIComponent(q)}&page=1&page_size=${pageSize}`);
+            const d = await resp.json();
+            if (d.code === 0) {
+                this.searchTotal = d.data.total;
+                this.searchHasMore = d.data.total > pageSize;
+                this.hasMore = false;
+                this.renderCards(d.data.list);
+            }
+        },
+
+        clearSearch() {
+            this.searchActive = false; this.searchQuery = ''; this.searchTotal = 0;
+            this.page = 1;
+            location.href = '/home?sort=' + this.tab;
+        },
+
+        renderCards(list) {
+            const grid = document.getElementById('feedGrid');
+            grid.innerHTML = '';
+            list.forEach(p => { grid.insertAdjacentHTML('beforeend', renderPostCard(p)); });
+        },
+
+        async loadMore() {
+            this.loading = true;
+            let url;
+            if (this.searchActive) {
+                this.searchPage++;
+                url = `/api/v1/search?q=${encodeURIComponent(this.searchQuery)}&page=${this.searchPage}&page_size=${pageSize}`;
+            } else {
+                const nextPage = this.page + 1;
+                url = `/api/v1/feed?sort=${this.tab}&page=${nextPage}&page_size=${pageSize}`;
+            }
+            try {
+                const resp = await fetch(url);
+                const d = await resp.json();
+                if (d.code !== 0 || !d.data.list.length) {
+                    this.hasMore = false; this.searchHasMore = false; this.loading = false; return;
+                }
+                const grid = document.getElementById('feedGrid');
+                d.data.list.forEach(p => { grid.insertAdjacentHTML('beforeend', renderPostCard(p)); });
+                if (this.searchActive) {
+                    this.searchHasMore = this.searchPage * pageSize < this.searchTotal;
+                } else {
+                    this.page++;
+                    this.hasMore = this.page * pageSize < this.total;
+                }
+            } catch (e) { console.error(e); }
+            this.loading = false;
+        }
+    }
+}
+</script>
+{{ template "footer" . }}

@@ -1,0 +1,36 @@
+{{ template "header" . }}
+<h3 class="mb-4"><i class="bi bi-check2-square"></i> 帖子审核</h3>
+<a href="/admin" class="btn btn-outline-secondary btn-sm mb-3">← 返回仪表盘</a>
+{{ if .Posts }}
+<div class="list-group">
+    {{ range .Posts }}
+    <div class="list-group-item">
+        <div class="row align-items-center">
+            <div class="col-auto">
+                <img src="{{ .CoverImage }}" width="80" height="80" style="object-fit:cover;border-radius:8px" onerror="this.style.background='#FFF0DC'">
+            </div>
+            <div class="col">
+                <div class="fw-bold">{{ if .User }}{{ .User.Username }}{{ end }}</div>
+                <div class="text-muted small">{{ .Content }}</div>
+                <small class="text-muted">{{ .CreatedAt.Format "2006-01-02 15:04" }}</small>
+            </div>
+            <div class="col-auto text-end">
+                <a href="/post/{{ .ID }}" target="_blank" class="btn btn-sm btn-outline-secondary mb-1">查看</a>
+                <div class="d-flex gap-1">
+                    <button class="btn btn-sm btn-success" onclick="review({{ .ID }},'approved')"><i class="bi bi-check-lg"></i> 通过</button>
+                    <button class="btn btn-sm btn-outline-danger" onclick="review({{ .ID }},'rejected', prompt('驳回理由(选填):')||'')"><i class="bi bi-x-lg"></i> 驳回</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    {{ end }}
+</div>
+<script>
+function review(id, status, comment) {
+    fetch('/api/v1/admin/posts/'+id+'/'+(status==='approved'?'approve':'reject'), {
+        method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({comment:comment})
+    }).then(r=>r.json()).then(d=>{ if(d.code===0) location.reload(); else alert(d.message); });
+}
+</script>
+{{ else }}<div class="text-center py-5"><div style="font-size:4rem"></div><h4 class="text-muted">没有待审核帖子</h4></div>{{ end }}
+{{ template "footer" . }}

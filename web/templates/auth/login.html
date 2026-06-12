@@ -1,0 +1,53 @@
+{{ template "header" . }}
+<div class="auth-container" x-data="{ mode: 'user' }">
+    <div class="auth-card">
+        <h2 class="text-center mb-1">ShareO</h2>
+        <p class="text-center text-muted mb-4">拍摄与作品管理系统</p>
+
+        <!-- Mode Switch -->
+        <div class="login-mode-switch mb-4">
+            <button type="button" class="mode-btn" :class="{ active: mode === 'user' }" @click="mode = 'user'">
+                用户登录
+            </button>
+            <button type="button" class="mode-btn" :class="{ active: mode === 'admin' }" @click="mode = 'admin'">
+                管理员登录
+            </button>
+        </div>
+
+        {{ if .Error }}
+        <div class="alert alert-danger py-2">{{ .Error }}</div>
+        {{ end }}
+
+        <form method="POST" action="/login" x-show="mode === 'user'">
+            <div class="mb-3">
+                <label class="form-label">用户名</label>
+                <input type="text" name="username" class="form-control" placeholder="请输入用户名" required>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">密码</label>
+                <input type="password" name="password" class="form-control" placeholder="请输入密码" required>
+            </div>
+            <button type="submit" class="btn btn-primary w-100 py-2 mb-3">登 录</button>
+            <div class="text-center">
+                <span class="text-muted">还没有账号？</span>
+                <a href="/register">立即注册</a>
+            </div>
+        </form>
+
+        <form method="POST" action="/login" x-show="mode === 'admin'" x-cloak>
+            <div class="mb-3">
+                <label class="form-label">管理员账号</label>
+                <input type="text" name="username" class="form-control" placeholder="请输入管理员账号" required>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">管理员密码</label>
+                <input type="password" name="password" class="form-control" placeholder="请输入管理员密码" required>
+            </div>
+            <button type="submit" class="btn btn-primary w-100 py-2 mb-3">管理员登录</button>
+            <div class="text-center text-muted">
+                <small>管理员账号由系统预设，请联系系统管理员获取</small>
+            </div>
+        </form>
+    </div>
+</div>
+{{ template "footer" . }}

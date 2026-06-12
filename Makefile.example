@@ -1,0 +1,27 @@
+.PHONY: run build tidy clean
+
+# Set your MySQL password before running:
+#   export MYSQL_PASS="your_password"
+
+run:
+	go run cmd/server/main.go
+
+build:
+	go build -o bin/shareo cmd/server/main.go
+
+migrate:
+	mysql -u root -p"${MYSQL_PASS}" < migrations/001_init.sql
+
+seed:
+	mysql -u root -p"${MYSQL_PASS}" shareo < migrations/002_seed.sql
+	mysql -u root -p"${MYSQL_PASS}" shareo < migrations/003_triggers.sql
+
+reset-db:
+	mysql -u root -p"${MYSQL_PASS}" -e "DROP DATABASE IF EXISTS shareo;"
+	mysql -u root -p"${MYSQL_PASS}" < migrations/001_init.sql
+
+tidy:
+	go mod tidy
+
+clean:
+	rm -rf bin/

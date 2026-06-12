@@ -1,0 +1,28 @@
+{{ template "header" . }}
+<div class="auth-container">
+    <div class="auth-card">
+        <h2 class="text-center mb-3">注册 ShareO</h2>
+        <p class="text-center text-muted mb-4">开启你的摄影之旅</p>
+        {{ if .Error }}<div class="alert alert-danger">{{ .Error }}</div>{{ end }}
+        <form method="POST" action="/register">
+            <div class="mb-3">
+                <label class="form-label">用户名</label>
+                <input type="text" name="username" class="form-control" placeholder="2-50个字符" required autofocus minlength="2" maxlength="50">
+            </div>
+            <div class="mb-3">
+                <label class="form-label">邮箱 <small class="text-muted">(选填)</small></label>
+                <input type="email" name="email" class="form-control" placeholder="your@email.com">
+            </div>
+            <div class="mb-3">
+                <label class="form-label">密码</label>
+                <input type="password" name="password" class="form-control" placeholder="至少6位密码" required minlength="6">
+            </div>
+            <button type="submit" class="btn btn-primary w-100 py-2 mb-3">注 册</button>
+            <div class="text-center">
+                <span class="text-muted">已有账号？</span>
+                <a href="/login">去登录</a>
+            </div>
+        </form>
+    </div>
+</div>
+{{ template "footer" . }}

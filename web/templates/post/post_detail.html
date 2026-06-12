@@ -1,0 +1,184 @@
+{{ template "header" . }}
+{{ $post := .Post }}
+<div class="row" x-data="postDetail({{ $post.ID }}, {{ $post.IsLiked }}, {{ $post.IsFavorited }})" x-init="init()">
+    <div class="col-lg-8 mx-auto">
+        {{ if $post.Images }}
+        <div class="image-carousel mb-3" x-data="{ cur: 0, total: {{ len $post.Images }} }">
+            {{ range $i, $img := $post.Images }}
+            <img src="{{ $img.ImageURL }}" x-show="cur === {{ $i }}" style="display:{{ if eq $i 0 }}block{{ else }}none{{ end }}">
+            {{ end }}
+            {{ if gt (len $post.Images) 1 }}
+            <button @click="cur = (cur - 1 + total) % total" style="position:absolute;left:12px;top:50%;transform:translateY(-50%);background:rgba(0,0,0,0.4);color:#fff;border:none;border-radius:50%;width:38px;height:38px;font-size:22px;cursor:pointer">‹</button>
+            <button @click="cur = (cur + 1) % total" style="position:absolute;right:12px;top:50%;transform:translateY(-50%);background:rgba(0,0,0,0.4);color:#fff;border:none;border-radius:50%;width:38px;height:38px;font-size:22px;cursor:pointer">›</button>
+            <div class="carousel-dots">
+                {{ range $i, $img := $post.Images }}<span class="dot" :class="{ active: cur === {{ $i }} }" @click="cur = {{ $i }}"></span>{{ end }}
+            </div>
+            {{ end }}
+        </div>
+        {{ end }}
+
+        {{ if eq $post.IsRepost 1 }}
+        <div class="repost-badge mb-2"><i class="bi bi-repeat"></i> 转帖</div>
+        {{ end }}
+        <h4 class="mb-2">{{ if $post.Content }}{{ $post.Content }}{{ else }}无标题{{ end }}</h4>
+
+        <div class="d-flex align-items-center mb-3">
+            <img src="{{ if $post.User }}{{ $post.User.AvatarURL }}{{ end }}" class="rounded-circle me-2" width="36" height="36" style="object-fit:cover" onerror="this.src='/static/img/default-avatar.svg'">
+            <div>
+                <a href="/user/{{ $post.UserID }}" class="fw-bold text-dark text-decoration-none">{{ if $post.User }}{{ $post.User.Username }}{{ end }}</a>
+                <br><small class="text-muted">{{ $post.CreatedAt.Format "2006-01-02 15:04" }}</small>
+            </div>
+            <span class="ms-auto text-muted small"><i class="bi bi-eye"></i> {{ $post.ViewCount }}</span>
+        </div>
+
+        {{ if and (eq $post.IsRepost 1) $post.RepostOf }}
+        <div class="repost-original-detail mb-3">
+            <div class="d-flex align-items-center gap-2 mb-2">
+                <img src="{{ if $post.RepostOf.User }}{{ $post.RepostOf.User.AvatarURL }}{{ end }}" class="rounded-circle" width="22" height="22" style="object-fit:cover" onerror="this.src='/static/img/default-avatar.svg'">
+                <small class="text-muted">{{ if $post.RepostOf.User }}{{ $post.RepostOf.User.Username }}{{ end }}</small>
+                <small class="text-muted">{{ $post.RepostOf.CreatedAt.Format "01-02 15:04" }}</small>
+            </div>
+            <p class="mb-2 small">{{ if $post.RepostOf.Content }}{{ $post.RepostOf.Content }}{{ else }}无标题{{ end }}</p>
+            {{ if $post.RepostOf.Images }}
+            <img src="{{ (index $post.RepostOf.Images 0).ImageURL }}" class="rounded-3 mb-2" style="max-width:200px;max-height:200px;object-fit:cover">
+            {{ end }}
+            <a href="/post/{{ $post.RepostOf.ID }}" class="btn btn-outline-secondary btn-sm rounded-pill">查看原文 <i class="bi bi-arrow-right"></i></a>
+        </div>
+        {{ end }}
+
+        <div class="action-bar">
+            <button class="action-btn" :class="{ liked: liked }" @click="toggleLike()" :disabled="busy">
+                <i class="bi" :class="liked ? 'bi-heart-fill' : 'bi-heart'"></i> <span x-text="likeCount">{{ $post.LikeCount }}</span>
+            </button>
+            <button class="action-btn" :class="{ favorited: favorited }" @click="toggleFavorite()" :disabled="busy">
+                <i class="bi" :class="favorited ? 'bi-star-fill' : 'bi-star'"></i> <span>收藏</span>
+            </button>
+            <button class="action-btn" @click="showRepost = true" :disabled="busy">
+                <i class="bi bi-repeat"></i> <span>转帖</span>
+            </button>
+            <a href="#comments" class="action-btn text-decoration-none"><i class="bi bi-chat"></i> <span>{{ $post.CommentCount }}</span></a>
+            {{ if eq .user_id $post.UserID }}
+            <a href="/post/{{ $post.ID }}/edit" class="action-btn text-decoration-none"><i class="bi bi-pencil"></i></a>
+            {{ end }}
+        </div>
+
+        <!-- Repost Modal -->
+        <div class="modal-overlay" x-show="showRepost" @click.self="showRepost = false">
+            <div class="modal-card">
+                <h5 class="mb-3"><i class="bi bi-repeat"></i> 转帖</h5>
+                <div x-show="repostDone" class="alert alert-success">转帖成功！<a :href="'/post/'+repostId">查看</a></div>
+                <textarea class="form-control mb-3" rows="2" placeholder="添加文字（可选）..." maxlength="500" x-model="repostText"></textarea>
+                <div class="upload-zone mb-3" @click="$refs.repostInput.click()" style="padding:20px">
+                    <small>点击添加图片（可选）</small>
+                    <input type="file" x-ref="repostInput" accept="image/*" multiple hidden @change="handleRepostUpload">
+                </div>
+                <div class="upload-preview mb-3" x-show="repostImages.length > 0">
+                    <template x-for="(img, idx) in repostImages" :key="idx">
+                        <div class="preview-item"><img :src="img.preview"><button class="remove-btn" @click="repostImages.splice(idx,1);repostUrls.splice(idx,1)">×</button></div>
+                    </template>
+                </div>
+                <div class="d-flex gap-2">
+                    <button class="btn btn-primary" @click="doRepost()" :disabled="reposting">
+                        <span x-show="!reposting">确认转帖</span>
+                        <span x-show="reposting"><span class="spinner-border spinner-border-sm"></span> 转帖中...</span>
+                    </button>
+                    <button class="btn btn-outline-secondary" @click="showRepost = false">取消</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Comments Section -->
+        <div id="comments" class="mt-4">
+            <h6><i class="bi bi-chat-dots"></i> 评论 (<span x-text="commentTotal">{{ $post.CommentCount }}</span>)</h6>
+            {{ if .user_id }}
+            <form method="POST" action="/post/{{ $post.ID }}/comment" class="mb-3">
+                <div class="input-group"><input type="text" name="content" class="form-control" placeholder="写下评论..." required maxlength="500"><button class="btn btn-primary" type="submit"><i class="bi bi-send"></i></button></div>
+            </form>
+            {{ else }}
+            <div class="text-muted mb-3"><a href="/login">登录</a> 后即可评论</div>
+            {{ end }}
+            <div class="comments-list" id="commentsList">
+                <div x-show="commentsLoading" class="text-center py-3 text-muted"><span class="spinner-border spinner-border-sm me-1"></span>加载评论...</div>
+                <template x-for="c in comments" :key="c.id">
+                    <div class="comment-item">
+                        <img :src="c.user?.avatar_url || '/static/img/default-avatar.svg'" class="comment-avatar" onerror="this.src='/static/img/default-avatar.svg'">
+                        <div class="comment-content">
+                            <div class="comment-author" x-text="c.user?.username || ''"></div>
+                            <div x-text="c.content"></div>
+                            <small class="text-muted" x-text="new Date(c.created_at).toLocaleString()"></small>
+                            <template x-if="c.children && c.children.length">
+                                <div class="comment-reply">
+                                    <template x-for="r in c.children" :key="r.id">
+                                        <div class="comment-item border-0 py-1">
+                                            <img :src="r.user?.avatar_url || '/static/img/default-avatar.svg'" class="comment-avatar" width="26" height="26" onerror="this.src='/static/img/default-avatar.svg'">
+                                            <div class="comment-content"><span class="comment-author" x-text="r.user?.username || ''"></span> <span x-text="r.content"></span></div>
+                                        </div>
+                                    </template>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+                </template>
+                <div x-show="!commentsLoading && comments.length === 0" class="text-muted text-center py-3">暂无评论，来说两句吧</div>
+            </div>
+        </div>
+    </div>
+</div>
+<script>
+function postDetail(postId, initialLiked, initialFavorited) {
+    return {
+        liked: initialLiked, favorited: initialFavorited, likeCount: {{ $post.LikeCount }},
+        busy: false,
+        showRepost: false, repostText: '', repostImages: [], repostUrls: [], reposting: false, repostDone: false, repostId: 0,
+        comments: [], commentsLoading: false, commentTotal: {{ $post.CommentCount }},
+
+        async init() { await this.loadComments(); },
+        async loadComments() {
+            this.commentsLoading = true;
+            const r = await fetch('/api/v1/posts/' + postId + '/comments?page_size=50');
+            const d = await r.json();
+            if (d.code === 0) { this.comments = d.data.list || []; this.commentTotal = d.data.total; }
+            this.commentsLoading = false;
+        },
+        async toggleLike() {
+            if (this.busy) return; this.busy = true;
+            const r = await fetch('/api/v1/posts/' + postId + '/like', { method: 'POST' });
+            const d = await r.json(); if (d.code === 0) { this.liked = d.data.liked; this.likeCount += this.liked ? 1 : -1; }
+            this.busy = false;
+        },
+        async toggleFavorite() {
+            if (this.busy) return; this.busy = true;
+            const r = await fetch('/api/v1/posts/' + postId + '/favorite', { method: 'POST' });
+            const d = await r.json(); if (d.code === 0) this.favorited = d.data.favorited;
+            this.busy = false;
+        },
+        async handleRepostUpload(e) {
+            const files = Array.from(e.target.files);
+            for (const f of files) {
+                if (f.size > 50*1024*1024) { alert(f.name + ' 超过50MB'); continue; }
+                const reader = new FileReader();
+                const preview = await new Promise(r => { reader.onload = e => r(e.target.result); });
+                reader.readAsDataURL(f);
+                this.repostImages.push({preview: preview, name: f.name});
+                const fd = new FormData(); fd.append('file', f);
+                const r = await fetch('/api/v1/upload', {method:'POST', body:fd});
+                const d = await r.json();
+                if (d.code === 0) this.repostUrls.push(d.data.url);
+            }
+            e.target.value = '';
+        },
+        async doRepost() {
+            this.reposting = true;
+            const r = await fetch('/api/v1/posts/' + postId + '/repost', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({text: this.repostText, images: this.repostUrls})
+            });
+            const d = await r.json();
+            if (d.code === 0) { this.repostDone = true; this.repostId = d.data.id; this.reposting = false; }
+            else { alert(d.message); this.reposting = false; }
+        }
+    }
+}
+</script>
+{{ template "footer" . }}

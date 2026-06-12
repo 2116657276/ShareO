@@ -1,0 +1,35 @@
+{{ template "header" . }}
+{{ $user := .ProfileUser }}
+<div class="row" x-data="profileFollow({{ $user.ID }}, {{ .IsFollowing }})"><div class="col-lg-8 mx-auto">
+    <div class="profile-header">
+        <img src="{{ $user.AvatarURL }}" class="profile-avatar" onerror="this.src='/static/img/default-avatar.svg'">
+        <h4 class="mt-3 mb-1">{{ $user.Username }}</h4>
+        {{ if $user.Bio }}<p class="text-muted">{{ $user.Bio }}</p>{{ end }}
+        {{ if not .IsOwnProfile }}
+        <button class="btn mt-2" :class="following ? 'btn-outline-secondary' : 'btn-primary'" @click="toggleFollow()">
+            <i class="bi" :class="following ? 'bi-person-dash' : 'bi-person-plus'"></i>
+            <span x-text="following ? '已关注' : '关注'"></span>
+        </button>
+        {{ else }}
+        <a href="/post/create" class="btn btn-primary mt-2"><i class="bi bi-plus-square"></i> 发布新作品</a>
+        {{ end }}
+    </div>
+    <div class="profile-stats">
+        <div class="stat-item"><div class="stat-num">{{ .PostCount }}</div><div class="stat-label">作品</div></div>
+        <div class="stat-item"><div class="stat-num">{{ .Following }}</div><div class="stat-label">关注</div></div>
+        <div class="stat-item"><div class="stat-num">{{ .Followers }}</div><div class="stat-label">粉丝</div></div>
+    </div>
+    <h5 class="mt-4 mb-3">作品墙</h5>
+    {{ if .Posts }}
+    <div class="user-post-grid">
+        {{ range .Posts }}
+        <a href="/post/{{ .ID }}" class="grid-item">
+            <img src="{{ .CoverImage }}" loading="lazy" onerror="this.style.background='#FFF0DC'">
+            <div class="overlay"><span><i class="bi bi-heart-fill"></i> {{ .LikeCount }}</span><span><i class="bi bi-chat-fill"></i> {{ .CommentCount }}</span></div>
+        </a>
+        {{ end }}
+    </div>
+    {{ else }}<div class="text-center py-4 text-muted">还没有发布作品</div>{{ end }}
+</div></div>
+<script>function profileFollow(uid, init) { return { following: init, async toggleFollow() { const r = await fetch('/api/v1/users/'+uid+'/follow', {method:'POST'}); const d = await r.json(); if(d.code===0) this.following = d.data.following; } } }</script>
+{{ template "footer" . }}

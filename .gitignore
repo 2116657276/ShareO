@@ -1,0 +1,46 @@
+# Binaries
+bin/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test binary
+*.test
+
+# Output of go coverage
+*.out
+
+# Go workspace
+go.work
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# MinIO data
+minio_data/
+
+# Configuration with secrets
+config.yaml
+!config.yaml.example
+
+# Uploaded files / temp
+/tmp/
+*.log
+
+# Dependencies
+vendor/
+
+# Local test scripts (contain credentials)
+test_*.sh
+start.sh
+Makefile

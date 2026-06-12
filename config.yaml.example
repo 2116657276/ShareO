@@ -1,0 +1,40 @@
+server:
+  port: 8080
+  mode: debug  # debug | release | test
+
+database:
+  host: 127.0.0.1
+  port: 3306
+  user: root
+  password: "your_mysql_password"
+  dbname: shareo
+  charset: utf8mb4
+  max_idle_conns: 10
+  max_open_conns: 100
+  conn_max_lifetime: 3600  # seconds
+
+redis:
+  host: 127.0.0.1
+  port: 6379
+  password: ""
+  db: 0
+  pool_size: 10
+
+minio:
+  endpoint: 127.0.0.1:9000
+  access_key: minioadmin
+  secret_key: minioadmin
+  bucket: shareo
+  use_ssl: false
+
+jwt:
+  secret: change-this-to-a-random-string
+  expire_hours: 72
+
+upload:
+  max_size: 52428800  # 50MB
+  allowed_types:
+    - image/jpeg
+    - image/png
+    - image/webp
+    - image/gif

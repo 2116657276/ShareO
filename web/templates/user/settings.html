@@ -1,0 +1,31 @@
+{{ template "header" . }}
+<div class="row"><div class="col-lg-6 mx-auto">
+    <h4 class="mb-4">账号设置</h4>
+    {{ if .Success }}<div class="alert alert-success">{{ .Success }}</div>{{ end }}
+    {{ if .Error }}<div class="alert alert-danger">{{ .Error }}</div>{{ end }}
+    <div class="card border-0 shadow-sm rounded-4 p-4 mb-3">
+        <h6 class="mb-3">个人信息</h6>
+        <form method="POST" action="/settings">
+            <div class="mb-3">
+                <label class="form-label">用户名</label>
+                <input type="text" class="form-control" value="{{ .username }}" disabled>
+                <small class="text-muted">用户名不可修改</small>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">邮箱</label>
+                <input type="email" name="email" class="form-control" value="{{ .Email }}" placeholder="请输入邮箱">
+            </div>
+            <div class="mb-3">
+                <label class="form-label">个人简介</label>
+                <textarea name="bio" class="form-control" rows="3" placeholder="介绍一下自己..." maxlength="200">{{ .Bio }}</textarea>
+                <small class="text-muted">最多200字</small>
+            </div>
+            <button type="submit" class="btn btn-primary"><i class="bi bi-check2"></i> 保存设置</button>
+        </form>
+    </div>
+    <div class="card border-0 shadow-sm rounded-4 p-4">
+        <h6 class="mb-3">安全</h6>
+        <p class="text-muted small">密码修改功能即将上线</p>
+    </div>
+</div></div>
+{{ template "footer" . }}
