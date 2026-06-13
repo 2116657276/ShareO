@@ -142,6 +142,50 @@ Phase 4: 数据清理（管理员API删除测试数据，保留原有帖子）
 - [ ] 普通用户访问 `/admin/` → 403
 - [ ] 未登录访问 `/home` → 401
 
+### 3.9 通知系统 🆕
+- [ ] `GET /api/v1/notifications` (test01) → 含点赞/评论/关注通知列表
+- [ ] `GET /api/v1/notifications?unread_only=true` → 仅未读
+- [ ] `GET /api/v1/notifications/unread-count` → 返回 count 数字
+- [ ] `PUT /api/v1/notifications/1/read` → 标记单条已读
+- [ ] `PUT /api/v1/notifications/read-all` → 全部已读
+- [ ] 验证自通知过滤：点赞自己的帖不产生通知
+- [ ] `GET /notifications` Web页面 → 200
+
+### 3.10 话题系统 🆕
+- [ ] 发帖含 `#风光摄影` → 帖子自动关联话题，Topic 自动创建
+- [ ] 发帖含多个 `#A #B #C` → 三个话题均关联
+- [ ] 编辑帖子修改 #标签 → 话题关联重新解析
+- [ ] `GET /topic/1` (ID) → 话题聚合页，含帖子列表
+- [ ] `GET /topic/风光摄影` (名称) → 同一页面
+- [ ] `GET /topic/不存在话题` → 404 页面
+- [ ] `GET /topic/abc` (纯英文) → 正常
+
+### 3.11 缩略图验证 🆕
+- [ ] 上传图片 → 返回 `urls.thumb`, `urls.medium`, `urls.original` 三个 URL
+- [ ] `HEAD <thumb URL>` → Content-Type: image/jpeg
+- [ ] `GET <medium URL>` → 返回中尺寸图片
+- [ ] 上传小图(<1200px) → medium 复用 original URL
+
+### 3.12 API 限流验证 🆕
+- [ ] 连续调用登录 API 超过 10 次/分钟 → 429 `code=1006`
+- [ ] 等待 60s 后重试 → 恢复正常
+- [ ] 发帖限流 30次/分钟 → 超限返回 429
+- [ ] 上传限流 20次/分钟 → 超限返回 429
+
+### 3.13 业务错误码验证 🆕
+- [ ] 成功响应 → `code=0`, HTTP 200
+- [ ] BadRequest → `code=1001`, HTTP 400
+- [ ] Unauthorized → `code=1002`, HTTP 401
+- [ ] Forbidden → `code=1003`, HTTP 403
+- [ ] NotFound → `code=1004`, HTTP 404
+- [ ] InternalError → `code=1005`, HTTP 500
+- [ ] RateLimit → `code=1006`, HTTP 429
+
+### 3.14 Graceful Shutdown 验证 🆕
+- [ ] 发送 SIGTERM 信号 → 日志输出 "Shutting down server..."
+- [ ] 10s 内完成现有请求处理
+- [ ] 日志输出 "Server exited"
+
 ---
 
 ## Phase 4: 数据清理
@@ -164,8 +208,10 @@ Phase 4: 数据清理（管理员API删除测试数据，保留原有帖子）
 - [ ] `GET /api/v1/admin/stats` 确认帖子数正确
 - [ ] `GET /api/v1/admin/users` 确认用户数（测试用户无需删除）
 
-### 4.4 清理缓存
-- [ ] `redis-cli DEL feed:latest:page1` 或 `redis-cli FLUSHALL`
+### 4.4 清理缓存与通知
+- [ ] `redis-cli DEL feed:latest:page1` 清 Feed 缓存
+- [ ] `redis-cli KEYS "ratelimit:*" | xargs redis-cli DEL` 清限流计数
+- [ ] 测试用户 `PUT /api/v1/notifications/read-all` 标记全部已读（清理未读状态）
 
 ---
 
@@ -184,3 +230,6 @@ Phase 4: 数据清理（管理员API删除测试数据，保留原有帖子）
 5. 每次 API 调用需携带正确的 JWT token
 6. 测试用户从 test01 开始，密码统一为 256500
 7. Phase 4 清理时**仅删除测试创建的帖子**，保留测试前已存在的帖子
+8. API 存在限流（登录 10次/分, 发帖 30次/分, 上传 20次/分），连续快速请求可能返回 429。遇到限流等待 60 秒后重试
+9. JSON `code` 字段: 0=成功, 1001~1006=各类错误（与 HTTP 状态码解耦），API 消费者统一检查 `code==0`
+10. 通知测试：自操作（点赞自己帖/关注自己）不产生通知

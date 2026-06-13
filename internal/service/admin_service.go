@@ -8,20 +8,26 @@ import (
 )
 
 type AdminService struct {
-	postRepo  *repository.PostRepo
-	userRepo  *repository.UserRepo
-	topicRepo *repository.TopicRepo
-	logRepo   *repository.LogRepo
-	feedSvc   *FeedService
+	postRepo    *repository.PostRepo
+	userRepo    *repository.UserRepo
+	topicRepo   *repository.TopicRepo
+	logRepo     *repository.LogRepo
+	likeRepo    *repository.LikeRepo
+	commentRepo *repository.CommentRepo
+	feedSvc     *FeedService
+	notifSvc    *NotificationService
 }
 
 func NewAdminService() *AdminService {
 	return &AdminService{
-		postRepo:  repository.NewPostRepo(),
-		userRepo:  repository.NewUserRepo(),
-		topicRepo: repository.NewTopicRepo(),
-		logRepo:   repository.NewLogRepo(),
-		feedSvc:   NewFeedService(),
+		postRepo:    repository.NewPostRepo(),
+		userRepo:    repository.NewUserRepo(),
+		topicRepo:   repository.NewTopicRepo(),
+		logRepo:     repository.NewLogRepo(),
+		likeRepo:    repository.NewLikeRepo(),
+		commentRepo: repository.NewCommentRepo(),
+		feedSvc:     NewFeedService(),
+		notifSvc:    NewNotificationService(),
 	}
 }
 
@@ -36,22 +42,26 @@ func (s *AdminService) DeletePost(postID int64) error {
 }
 
 func (s *AdminService) ReviewPost(postID int64, status, comment string, reviewerID int64) error {
-	if status != "approved" && status != "rejected" {
+	if status != model.StatusApproved && status != model.StatusRejected {
 		return errors.New("审核状态无效")
 	}
 	err := s.postRepo.UpdateStatus(postID, status, comment, reviewerID)
 	if err == nil {
 		s.feedSvc.InvalidateCache()
+		// Notify the post author about review result
+		if post, findErr := s.postRepo.FindByID(postID); findErr == nil && post != nil {
+			s.notifSvc.Send(post.UserID, reviewerID, model.NotifTypeReview, postID)
+		}
 	}
 	return err
 }
 
 func (s *AdminService) GetPendingPosts(page, pageSize int) ([]model.Post, int64, error) {
 	q := repository.FeedQuery{
-		Status:   "pending",
+		Status:   model.StatusPending,
 		Page:     page,
 		PageSize: pageSize,
-		Sort:     "latest",
+		Sort:     model.SortLatest,
 	}
 	return s.postRepo.Feed(q)
 }
@@ -63,7 +73,7 @@ func (s *AdminService) ListUsers(page, pageSize int, role string, status *int) (
 }
 
 func (s *AdminService) UpdateUserStatus(userID int64, status int8) error {
-	if status != 0 && status != 1 {
+	if status != model.UserStatusBanned && status != model.UserStatusActive {
 		return errors.New("状态值无效")
 	}
 	return s.userRepo.UpdateStatus(userID, status)
@@ -123,13 +133,13 @@ type DashboardStats struct {
 func (s *AdminService) GetDashboardStats() (*DashboardStats, error) {
 	stats := &DashboardStats{}
 
-	repository.DB.Model(&model.User{}).Where("role = 'user'").Count(&stats.TotalUsers)
-	repository.DB.Model(&model.User{}).Where("status = 0").Count(&stats.BannedUsers)
-	repository.DB.Model(&model.Post{}).Where("is_deleted = 0").Count(&stats.TotalPosts)
-	repository.DB.Model(&model.Post{}).Where("status = 'pending' AND is_deleted = 0").Count(&stats.PendingPosts)
-	repository.DB.Model(&model.Like{}).Count(&stats.TotalLikes)
-	repository.DB.Model(&model.Comment{}).Where("is_deleted = 0").Count(&stats.TotalComments)
-	repository.DB.Model(&model.Topic{}).Where("status = 1").Count(&stats.ActiveTopics)
+	stats.TotalUsers = s.userRepo.CountByRole(model.RoleUser)
+	stats.BannedUsers = s.userRepo.CountByStatus(model.UserStatusBanned)
+	stats.TotalPosts = s.postRepo.CountTotal()
+	stats.PendingPosts = s.postRepo.CountByStatus(model.StatusPending)
+	stats.TotalLikes = s.likeRepo.CountTotal()
+	stats.TotalComments = s.commentRepo.CountNonDeleted()
+	stats.ActiveTopics = s.topicRepo.CountByStatus(model.TopicStatusActive)
 
 	return stats, nil
 }

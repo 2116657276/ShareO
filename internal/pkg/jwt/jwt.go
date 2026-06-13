@@ -25,6 +25,9 @@ func Init(secret string, expireHours int) {
 }
 
 func GenerateToken(userID int64, username, role string) (string, error) {
+	if len(secretKey) == 0 {
+		return "", errors.New("jwt: secret key not initialized")
+	}
 	claims := Claims{
 		UserID:   userID,
 		Username: username,
@@ -41,6 +44,9 @@ func GenerateToken(userID int64, username, role string) (string, error) {
 }
 
 func ParseToken(tokenString string) (*Claims, error) {
+	if len(secretKey) == 0 {
+		return nil, errors.New("jwt: secret key not initialized")
+	}
 	token, err := jwt.ParseWithClaims(tokenString, &Claims{}, func(token *jwt.Token) (interface{}, error) {
 		return secretKey, nil
 	})

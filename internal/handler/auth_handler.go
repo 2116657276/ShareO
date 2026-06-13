@@ -2,7 +2,6 @@ package handler
 
 import (
 	"net/http"
-	"strconv"
 
 	"github.com/gin-gonic/gin"
 	"github.com/zhoujianlin/ShareO/internal/pkg/response"
@@ -27,7 +26,14 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		return
 	}
 	// Set cookie for web
-	c.SetCookie("token", resp.Token, 3600*72, "/", "", false, true)
+	http.SetCookie(c.Writer, &http.Cookie{
+			Name:     "token",
+			Value:    resp.Token,
+			Path:     "/",
+			MaxAge:   3600 * 72,
+			HttpOnly: true,
+			SameSite: http.SameSiteLaxMode,
+		})
 	response.Success(c, resp)
 }
 
@@ -42,12 +48,26 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		response.BadRequest(c, err.Error())
 		return
 	}
-	c.SetCookie("token", resp.Token, 3600*72, "/", "", false, true)
+	http.SetCookie(c.Writer, &http.Cookie{
+			Name:     "token",
+			Value:    resp.Token,
+			Path:     "/",
+			MaxAge:   3600 * 72,
+			HttpOnly: true,
+			SameSite: http.SameSiteLaxMode,
+		})
 	response.Success(c, resp)
 }
 
 func (h *AuthHandler) Logout(c *gin.Context) {
-	c.SetCookie("token", "", -1, "/", "", false, true)
+	http.SetCookie(c.Writer, &http.Cookie{
+		Name:     "token",
+		Value:    "",
+		Path:     "/",
+		MaxAge:   -1,
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+	})
 	response.Success(c, nil)
 }
 
@@ -98,7 +118,14 @@ func (h *AuthHandler) WebLogin(c *gin.Context) {
 		c.HTML(http.StatusOK, "login.html", userData(c, gin.H{"title": "登录 - ShareO", "Error": err.Error()}))
 		return
 	}
-	c.SetCookie("token", resp.Token, 3600*72, "/", "", false, true)
+	http.SetCookie(c.Writer, &http.Cookie{
+			Name:     "token",
+			Value:    resp.Token,
+			Path:     "/",
+			MaxAge:   3600 * 72,
+			HttpOnly: true,
+			SameSite: http.SameSiteLaxMode,
+		})
 	if resp.User.Role == "admin" {
 		c.Redirect(http.StatusFound, "/admin")
 	} else {
@@ -115,7 +142,14 @@ func (h *AuthHandler) WebRegister(c *gin.Context) {
 		c.HTML(http.StatusOK, "register.html", userData(c, gin.H{"title": "注册 - ShareO", "Error": err.Error()}))
 		return
 	}
-	c.SetCookie("token", resp.Token, 3600*72, "/", "", false, true)
+	http.SetCookie(c.Writer, &http.Cookie{
+			Name:     "token",
+			Value:    resp.Token,
+			Path:     "/",
+			MaxAge:   3600 * 72,
+			HttpOnly: true,
+			SameSite: http.SameSiteLaxMode,
+		})
 	c.Redirect(http.StatusFound, "/home")
 }
 
@@ -133,7 +167,8 @@ func (h *AuthHandler) WebSettings(c *gin.Context) {
 	userID := c.GetInt64("user_id")
 	email := c.PostForm("email")
 	bio := c.PostForm("bio")
-	if err := h.svc.UpdateProfile(userID, "", bio, email); err != nil {
+	avatarURL := c.PostForm("avatar_url")
+	if err := h.svc.UpdateProfile(userID, avatarURL, bio, email); err != nil {
 		c.HTML(http.StatusOK, "settings.html", userData(c, gin.H{
 			"title": "设置 - ShareO",
 			"Email": email, "Bio": bio,
@@ -152,11 +187,14 @@ func (h *AuthHandler) WebSettings(c *gin.Context) {
 }
 
 func (h *AuthHandler) WebLogout(c *gin.Context) {
-	c.SetCookie("token", "", -1, "/", "", false, true)
+	http.SetCookie(c.Writer, &http.Cookie{
+		Name:     "token",
+		Value:    "",
+		Path:     "/",
+		MaxAge:   -1,
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+	})
 	c.Redirect(http.StatusFound, "/login")
 }
 
-func getInt64Param(c *gin.Context, key string) int64 {
-	v, _ := strconv.ParseInt(c.Param(key), 10, 64)
-	return v
-}

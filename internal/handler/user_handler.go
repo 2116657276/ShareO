@@ -5,60 +5,38 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
-	"github.com/zhoujianlin/ShareO/internal/repository"
+	"github.com/zhoujianlin/ShareO/internal/service"
 )
 
 type UserHandler struct {
-	userRepo    *repository.UserRepo
-	followRepo  *repository.FollowRepo
-	postRepo    *repository.PostRepo
+	svc *service.UserService
 }
 
 func NewUserHandler() *UserHandler {
-	return &UserHandler{
-		userRepo:   repository.NewUserRepo(),
-		followRepo: repository.NewFollowRepo(),
-		postRepo:   repository.NewPostRepo(),
-	}
+	return &UserHandler{svc: service.NewUserService()}
 }
 
 func (h *UserHandler) ProfilePage(c *gin.Context) {
-	userID, _ := strconv.ParseInt(c.Param("id"), 10, 64)
-	user, err := h.userRepo.FindByID(userID)
-	if err != nil || user == nil {
+	profileUserID, _ := strconv.ParseInt(c.Param("id"), 10, 64)
+	currentUserID := c.GetInt64("user_id")
+
+	data, err := h.svc.GetProfile(profileUserID, currentUserID)
+	if err != nil || data.User == nil {
 		c.HTML(http.StatusNotFound, "404.html", gin.H{"title": "用户不存在"})
 		return
 	}
 
-	currentUserID := c.GetInt64("user_id")
-	isOwnProfile := currentUserID == userID
-	isFollowing := false
-	if currentUserID > 0 && !isOwnProfile {
-		isFollowing = h.followRepo.IsFollowing(currentUserID, userID)
-	}
-
-	following, followers := h.userRepo.GetFollowCounts(userID)
-	postCount := h.postRepo.CountByUser(userID)
-
-	// Get user's posts
-	q := repository.FeedQuery{
-		UserID:   &userID,
-		Status:   "approved",
-		Sort:     "latest",
-		Page:     1,
-		PageSize: 12,
-	}
-	posts, total, _ := h.postRepo.Feed(q)
+	isOwnProfile := currentUserID == profileUserID
 
 	c.HTML(http.StatusOK, "user_profile.html", userData(c, gin.H{
-		"title":        user.Username + " - ShareO",
-		"ProfileUser":  user,
-		"Posts":        posts,
-		"TotalPosts":   total,
-		"PostCount":    postCount,
-		"Following":    following,
-		"Followers":    followers,
+		"title":        data.User.Username + " - ShareO",
+		"ProfileUser":  data.User,
+		"Posts":        data.Posts,
+		"TotalPosts":   data.TotalPosts,
+		"PostCount":    data.PostCount,
+		"Following":    data.Following,
+		"Followers":    data.Followers,
 		"IsOwnProfile": isOwnProfile,
-		"IsFollowing":  isFollowing,
-})) 
+		"IsFollowing":  data.IsFollowing,
+	}))
 }

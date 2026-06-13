@@ -1,10 +1,18 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"html/template"
 	"log"
 	"net/http"
+	"os"
+	"os/signal"
+	"path/filepath"
+	"regexp"
+	"strings"
+	"syscall"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/zhoujianlin/ShareO/internal/config"
@@ -12,6 +20,12 @@ import (
 	"github.com/zhoujianlin/ShareO/internal/pkg/upload"
 	"github.com/zhoujianlin/ShareO/internal/repository"
 	"github.com/zhoujianlin/ShareO/internal/router"
+)
+
+var hashtagLinkRE = regexp.MustCompile(`#([\p{L}\p{N}_]+)`)
+var (
+	mediumToThumbRE   = regexp.MustCompile(`/posts/medium/`)
+	anyToMediumRE     = regexp.MustCompile(`/posts/(original|thumb)/`)
 )
 
 func main() {
@@ -25,7 +39,7 @@ func main() {
 	gin.SetMode(cfg.Server.Mode)
 
 	// Init MySQL
-	if err := repository.InitDB(cfg.Database); err != nil {
+	if err := repository.InitDB(cfg.Database, cfg.Server.Mode); err != nil {
 		log.Fatalf("Failed to init MySQL: %v", err)
 	}
 
@@ -60,10 +74,29 @@ func main() {
 			}
 			return b
 		},
+		"thumbURL": func(url string) string {
+			return mediumToThumbRE.ReplaceAllString(url, "/posts/thumb/")
+		},
+		"mediumURL": func(url string) string {
+			// Ensure URL uses medium size: /posts/original/ → /posts/medium/, /posts/thumb/ → /posts/medium/
+			return anyToMediumRE.ReplaceAllString(url, "/posts/medium/")
+		},
+		"renderHashtags": func(content string) template.HTML {
+			safe := hashtagLinkRE.ReplaceAllStringFunc(content, func(match string) string {
+				name := strings.TrimPrefix(match, "#")
+				return `<a href="/topic/` + template.HTMLEscapeString(name) + `" class="hashtag-link">#` + template.HTMLEscapeString(name) + `</a>`
+			})
+			return template.HTML(safe)
+		},
 	})
 
+	// Collect all HTML templates (Go filepath.Glob does not support **).
+	rootFiles, _ := filepath.Glob("web/templates/*.html")
+	subFiles, _ := filepath.Glob("web/templates/*/*.html")
+	allTemplates := append(rootFiles, subFiles...)
+
 	// Reload templates after setting func map
-	r.LoadHTMLGlob("web/templates/**/*.html")
+	r.LoadHTMLFiles(allTemplates...)
 
 	// Health check
 	r.GET("/healthz", func(c *gin.Context) {
@@ -85,7 +118,27 @@ func main() {
 	fmt.Printf("  用户:    注册后登录\n")
 	fmt.Println("========================================")
 
-	if err := r.Run(addr); err != nil {
-		log.Fatalf("Server failed: %v", err)
+	// Graceful shutdown with signal handling
+	srv := &http.Server{
+		Addr:    addr,
+		Handler: r,
 	}
+
+	go func() {
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("Server failed: %v", err)
+		}
+	}()
+
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	<-quit
+	log.Println("Shutting down server...")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := srv.Shutdown(ctx); err != nil {
+		log.Fatalf("Server forced to shutdown: %v", err)
+	}
+	log.Println("Server exited")
 }

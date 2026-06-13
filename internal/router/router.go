@@ -2,6 +2,7 @@ package router
 
 import (
 	"net/http"
+	"time"
 
 	"github.com/gin-contrib/gzip"
 	"github.com/gin-gonic/gin"
@@ -24,6 +25,8 @@ func SetupRouter() *gin.Engine {
 	adminH := handler.NewAdminHandler()
 	userH := handler.NewUserHandler()
 	uploadH := handler.NewUploadHandler()
+	notifH := handler.NewNotificationHandler()
+	topicH := handler.NewTopicHandler()
 
 	// === 首页：根据登录态分流 ===
 	// 未登录 → 登录页(区分admin/user入口)
@@ -50,8 +53,10 @@ func SetupRouter() *gin.Engine {
 	// === Public API ===
 	api := r.Group("/api/v1")
 	{
-		api.POST("/auth/register", authH.Register)
-		api.POST("/auth/login", authH.Login)
+		// Rate limit auth endpoints: 10 requests per minute per IP
+		authLimiter := middleware.RateLimit(10, 1*time.Minute)
+		api.POST("/auth/register", authLimiter, authH.Register)
+		api.POST("/auth/login", authLimiter, authH.Login)
 
 		pub := api.Group("")
 		pub.Use(middleware.OptionalAuth())
@@ -69,20 +74,31 @@ func SetupRouter() *gin.Engine {
 	authAPI := api.Group("")
 	authAPI.Use(middleware.AuthRequired())
 	{
+		// Rate limit write operations
+		postLimiter := middleware.RateLimit(30, 1*time.Minute)
+		uploadLimiter := middleware.RateLimit(20, 1*time.Minute)
+
 		authAPI.GET("/auth/me", authH.Me)
 		authAPI.POST("/auth/logout", authH.Logout)
 		authAPI.PUT("/auth/profile", authH.UpdateProfile)
-		authAPI.POST("/posts", postH.Create)
+		authAPI.POST("/posts", postLimiter, postH.Create)
 		authAPI.PUT("/posts/:id", postH.Update)
 		authAPI.DELETE("/posts/:id", postH.Delete)
 		authAPI.POST("/posts/:id/repost", postH.Repost)
 		authAPI.POST("/posts/:id/like", socialH.ToggleLike)
 		authAPI.POST("/posts/:id/favorite", socialH.ToggleFavorite)
 		authAPI.GET("/favorites", socialH.GetFavorites)
+		authAPI.GET("/likes", socialH.GetLikes)
 		authAPI.POST("/posts/:id/comments", socialH.CreateComment)
 		authAPI.DELETE("/comments/:cid", socialH.DeleteComment)
 		authAPI.POST("/users/:id/follow", socialH.ToggleFollow)
-		authAPI.POST("/upload", uploadH.UploadImage)
+		authAPI.POST("/upload", uploadLimiter, uploadH.UploadImage)
+
+		// Notifications
+		authAPI.GET("/notifications", notifH.List)
+		authAPI.PUT("/notifications/:id/read", notifH.MarkRead)
+		authAPI.PUT("/notifications/read-all", notifH.MarkAllRead)
+		authAPI.GET("/notifications/unread-count", notifH.UnreadCount)
 	}
 
 	api.Any("/images/*objectName", uploadH.ServeImage)
@@ -121,6 +137,8 @@ func SetupRouter() *gin.Engine {
 		needLogin.GET("/user/:id", userH.ProfilePage)
 		needLogin.GET("/settings", authH.SettingsPage)
 		needLogin.POST("/settings", authH.WebSettings)
+		needLogin.GET("/notifications", notifH.NotificationsPage)
+		needLogin.GET("/topic/:id", topicH.TopicPage)
 		needLogin.GET("/logout", authH.WebLogout)
 	}
 

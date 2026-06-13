@@ -61,8 +61,8 @@ func (s *AuthService) Register(req RegisterReq) (*AuthResp, error) {
 		Username:     req.Username,
 		PasswordHash: string(hashed),
 		Email:        req.Email,
-		Role:         "user",
-		Status:       1,
+		Role:         model.RoleUser,
+		Status:       model.UserStatusActive,
 	}
 	if err := s.userRepo.Create(user); err != nil {
 		return nil, err
@@ -77,6 +77,7 @@ func (s *AuthService) Register(req RegisterReq) (*AuthResp, error) {
 }
 
 func (s *AuthService) Login(req LoginReq) (*AuthResp, error) {
+	req.Username = strings.TrimSpace(req.Username)
 	user, err := s.userRepo.FindByUsername(req.Username)
 	if err != nil {
 		return nil, err
@@ -118,5 +119,5 @@ func (s *AuthService) UpdateProfile(userID int64, avatarURL, bio, email string) 
 	if len(updates) == 0 {
 		return nil
 	}
-	return repository.DB.Model(&model.User{}).Where("id = ?", userID).Updates(updates).Error
+	return s.userRepo.UpdateFields(userID, updates)
 }

@@ -5,7 +5,7 @@
         {{ if $post.Images }}
         <div class="image-carousel mb-3" x-data="{ cur: 0, total: {{ len $post.Images }} }">
             {{ range $i, $img := $post.Images }}
-            <img src="{{ $img.ImageURL }}" x-show="cur === {{ $i }}" style="display:{{ if eq $i 0 }}block{{ else }}none{{ end }}">
+            <img src="{{ mediumURL $img.ImageURL }}" x-show="cur === {{ $i }}" style="display:{{ if eq $i 0 }}block{{ else }}none{{ end }}">
             {{ end }}
             {{ if gt (len $post.Images) 1 }}
             <button @click="cur = (cur - 1 + total) % total" style="position:absolute;left:12px;top:50%;transform:translateY(-50%);background:rgba(0,0,0,0.4);color:#fff;border:none;border-radius:50%;width:38px;height:38px;font-size:22px;cursor:pointer">‹</button>
@@ -20,7 +20,7 @@
         {{ if eq $post.IsRepost 1 }}
         <div class="repost-badge mb-2"><i class="bi bi-repeat"></i> 转帖</div>
         {{ end }}
-        <h4 class="mb-2">{{ if $post.Content }}{{ $post.Content }}{{ else }}无标题{{ end }}</h4>
+        <h4 class="mb-2">{{ if $post.Content }}{{ renderHashtags $post.Content }}{{ else }}无标题{{ end }}</h4>
 
         <div class="d-flex align-items-center mb-3">
             <img src="{{ if $post.User }}{{ $post.User.AvatarURL }}{{ end }}" class="rounded-circle me-2" width="36" height="36" style="object-fit:cover" onerror="this.src='/static/img/default-avatar.svg'">
@@ -38,9 +38,9 @@
                 <small class="text-muted">{{ if $post.RepostOf.User }}{{ $post.RepostOf.User.Username }}{{ end }}</small>
                 <small class="text-muted">{{ $post.RepostOf.CreatedAt.Format "01-02 15:04" }}</small>
             </div>
-            <p class="mb-2 small">{{ if $post.RepostOf.Content }}{{ $post.RepostOf.Content }}{{ else }}无标题{{ end }}</p>
+            <p class="mb-2 small">{{ if $post.RepostOf.Content }}{{ renderHashtags $post.RepostOf.Content }}{{ else }}无标题{{ end }}</p>
             {{ if $post.RepostOf.Images }}
-            <img src="{{ (index $post.RepostOf.Images 0).ImageURL }}" class="rounded-3 mb-2" style="max-width:200px;max-height:200px;object-fit:cover">
+            <img src="{{ mediumURL (index $post.RepostOf.Images 0).ImageURL }}" class="rounded-3 mb-2" style="max-width:200px;max-height:200px;object-fit:cover">
             {{ end }}
             <a href="/post/{{ $post.RepostOf.ID }}" class="btn btn-outline-secondary btn-sm rounded-pill">查看原文 <i class="bi bi-arrow-right"></i></a>
         </div>

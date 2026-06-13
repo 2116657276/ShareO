@@ -3,57 +3,68 @@
 <div x-data="adminPanel()">
     <h4 class="mb-3">管理仪表盘</h4>
 
-    <!-- Compact Stats Row -->
-    <div class="d-flex flex-wrap gap-2 mb-4">
-        <span class="badge fs-6 px-3 py-2 rounded-pill" style="background:var(--cream);color:var(--text)">用户 {{ $stats.TotalUsers }}</span>
-        <span class="badge fs-6 px-3 py-2 rounded-pill" style="background:var(--cream);color:var(--text)">帖子 {{ $stats.TotalPosts }}</span>
-        <span class="badge fs-6 px-3 py-2 rounded-pill" style="background:#FFF0F0;color:var(--like)">待审 {{ $stats.PendingPosts }}</span>
-        <span class="badge fs-6 px-3 py-2 rounded-pill" style="background:var(--cream);color:var(--text)">点赞 {{ $stats.TotalLikes }}</span>
-        <span class="badge fs-6 px-3 py-2 rounded-pill" style="background:var(--cream);color:var(--text)">评论 {{ $stats.TotalComments }}</span>
-        <span class="badge fs-6 px-3 py-2 rounded-pill" style="background:var(--cream);color:var(--text)">封禁 {{ $stats.BannedUsers }}</span>
+    <!-- Stats Grid: equal-width cards -->
+    <div class="admin-stats-grid">
+        <div class="admin-stat-card">
+            <div class="admin-stat-icon" style="background:#E8F5E9;color:#4CAF50"><i class="bi bi-people-fill"></i></div>
+            <div class="admin-stat-body"><div class="admin-stat-num">{{ $stats.TotalUsers }}</div><div class="admin-stat-label">用户总数</div></div>
+        </div>
+        <div class="admin-stat-card">
+            <div class="admin-stat-icon" style="background:#E3F2FD;color:#2196F3"><i class="bi bi-file-earmark-text"></i></div>
+            <div class="admin-stat-body"><div class="admin-stat-num">{{ $stats.TotalPosts }}</div><div class="admin-stat-label">帖子总数</div></div>
+        </div>
+        <div class="admin-stat-card">
+            <div class="admin-stat-icon" style="background:#FFF3E0;color:#FF9800"><i class="bi bi-hourglass-split"></i></div>
+            <div class="admin-stat-body"><div class="admin-stat-num">{{ $stats.PendingPosts }}</div><div class="admin-stat-label">待审核</div></div>
+        </div>
+        <div class="admin-stat-card">
+            <div class="admin-stat-icon" style="background:#FCE4EC;color:#E91E63"><i class="bi bi-heart-fill"></i></div>
+            <div class="admin-stat-body"><div class="admin-stat-num">{{ $stats.TotalLikes }}</div><div class="admin-stat-label">点赞总数</div></div>
+        </div>
+        <div class="admin-stat-card">
+            <div class="admin-stat-icon" style="background:#EDE7F6;color:#7C4DFF"><i class="bi bi-chat-dots-fill"></i></div>
+            <div class="admin-stat-body"><div class="admin-stat-num">{{ $stats.TotalComments }}</div><div class="admin-stat-label">评论总数</div></div>
+        </div>
+        <div class="admin-stat-card">
+            <div class="admin-stat-icon" style="background:#FBE9E7;color:#E64A19"><i class="bi bi-slash-circle"></i></div>
+            <div class="admin-stat-body"><div class="admin-stat-num">{{ $stats.BannedUsers }}</div><div class="admin-stat-label">封禁用户</div></div>
+        </div>
     </div>
 
     <!-- Panel: Post Review -->
     <div class="card border-0 shadow-sm rounded-4 mb-3">
-        <div class="card-header bg-white border-0 rounded-4 d-flex align-items-center cursor-pointer"
-             @click="toggle('review')" style="cursor:pointer">
+        <div class="card-header bg-white border-0 rounded-4 d-flex align-items-center" @click="toggle('review')" style="cursor:pointer">
             <i class="bi bi-check2-square me-2" style="color:var(--primary)"></i>
             <span class="fw-semibold">帖子审核</span>
-            {{ if gt $stats.PendingPosts 0 }}
-            <span class="badge bg-danger ms-2 rounded-pill">{{ $stats.PendingPosts }}</span>
-            {{ end }}
+            {{ if gt $stats.PendingPosts 0 }}<span class="badge bg-danger ms-2 rounded-pill">{{ $stats.PendingPosts }}</span>{{ end }}
             <i class="bi ms-auto" :class="open === 'review' ? 'bi-chevron-up' : 'bi-chevron-down'"></i>
         </div>
         <div class="card-body pt-0" x-show="open === 'review'" x-collapse>
-            <div id="reviewContent">
-                <div class="text-center py-3 text-muted" x-show="reviewLoading">加载中...</div>
-                <div x-show="!reviewLoading">
-                    <template x-if="reviewPosts.length === 0">
-                        <p class="text-muted text-center py-2">暂无待审核帖子</p>
-                    </template>
-                    <template x-for="p in reviewPosts" :key="p.id">
-                        <div class="d-flex align-items-center gap-3 py-2 border-bottom">
-                            <img :src="p.cover_image" width="56" height="56" style="object-fit:cover;border-radius:8px"
-                                 onerror="this.style.background='var(--cream-dark)'">
-                            <div class="flex-grow-1" style="min-width:0">
-                                <div class="small fw-semibold" x-text="p.user?.username || ''"></div>
-                                <div class="text-muted small text-truncate" x-text="p.content || '无标题'"></div>
-                            </div>
-                            <div class="d-flex gap-1 flex-shrink-0">
-                                <button class="btn btn-sm btn-success" @click="doReview(p.id, 'approved')">通过</button>
-                                <button class="btn btn-sm btn-outline-danger" @click="doReview(p.id, 'rejected', prompt('驳回理由(选填):')||'')">驳回</button>
-                            </div>
+            <div x-show="reviewLoading" class="text-center py-3 text-muted">加载中...</div>
+            <div x-show="!reviewLoading">
+                <template x-if="reviewPosts.length === 0">
+                    <p class="text-muted text-center py-2">暂无待审核帖子</p>
+                </template>
+                <template x-for="p in reviewPosts" :key="p.id">
+                    <div class="d-flex align-items-center gap-3 py-2 border-bottom">
+                        <img :src="p.cover_image" width="56" height="56" style="object-fit:cover;border-radius:8px" onerror="this.style.background='var(--cream-dark)'">
+                        <div class="flex-grow-1" style="min-width:0">
+                            <div class="small fw-semibold" x-text="p.user?.username || ''"></div>
+                            <div class="text-muted small text-truncate" x-text="p.content || '无标题'"></div>
                         </div>
-                    </template>
-                </div>
+                        <div class="d-flex gap-1 flex-shrink-0">
+                            <button class="btn btn-sm btn-success" @click="doReview(p.id, 'approved')">通过</button>
+                            <button class="btn btn-sm btn-outline-danger" @click="doReview(p.id, 'rejected', prompt('驳回理由(选填):')||'')">驳回</button>
+                        </div>
+                    </div>
+                </template>
             </div>
         </div>
     </div>
 
     <!-- Panel: User Management -->
     <div class="card border-0 shadow-sm rounded-4 mb-3">
-        <div class="card-header bg-white border-0 rounded-4 d-flex align-items-center"
-             @click="toggle('users')" style="cursor:pointer">
+        <div class="card-header bg-white border-0 rounded-4 d-flex align-items-center" @click="toggle('users')" style="cursor:pointer">
             <i class="bi bi-people me-2" style="color:var(--primary)"></i>
             <span class="fw-semibold">用户管理</span>
             <i class="bi ms-auto" :class="open === 'users' ? 'bi-chevron-up' : 'bi-chevron-down'"></i>
@@ -72,8 +83,7 @@
                                 <td><span class="badge" :class="u.status===1?'bg-success':'bg-dark'" x-text="u.status===1?'正常':'封禁'"></span></td>
                                 <td>
                                     <button class="btn btn-sm" :class="u.status===1?'btn-outline-danger':'btn-outline-success'"
-                                        x-show="u.role !== 'admin'"
-                                        @click="toggleUser(u.id, u.status===1?0:1)"
+                                        x-show="u.role !== 'admin'" @click="toggleUser(u.id, u.status===1?0:1)"
                                         x-text="u.status===1?'封禁':'解封'"></button>
                                 </td>
                             </tr>
@@ -86,8 +96,7 @@
 
     <!-- Panel: System Logs -->
     <div class="card border-0 shadow-sm rounded-4 mb-3">
-        <div class="card-header bg-white border-0 rounded-4 d-flex align-items-center"
-             @click="toggle('logs')" style="cursor:pointer">
+        <div class="card-header bg-white border-0 rounded-4 d-flex align-items-center" @click="toggle('logs')" style="cursor:pointer">
             <i class="bi bi-journal-text me-2" style="color:var(--primary)"></i>
             <span class="fw-semibold">系统日志</span>
             <i class="bi ms-auto" :class="open === 'logs' ? 'bi-chevron-up' : 'bi-chevron-down'"></i>
@@ -121,11 +130,11 @@ function adminPanel() {
         users: [], usersLoading: false,
         logs: [], logsLoading: false,
 
-        async toggle(section) {
-            this.open = this.open === section ? null : section;
-            if (section === 'review' && this.reviewPosts.length === 0) await this.loadReview();
-            if (section === 'users' && this.users.length === 0) await this.loadUsers();
-            if (section === 'logs' && this.logs.length === 0) await this.loadLogs();
+        async toggle(s) {
+            this.open = this.open === s ? null : s;
+            if (s === 'review' && this.reviewPosts.length === 0) await this.loadReview();
+            if (s === 'users' && this.users.length === 0) await this.loadUsers();
+            if (s === 'logs' && this.logs.length === 0) await this.loadLogs();
         },
 
         async loadReview() {

@@ -2,6 +2,8 @@ package repository
 
 import (
 	"errors"
+	"fmt"
+	"strings"
 
 	"github.com/zhoujianlin/ShareO/internal/model"
 	"gorm.io/gorm"
@@ -52,7 +54,7 @@ func (r *FollowRepo) GetFollowing(userID int64, page, pageSize int) ([]model.Use
 	}
 
 	var users []model.User
-	DB.Where("id IN ?", followeeIDs).Find(&users)
+	DB.Where("id IN ?", followeeIDs).Order(orderByField("id", followeeIDs)).Find(&users)
 	return users, total, nil
 }
 
@@ -71,6 +73,18 @@ func (r *FollowRepo) GetFollowers(userID int64, page, pageSize int) ([]model.Use
 	}
 
 	var users []model.User
-	DB.Where("id IN ?", followerIDs).Find(&users)
+	DB.Where("id IN ?", followerIDs).Order(orderByField("id", followerIDs)).Find(&users)
 	return users, total, nil
+}
+
+// orderByField builds an ORDER BY FIELD clause to preserve the order of IDs.
+func orderByField(column string, ids []int64) string {
+	if len(ids) == 0 {
+		return ""
+	}
+	parts := make([]string, len(ids))
+	for i, id := range ids {
+		parts[i] = fmt.Sprintf("%d", id)
+	}
+	return fmt.Sprintf("FIELD(%s, %s)", column, strings.Join(parts, ","))
 }

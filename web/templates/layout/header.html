@@ -25,6 +25,12 @@
                 {{ if .user_id }}
                 <li class="nav-item"><a class="nav-link" href="/home"><i class="bi bi-compass"></i> 浏览</a></li>
                 <li class="nav-item"><a class="nav-link" href="/post/create"><i class="bi bi-plus-square"></i> 发布</a></li>
+                <li class="nav-item" x-data="{ unread: 0 }" x-init="fetch('/api/v1/notifications/unread-count').then(r=>r.json()).then(d=>{if(d.code===0) unread = d.data.count})">
+                    <a class="nav-link position-relative" href="/notifications">
+                        <i class="bi bi-bell"></i> 通知
+                        <span class="badge position-absolute top-0 start-100 translate-middle bg-danger rounded-pill" style="font-size:0.55rem" x-show="unread > 0" x-text="unread"></span>
+                    </a>
+                </li>
                 {{ if eq .role "admin" }}
                 <li class="nav-item"><a class="nav-link" href="/admin"><i class="bi bi-shield-check"></i> 管理</a></li>
                 {{ end }}

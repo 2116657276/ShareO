@@ -20,6 +20,9 @@ func (r *LikeRepo) Toggle(userID, postID int64) (bool, error) {
 		if delErr := DB.Delete(&existing).Error; delErr != nil {
 			return false, delErr
 		}
+		// Sync post like_count via COUNT (idempotent, safe with triggers)
+		DB.Model(&model.Post{}).Where("id = ?", postID).UpdateColumn("like_count",
+			gorm.Expr("(SELECT COUNT(*) FROM likes WHERE post_id = ?)", postID))
 		return false, nil
 	}
 	if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -28,9 +31,18 @@ func (r *LikeRepo) Toggle(userID, postID int64) (bool, error) {
 		if createErr := DB.Create(&like).Error; createErr != nil {
 			return false, createErr
 		}
+		// Sync post like_count via COUNT (idempotent, safe with triggers)
+		DB.Model(&model.Post{}).Where("id = ?", postID).UpdateColumn("like_count",
+			gorm.Expr("(SELECT COUNT(*) FROM likes WHERE post_id = ?)", postID))
 		return true, nil
 	}
 	return false, err
+}
+
+func (r *LikeRepo) CountTotal() int64 {
+	var count int64
+	DB.Model(&model.Like{}).Count(&count)
+	return count
 }
 
 func (r *LikeRepo) IsLiked(userID, postID int64) bool {
@@ -67,7 +79,7 @@ func (r *LikeRepo) GetUserLikedPosts(userID int64, page, pageSize int) ([]model.
 	}
 
 	var posts []model.Post
-	DB.Where("id IN ? AND is_deleted = 0 AND status = ?", postIDs, "approved").
+	DB.Where("id IN ? AND is_deleted = 0 AND status = ?", postIDs, model.StatusApproved).
 		Preload("User").Preload("Images").Find(&posts)
 
 	// preserve order from likes

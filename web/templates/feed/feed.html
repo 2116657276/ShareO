@@ -9,12 +9,12 @@
     </div>
 
     <!-- Search Bar -->
-    <div class="search-bar mb-4" x-data="{ q: '' }">
+    <div class="search-bar mb-4" >
         <div class="input-group">
             <span class="input-group-text bg-white border-end-0 rounded-start-pill"><i class="bi bi-search text-muted"></i></span>
             <input type="text" class="form-control border-start-0 rounded-end-pill" placeholder="搜索作品..."
-                   x-model="q" @keyup.enter="doSearch(q)" style="border-left:0">
-            <button class="btn btn-primary rounded-pill ms-2 px-4" @click="doSearch(q)" x-show="q.length > 0">搜索</button>
+                   x-model="searchInput" @keyup.enter="doSearch()" style="border-left:0">
+            <button class="btn btn-primary rounded-pill ms-2 px-4" @click="doSearch()">搜索</button>
         </div>
         <div x-show="searchActive" class="mt-2">
             <small class="text-muted" @click="clearSearch()" style="cursor:pointer">搜索: "<span x-text="searchQuery"></span>" &middot; <span x-text="searchTotal"></span> 条结果 &middot; 点击清除</small>
@@ -23,21 +23,14 @@
 
     {{ if .Error }}<div class="alert alert-danger">{{ .Error }}</div>{{ end }}
 
-    {{ if not .Posts }}
-    <div class="text-center py-5">
-        <div style="font-size:4rem; color: var(--text-muted)">···</div>
-        <h4 class="text-muted mt-3">还没有作品</h4>
-        <p class="text-muted">成为第一个分享作品的人吧</p>
-        <a href="/post/create" class="btn btn-primary btn-lg mt-2"><i class="bi bi-plus-square"></i> 发布作品</a>
-    </div>
-    {{ else }}
     <div class="feed-grid" id="feedGrid">
         {{ range $idx, $p := .Posts }}
         <a href="/post/{{ $p.ID }}" class="text-decoration-none feed-item">
             <div class="feed-card">
                 <div class="card-img-container skeleton-bg">
-                    <img src="{{ $p.CoverImage }}" alt="cover" decoding="async"
-                         {{ if lt $idx 6 }}loading="eager"{{ else }}loading="lazy"{{ end }}
+                    <img src="{{ thumbURL $p.CoverImage }}" alt="cover" decoding="async"
+                         {{ if lt $idx 12 }}loading="eager"{{ else }}loading="lazy"{{ end }}
+                         {{ if lt $idx 4 }}fetchpriority="high"{{ end }}
                          onload="this.parentElement.classList.remove('skeleton-bg')"
                          onerror="this.parentElement.classList.remove('skeleton-bg');this.parentElement.classList.add('img-error')">
                     {{ if gt (len $p.Images) 1 }}<span class="card-img-badge"><i class="bi bi-images"></i> {{ len $p.Images }}</span>{{ end }}
@@ -55,6 +48,14 @@
         {{ end }}
     </div>
 
+    <!-- Empty state (shown via Alpine when grid is cleared and no results) -->
+    <div class="text-center py-5" id="emptyState" style="display:none">
+        <div style="font-size:4rem; color: var(--text-muted)">···</div>
+        <h4 class="text-muted mt-3">还没有作品</h4>
+        <p class="text-muted">成为第一个分享作品的人吧</p>
+        <a href="/post/create" class="btn btn-primary btn-lg mt-2"><i class="bi bi-plus-square"></i> 发布作品</a>
+    </div>
+
     <!-- Load More -->
     <div class="text-center mt-4" id="loadMoreArea">
         <div x-show="loading" class="py-3">
@@ -65,10 +66,11 @@
             x-show="(hasMore || searchHasMore) && !loading" @click="loadMore()">加载更多</button>
         <p class="text-muted mt-3 small" x-show="!hasMore && !searchHasMore && !loading">已展示全部作品</p>
     </div>
-    {{ end }}
 </div>
 
 <script>
+function thumbUrl(url) { return url ? url.replace('/posts/medium/', '/posts/thumb/') : url; }
+
 function renderPostCard(post) {
     const imgCount = post.images ? post.images.length : 1;
     const content = post.content || '';
@@ -84,7 +86,7 @@ function renderPostCard(post) {
     return `<a href="/post/${post.id}" class="text-decoration-none feed-item">
         <div class="feed-card">
             <div class="card-img-container skeleton-bg">
-                <img src="${post.cover_image}" alt="cover" decoding="async" loading="lazy"
+                <img src="${thumbUrl(post.cover_image)}" alt="cover" decoding="async" loading="eager"
                      onload="this.parentElement.classList.remove('skeleton-bg')"
                      onerror="this.parentElement.classList.remove('skeleton-bg');this.parentElement.classList.add('img-error')">
                 ${badgeHtml}
@@ -113,13 +115,13 @@ function renderRepostCard(post, likeIcon) {
     let imageSection = '';
     if (hasBothImages) {
         imageSection = `<div class="pip-container">
-            <div class="pip-main"><img src="${post.cover_image}" decoding="async" loading="lazy" onload="this.parentElement.classList.remove('skeleton-bg')" onerror="this.parentElement.classList.add('img-error')"></div>
-            <div class="pip-original"><img src="${orig.cover_image}" decoding="async" loading="lazy" onload="this.parentElement.classList.remove('skeleton-bg')" onerror="this.parentElement.classList.add('img-error')"></div>
+            <div class="pip-main"><img src="${thumbUrl(post.cover_image)}" decoding="async" loading="eager" onload="this.parentElement.classList.remove('skeleton-bg')" onerror="this.parentElement.classList.add('img-error')"></div>
+            <div class="pip-original"><img src="${thumbUrl(orig.cover_image)}" decoding="async" loading="eager" onload="this.parentElement.classList.remove('skeleton-bg')" onerror="this.parentElement.classList.add('img-error')"></div>
         </div>`;
     } else if (repostImgCount > 0) {
-        imageSection = `<div class="card-img-container skeleton-bg"><img src="${post.cover_image}" decoding="async" loading="lazy" onload="this.parentElement.classList.remove('skeleton-bg')" onerror="this.parentElement.classList.add('img-error')"></div>`;
+        imageSection = `<div class="card-img-container skeleton-bg"><img src="${thumbUrl(post.cover_image)}" decoding="async" loading="eager" onload="this.parentElement.classList.remove('skeleton-bg')" onerror="this.parentElement.classList.add('img-error')"></div>`;
     } else if (origImgCount > 0) {
-        imageSection = `<div class="card-img-container skeleton-bg"><img src="${orig.cover_image}" decoding="async" loading="lazy" onload="this.parentElement.classList.remove('skeleton-bg')" onerror="this.parentElement.classList.add('img-error')"></div>`;
+        imageSection = `<div class="card-img-container skeleton-bg"><img src="${thumbUrl(orig.cover_image)}" decoding="async" loading="eager" onload="this.parentElement.classList.remove('skeleton-bg')" onerror="this.parentElement.classList.add('img-error')"></div>`;
     }
 
     return `<a href="/post/${post.id}" class="text-decoration-none feed-item">
@@ -144,7 +146,6 @@ function renderRepostCard(post, likeIcon) {
             </div>
         </div></a>`;
 }
-}
 
 function feedPage(currentPage, totalCount, sort) {
     const pageSize = 12;
@@ -152,30 +153,39 @@ function feedPage(currentPage, totalCount, sort) {
     return {
         page: currentPage, total: totalCount, tab: sort || 'latest',
         loading: false, hasMore: currentPage < totalPages && totalCount > 0,
-        searchActive: false, searchQuery: '', searchTotal: 0, searchPage: 1, searchHasMore: false,
+        searchActive: false, searchQuery: '', searchTotal: 0, searchPage: 1, searchHasMore: false, searchInput: '',
 
-        async doSearch(q) {
-            if (!q || q.trim() === '') return this.clearSearch();
+        async doSearch() {
+            const q = this.searchInput.trim();
+            if (!q) return this.clearSearch();
             this.searchActive = true; this.searchQuery = q; this.searchPage = 1;
-            const resp = await fetch(`/api/v1/search?q=${encodeURIComponent(q)}&page=1&page_size=${pageSize}`);
-            const d = await resp.json();
-            if (d.code === 0) {
-                this.searchTotal = d.data.total;
-                this.searchHasMore = d.data.total > pageSize;
-                this.hasMore = false;
-                this.renderCards(d.data.list);
-            }
+            try {
+                const resp = await fetch(`/api/v1/search?q=${encodeURIComponent(q)}&page=1&page_size=${pageSize}`);
+                const d = await resp.json();
+                if (d.code === 0) {
+                    this.searchTotal = d.data.total;
+                    this.searchHasMore = d.data.total > pageSize;
+                    this.hasMore = false;
+                    this.renderCards(d.data.list);
+                }
+            } catch(e) { console.error(e); }
         },
 
         clearSearch() {
             this.searchActive = false; this.searchQuery = ''; this.searchTotal = 0;
-            this.page = 1;
+            this.searchInput = '';
             location.href = '/home?sort=' + this.tab;
         },
 
         renderCards(list) {
             const grid = document.getElementById('feedGrid');
+            if (!grid) return;
             grid.innerHTML = '';
+            if (!list || list.length === 0) {
+                document.getElementById('emptyState').style.display = '';
+                return;
+            }
+            document.getElementById('emptyState').style.display = 'none';
             list.forEach(p => { grid.insertAdjacentHTML('beforeend', renderPostCard(p)); });
         },
 
@@ -193,8 +203,10 @@ function feedPage(currentPage, totalCount, sort) {
                 const resp = await fetch(url);
                 const d = await resp.json();
                 if (d.code !== 0 || !d.data.list.length) {
-                    this.hasMore = false; this.searchHasMore = false; this.loading = false; return;
+                    this.hasMore = false; this.searchHasMore = false;
+                    this.loading = false; return;
                 }
+                document.getElementById('emptyState').style.display = 'none';
                 const grid = document.getElementById('feedGrid');
                 d.data.list.forEach(p => { grid.insertAdjacentHTML('beforeend', renderPostCard(p)); });
                 if (this.searchActive) {

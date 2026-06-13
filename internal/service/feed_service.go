@@ -3,7 +3,7 @@ package service
 import (
 	"context"
 	"encoding/json"
-	"fmt"
+	"log"
 	"time"
 
 	"github.com/zhoujianlin/ShareO/internal/model"
@@ -25,7 +25,7 @@ func NewFeedService() *FeedService {
 }
 
 type FeedReq struct {
-	Sort     string `form:"sort"`     // "latest" (default) or "hot"
+	Sort     string `form:"sort"`     // model.SortLatest (default) or "hot"
 	TopicID  *int64 `form:"topic_id"`
 	UserID   *int64 `form:"user_id"`
 	Page     int    `form:"page"`
@@ -40,11 +40,11 @@ func (s *FeedService) GetFeed(req FeedReq, currentUserID int64) ([]model.Post, i
 		req.PageSize = 20
 	}
 	if req.Sort == "" {
-		req.Sort = "latest"
+		req.Sort = model.SortLatest
 	}
 
 	// Try Redis cache for first page of latest feed (hot feed always fresh)
-	if req.Page == 1 && req.Sort == "latest" && req.TopicID == nil && req.UserID == nil {
+	if req.Page == 1 && req.Sort == model.SortLatest && req.TopicID == nil && req.UserID == nil {
 		cached, cachedTotal, ok := s.getCachedFeed()
 		if ok && len(cached) >= req.PageSize {
 			// Slice to requested page_size
@@ -73,7 +73,7 @@ func (s *FeedService) GetFeed(req FeedReq, currentUserID int64) ([]model.Post, i
 	s.fillUserInteraction(posts, currentUserID)
 
 	// Cache first page of latest feed (store page_size=20 worth + total)
-	if req.Page == 1 && req.Sort == "latest" && req.TopicID == nil && req.UserID == nil {
+	if req.Page == 1 && req.Sort == model.SortLatest && req.TopicID == nil && req.UserID == nil {
 		s.cacheFeed(posts, total)
 	}
 
@@ -98,8 +98,10 @@ func (s *FeedService) fillUserInteraction(posts []model.Post, userID int64) {
 		postIDs[i] = p.ID
 	}
 	likedMap := s.likeRepo.GetUserLikedPostIDs(userID, postIDs)
+	favoritedMap := s.favRepo.GetUserFavoritedPostIDs(userID, postIDs)
 	for i := range posts {
 		posts[i].IsLiked = likedMap[posts[i].ID]
+		posts[i].IsFavorited = favoritedMap[posts[i].ID]
 	}
 }
 
@@ -133,6 +135,6 @@ func (s *FeedService) getCachedFeed() ([]model.Post, int64, bool) {
 	if err := json.Unmarshal(bytes, &data); err != nil {
 		return nil, 0, false
 	}
-	fmt.Println("feed served from Redis cache")
+	log.Println("feed served from Redis cache")
 	return data.Posts, data.Total, true
 }

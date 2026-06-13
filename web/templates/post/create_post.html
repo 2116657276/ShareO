@@ -61,37 +61,34 @@ function uploadForm() {
         },
 
         async handleFileSelect(e) {
-            const files = Array.from(e.target.files);
-            if (!files.length) return;
+            const files = Array.from(e.target.files).filter(f => f.size <= 50*1024*1024);
+            if (!files.length) { e.target.value = ''; return; }
             this.uploading = true;
+            // Show previews immediately
             for (const f of files) {
-                if (f.size > 50 * 1024 * 1024) { alert(f.name + ' 超过50MB限制'); continue; }
                 const reader = new FileReader();
-                const promise = new Promise(r => { reader.onload = e => r(e.target.result); });
+                const p = new Promise(r => { reader.onload = e => r(e.target.result); });
                 reader.readAsDataURL(f);
-                const preview = await promise;
-                this.images.push({ preview: preview, name: f.name });
-                await this.uploadFile(f);
+                this.images.push({ preview: await p, name: f.name });
             }
+            // Upload concurrently
+            await Promise.all(files.map(f => this.uploadFile(f)));
             this.uploading = false;
             e.target.value = '';
         },
 
         async handleDrop(e) {
             e.target.closest('.upload-zone').classList.remove('dragover');
-            const files = Array.from(e.dataTransfer.files);
+            const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/') && f.size <= 50*1024*1024);
             if (!files.length) return;
             this.uploading = true;
             for (const f of files) {
-                if (!f.type.startsWith('image/')) continue;
-                if (f.size > 50 * 1024 * 1024) { alert(f.name + ' 超过50MB限制'); continue; }
                 const reader = new FileReader();
-                const promise = new Promise(r => { reader.onload = e => r(e.target.result); });
+                const p = new Promise(r => { reader.onload = e => r(e.target.result); });
                 reader.readAsDataURL(f);
-                const preview = await promise;
-                this.images.push({ preview: preview, name: f.name });
-                await this.uploadFile(f);
+                this.images.push({ preview: await p, name: f.name });
             }
+            await Promise.all(files.map(f => this.uploadFile(f)));
             this.uploading = false;
         },
 

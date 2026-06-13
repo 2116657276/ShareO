@@ -498,8 +498,8 @@ footer {
 
 /* ===== Skeleton Loading ===== */
 @keyframes shimmer {
-    0% { background-position: -200px 0; }
-    100% { background-position: 200px 0; }
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
 }
 .skeleton {
     background: linear-gradient(90deg, var(--cream-dark) 25%, var(--cream) 50%, var(--cream-dark) 75%);
@@ -529,9 +529,6 @@ footer {
     background-size: 200% 100%;
     animation: shimmer 1.5s ease-in-out infinite;
 }
-@keyframes shimmer {
-    0% { background-position: 200% 0; }
-    100% { background-position: -200% 0; }
 }
 
 /* Image error fallback */
@@ -548,3 +545,135 @@ footer {
 /* Pip skeleton */
 .pip-main, .pip-original { background: var(--cream-dark); }
 .pip-main img, .pip-original img { display: block; }
+
+/* Accessibility: reduce motion */
+@media (prefers-reduced-motion: reduce) {
+    .feed-card:hover { transform: none; }
+    .feed-card:hover .card-img-container img { transform: none; }
+    .skeleton, .skeleton-bg { animation: none; }
+    .btn-gradient:hover { transform: none; }
+}
+
+/* ===== Profile Stats Row ===== */
+.stats-row {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0;
+    padding: 16px 0;
+    border-top: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+    margin: 16px 0;
+}
+.stats-col {
+    text-align: center;
+    padding: 8px 0;
+}
+.stats-num {
+    font-size: 1.4rem;
+    font-weight: 800;
+    color: var(--text);
+    line-height: 1.2;
+}
+.stats-label {
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    margin-top: 2px;
+}
+
+/* ===== Profile Tabs (3 equal columns) ===== */
+.profile-tabs {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0;
+    margin-bottom: 2px;
+}
+.profile-tab {
+    flex: 1;
+    padding: 12px 0;
+    border: none;
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 0.88rem;
+    font-weight: 500;
+    cursor: pointer;
+    text-align: center;
+    border-bottom: 2px solid transparent;
+    transition: color 0.2s, border-color 0.2s;
+}
+.profile-tab:hover { color: var(--text); }
+.profile-tab.active {
+    color: var(--text);
+    border-bottom-color: var(--text);
+    font-weight: 600;
+}
+
+/* ===== Douyin-style Grid (3 cols, tight gap) ===== */
+.douyin-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 2px;
+}
+.douyin-item {
+    position: relative;
+    aspect-ratio: 1;
+    overflow: hidden;
+    display: block;
+    background: var(--cream-dark);
+}
+.douyin-item img {
+    width: 100%; height: 100%;
+    object-fit: cover;
+    display: block;
+}
+.douyin-overlay {
+    position: absolute; bottom: 6px; left: 6px;
+    color: #fff; font-size: 0.82rem; font-weight: 600;
+    display: flex; align-items: center; gap: 4px;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.4);
+    pointer-events: none;
+}
+
+/* ===== Admin Stats Grid (equal-width cards) ===== */
+.admin-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    margin-bottom: 20px;
+}
+.admin-stat-card {
+    background: var(--card);
+    border-radius: var(--radius);
+    padding: 18px 14px;
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    transition: transform 0.15s, box-shadow 0.15s;
+}
+.admin-stat-card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-lg);
+}
+.admin-stat-icon {
+    width: 44px; height: 44px;
+    border-radius: 12px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.3rem;
+    flex-shrink: 0;
+}
+.admin-stat-body { flex: 1; min-width: 0; }
+.admin-stat-num {
+    font-size: 1.3rem; font-weight: 800; color: var(--text); line-height: 1.2;
+}
+.admin-stat-label {
+    font-size: 0.72rem; color: var(--text-muted); margin-top: 2px;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .admin-stats-grid { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 480px) {
+    .admin-stats-grid { grid-template-columns: 1fr; }
+}

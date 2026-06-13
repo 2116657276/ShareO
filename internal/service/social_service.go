@@ -15,7 +15,14 @@ type SocialService struct {
 	commentRepo  *repository.CommentRepo
 	userRepo     *repository.UserRepo
 	postRepo     *repository.PostRepo
+	notifSvc     *NotificationService
 }
+
+// Sentinel errors for handler-layer HTTP status decisions
+var (
+	ErrPostNotFound     = errors.New("帖子不存在")
+	ErrPermissionDenied = errors.New("无权操作")
+)
 
 func NewSocialService() *SocialService {
 	return &SocialService{
@@ -25,17 +32,22 @@ func NewSocialService() *SocialService {
 		commentRepo:  repository.NewCommentRepo(),
 		userRepo:     repository.NewUserRepo(),
 		postRepo:     repository.NewPostRepo(),
+		notifSvc:     NewNotificationService(),
 	}
 }
 
 // --- Like ---
 
 func (s *SocialService) ToggleLike(userID, postID int64) (bool, error) {
-	post, err := s.postRepo.FindByID(postID)
+	post, err := s.postRepo.FindByIDLight(postID)
 	if err != nil || post == nil || post.IsDeleted == 1 {
-		return false, errors.New("帖子不存在")
+		return false, ErrPostNotFound
 	}
-	return s.likeRepo.Toggle(userID, postID)
+	liked, err := s.likeRepo.Toggle(userID, postID)
+	if err == nil && liked {
+		s.notifSvc.Send(post.UserID, userID, model.NotifTypeLike, postID)
+	}
+	return liked, err
 }
 
 func (s *SocialService) GetLikedPosts(userID int64, page, pageSize int) ([]model.Post, int64, error) {
@@ -45,9 +57,9 @@ func (s *SocialService) GetLikedPosts(userID int64, page, pageSize int) ([]model
 // --- Favorite ---
 
 func (s *SocialService) ToggleFavorite(userID, postID int64) (bool, error) {
-	post, err := s.postRepo.FindByID(postID)
+	post, err := s.postRepo.FindByIDLight(postID)
 	if err != nil || post == nil || post.IsDeleted == 1 {
-		return false, errors.New("帖子不存在")
+		return false, ErrPostNotFound
 	}
 	return s.favoriteRepo.Toggle(userID, postID)
 }
@@ -59,7 +71,11 @@ func (s *SocialService) GetFavorites(userID int64, page, pageSize int) ([]model.
 // --- Follow ---
 
 func (s *SocialService) ToggleFollow(followerID, followeeID int64) (bool, error) {
-	return s.followRepo.Toggle(followerID, followeeID)
+	following, err := s.followRepo.Toggle(followerID, followeeID)
+	if err == nil && following {
+		s.notifSvc.Send(followeeID, followerID, model.NotifTypeFollow, 0)
+	}
+	return following, err
 }
 
 func (s *SocialService) IsFollowing(followerID, followeeID int64) bool {
@@ -88,9 +104,9 @@ func (s *SocialService) CreateComment(userID int64, req CreateCommentReq) (*mode
 		return nil, errors.New("评论内容不能为空")
 	}
 
-	post, err := s.postRepo.FindByID(req.PostID)
+	post, err := s.postRepo.FindByIDLight(req.PostID)
 	if err != nil || post == nil || post.IsDeleted == 1 {
-		return nil, errors.New("帖子不存在")
+		return nil, ErrPostNotFound
 	}
 
 	comment := &model.Comment{
@@ -102,6 +118,12 @@ func (s *SocialService) CreateComment(userID int64, req CreateCommentReq) (*mode
 	}
 	if err := s.commentRepo.Create(comment); err != nil {
 		return nil, err
+	}
+	// Notify post owner (only if commenter is not the post owner)
+	s.notifSvc.Send(post.UserID, userID, model.NotifTypeComment, req.PostID)
+	// Notify the replied-to user (for nested replies)
+	if req.ReplyToUID != nil && *req.ReplyToUID != userID && *req.ReplyToUID != post.UserID {
+		s.notifSvc.Send(*req.ReplyToUID, userID, model.NotifTypeComment, req.PostID)
 	}
 	return comment, nil
 }

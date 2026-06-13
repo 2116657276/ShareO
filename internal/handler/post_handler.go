@@ -52,7 +52,10 @@ func (h *PostHandler) Repost(c *gin.Context) {
 	userID := c.GetInt64("user_id")
 	postID := getInt64Param(c, "id")
 	var req service.RepostReq
-	c.ShouldBindJSON(&req)
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "请求参数格式错误")
+		return
+	}
 	post, err := h.svc.Repost(userID, postID, req)
 	if err != nil {
 		response.BadRequest(c, err.Error())

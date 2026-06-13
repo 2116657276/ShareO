@@ -6,7 +6,7 @@ database:
   host: 127.0.0.1
   port: 3306
   user: root
-  password: "your_mysql_password"
+  password: "your_db_password_here"  # Or use env: SHAREO_DB_PASSWORD
   dbname: shareo
   charset: utf8mb4
   max_idle_conns: 10
@@ -16,19 +16,19 @@ database:
 redis:
   host: 127.0.0.1
   port: 6379
-  password: ""
+  password: ""  # Or use env: SHAREO_REDIS_PASSWORD
   db: 0
   pool_size: 10
 
 minio:
   endpoint: 127.0.0.1:9000
-  access_key: minioadmin
-  secret_key: minioadmin
+  access_key: your_minio_access_key  # Or use env: SHAREO_MINIO_ACCESS_KEY
+  secret_key: your_minio_secret_key  # Or use env: SHAREO_MINIO_SECRET_KEY
   bucket: shareo
   use_ssl: false
 
 jwt:
-  secret: change-this-to-a-random-string
+  secret: change-this-to-a-random-string  # Or use env: SHAREO_JWT_SECRET
   expire_hours: 72
 
 upload:

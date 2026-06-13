@@ -1,0 +1,111 @@
+{{ template "header" . }}
+<div class="row"><div class="col-lg-8 mx-auto" x-data="notifications()" x-init="fetchNotifs()">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h4 class="mb-0">通知</h4>
+        <button class="btn btn-sm btn-outline-secondary" @click="markAllRead()" x-show="unreadCount > 0">全部已读</button>
+    </div>
+
+    <!-- Loading -->
+    <template x-if="loading">
+        <div class="text-center py-5"><div class="spinner-border text-primary"></div></div>
+    </template>
+
+    <!-- Empty state -->
+    <template x-if="!loading && items.length === 0">
+        <div class="text-center py-5 text-muted"><i class="bi bi-bell" style="font-size:3rem"></i><p class="mt-2">暂无通知</p></div>
+    </template>
+
+    <!-- Notification list -->
+    <template x-for="n in items" :key="n.id">
+        <div class="card mb-2" :class="{ 'border-primary': n.is_read === 0 }" style="cursor:pointer"
+             @click="openNotif(n)">
+            <div class="card-body py-2 px-3 d-flex align-items-center">
+                <img :src="n.actor?.avatar_url || '/static/img/default-avatar.svg'" class="rounded-circle me-2" width="36" height="36" onerror="this.src='/static/img/default-avatar.svg'">
+                <div class="flex-grow-1">
+                    <small>
+                        <strong x-text="n.actor?.username"></strong>&nbsp;
+                        <span x-text="actionText(n.type)"></span>
+                    </small>
+                    <div><small class="text-muted" x-text="timeAgo(n.created_at)"></small></div>
+                </div>
+                <span class="badge bg-primary rounded-pill" x-show="n.is_read === 0" style="width:8px;height:8px"></span>
+            </div>
+        </div>
+    </template>
+
+    <!-- Load more -->
+    <div class="text-center mt-3" x-show="hasMore">
+        <button class="btn btn-outline-secondary btn-sm" @click="loadMore()">加载更多</button>
+    </div>
+</div></div>
+
+<script>
+function notifications() {
+    return {
+        items: [],
+        page: 1,
+        loading: true,
+        hasMore: false,
+        unreadCount: 0,
+
+        async fetchNotifs() {
+            this.loading = true;
+            try {
+                const r = await fetch('/api/v1/notifications?page=' + this.page + '&page_size=20');
+                const d = await r.json();
+                if (d.code === 0) {
+                    this.items = this.page === 1 ? d.data.list : [...this.items, ...d.data.list];
+                    this.hasMore = d.data.list.length === 20;
+                    await this.fetchUnreadCount();
+                }
+            } finally { this.loading = false; }
+        },
+
+        async fetchUnreadCount() {
+            try {
+                const r = await fetch('/api/v1/notifications/unread-count');
+                const d = await r.json();
+                if (d.code === 0) this.unreadCount = d.data.count;
+            } catch(e) {}
+        },
+
+        async loadMore() {
+            this.page++;
+            await this.fetchNotifs();
+        },
+
+        async markAllRead() {
+            await fetch('/api/v1/notifications/read-all', { method: 'PUT' });
+            this.items.forEach(n => n.is_read = 1);
+            this.unreadCount = 0;
+        },
+
+        async openNotif(n) {
+            if (n.is_read === 0) {
+                await fetch('/api/v1/notifications/' + n.id + '/read', { method: 'PUT' });
+                n.is_read = 1;
+                this.unreadCount = Math.max(0, this.unreadCount - 1);
+            }
+            if (n.target_id > 0 && (n.type === 'like' || n.type === 'comment' || n.type === 'repost')) {
+                window.location.href = '/post/' + n.target_id;
+            } else if (n.type === 'follow') {
+                window.location.href = '/user/' + n.actor_id;
+            }
+        },
+
+        actionText(type) {
+            const m = { like: '赞了你的作品', comment: '评论了你的作品', follow: '关注了你', repost: '转帖了你的作品', review: '审核了你的帖子' };
+            return m[type] || '与你互动';
+        },
+
+        timeAgo(t) {
+            const diff = (Date.now() - new Date(t).getTime()) / 1000;
+            if (diff < 60) return '刚刚';
+            if (diff < 3600) return Math.floor(diff/60) + '分钟前';
+            if (diff < 86400) return Math.floor(diff/3600) + '小时前';
+            return Math.floor(diff/86400) + '天前';
+        }
+    }
+}
+</script>
+{{ template "footer" . }}

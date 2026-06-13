@@ -16,6 +16,9 @@ func (r *FavoriteRepo) Toggle(userID, postID int64) (bool, error) {
 	err := DB.Where("user_id = ? AND post_id = ?", userID, postID).First(&existing).Error
 	if err == nil {
 		DB.Delete(&existing)
+		// Sync post favorite_count
+		DB.Model(&model.Post{}).Where("id = ? AND favorite_count > 0", postID).
+			UpdateColumn("favorite_count", gorm.Expr("favorite_count - 1"))
 		return false, nil
 	}
 	if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -23,9 +26,25 @@ func (r *FavoriteRepo) Toggle(userID, postID int64) (bool, error) {
 		if createErr := DB.Create(&fav).Error; createErr != nil {
 			return false, createErr
 		}
+		// Sync post favorite_count
+		DB.Model(&model.Post{}).Where("id = ?", postID).
+			UpdateColumn("favorite_count", gorm.Expr("favorite_count + 1"))
 		return true, nil
 	}
 	return false, err
+}
+
+func (r *FavoriteRepo) GetUserFavoritedPostIDs(userID int64, postIDs []int64) map[int64]bool {
+	if len(postIDs) == 0 {
+		return map[int64]bool{}
+	}
+	var favs []model.Favorite
+	DB.Where("user_id = ? AND post_id IN ?", userID, postIDs).Find(&favs)
+	result := make(map[int64]bool, len(favs))
+	for _, f := range favs {
+		result[f.PostID] = true
+	}
+	return result
 }
 
 func (r *FavoriteRepo) IsFavorited(userID, postID int64) bool {
@@ -51,7 +70,7 @@ func (r *FavoriteRepo) GetUserFavorites(userID int64, page, pageSize int) ([]mod
 	}
 
 	var posts []model.Post
-	DB.Where("id IN ? AND is_deleted = 0 AND status = ?", postIDs, "approved").
+	DB.Where("id IN ? AND is_deleted = 0 AND status = ?", postIDs, model.StatusApproved).
 		Preload("User").Preload("Images").Find(&posts)
 	return posts, total, nil
 }

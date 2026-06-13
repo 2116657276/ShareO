@@ -12,9 +12,21 @@ type Response struct {
 	Data    interface{} `json:"data,omitempty"`
 }
 
+// Business error codes — decoupled from HTTP status codes.
+// API consumers should check `code == 0` for success.
+const (
+	ErrCodeSuccess      = 0
+	ErrCodeBadRequest   = 1001
+	ErrCodeUnauthorized = 1002
+	ErrCodeForbidden    = 1003
+	ErrCodeNotFound     = 1004
+	ErrCodeInternal     = 1005
+	ErrCodeRateLimit    = 1006
+)
+
 func Success(c *gin.Context, data interface{}) {
 	c.JSON(http.StatusOK, Response{
-		Code:    0,
+		Code:    ErrCodeSuccess,
 		Message: "success",
 		Data:    data,
 	})
@@ -22,37 +34,37 @@ func Success(c *gin.Context, data interface{}) {
 
 func SuccessWithMessage(c *gin.Context, message string, data interface{}) {
 	c.JSON(http.StatusOK, Response{
-		Code:    0,
+		Code:    ErrCodeSuccess,
 		Message: message,
 		Data:    data,
 	})
 }
 
-func Error(c *gin.Context, code int, message string) {
-	c.JSON(code, Response{
-		Code:    code,
+func Error(c *gin.Context, httpStatus int, bizCode int, message string) {
+	c.JSON(httpStatus, Response{
+		Code:    bizCode,
 		Message: message,
 	})
 }
 
 func BadRequest(c *gin.Context, message string) {
-	Error(c, http.StatusBadRequest, message)
+	Error(c, http.StatusBadRequest, ErrCodeBadRequest, message)
 }
 
 func Unauthorized(c *gin.Context, message string) {
-	Error(c, http.StatusUnauthorized, message)
+	Error(c, http.StatusUnauthorized, ErrCodeUnauthorized, message)
 }
 
 func Forbidden(c *gin.Context, message string) {
-	Error(c, http.StatusForbidden, message)
+	Error(c, http.StatusForbidden, ErrCodeForbidden, message)
 }
 
 func NotFound(c *gin.Context, message string) {
-	Error(c, http.StatusNotFound, message)
+	Error(c, http.StatusNotFound, ErrCodeNotFound, message)
 }
 
 func InternalError(c *gin.Context, message string) {
-	Error(c, http.StatusInternalServerError, message)
+	Error(c, http.StatusInternalServerError, ErrCodeInternal, message)
 }
 
 // PageResponse for paginated API responses

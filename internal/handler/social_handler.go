@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"errors"
 	"net/http"
 	"strconv"
 
@@ -22,10 +23,28 @@ func (h *SocialHandler) ToggleLike(c *gin.Context) {
 	postID := getInt64Param(c, "id")
 	liked, err := h.svc.ToggleLike(userID, postID)
 	if err != nil {
-		response.BadRequest(c, err.Error())
+		if errors.Is(err, service.ErrPostNotFound) {
+			response.NotFound(c, err.Error())
+		} else {
+			response.BadRequest(c, err.Error())
+		}
 		return
 	}
 	response.Success(c, gin.H{"liked": liked})
+}
+
+func (h *SocialHandler) GetLikes(c *gin.Context) {
+	userID := c.GetInt64("user_id")
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "12"))
+	posts, total, err := h.svc.GetLikedPosts(userID, page, pageSize)
+	if err != nil {
+		response.InternalError(c, err.Error())
+		return
+	}
+	response.Success(c, response.PageResponse{
+		List: posts, Total: total, Page: page, PageSize: pageSize,
+	})
 }
 
 // --- Favorite ---
@@ -35,7 +54,11 @@ func (h *SocialHandler) ToggleFavorite(c *gin.Context) {
 	postID := getInt64Param(c, "id")
 	favorited, err := h.svc.ToggleFavorite(userID, postID)
 	if err != nil {
-		response.BadRequest(c, err.Error())
+		if errors.Is(err, service.ErrPostNotFound) {
+			response.NotFound(c, err.Error())
+		} else {
+			response.BadRequest(c, err.Error())
+		}
 		return
 	}
 	response.Success(c, gin.H{"favorited": favorited})
@@ -106,7 +129,11 @@ func (h *SocialHandler) CreateComment(c *gin.Context) {
 	}
 	comment, err := h.svc.CreateComment(userID, req)
 	if err != nil {
-		response.BadRequest(c, err.Error())
+		if errors.Is(err, service.ErrPostNotFound) {
+			response.NotFound(c, err.Error())
+		} else {
+			response.BadRequest(c, err.Error())
+		}
 		return
 	}
 	response.Success(c, comment)
@@ -115,7 +142,11 @@ func (h *SocialHandler) CreateComment(c *gin.Context) {
 func (h *SocialHandler) GetComments(c *gin.Context) {
 	postID := getInt64Param(c, "id")
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
-	comments, total, err := h.svc.GetComments(postID, page, 20)
+	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
+	if pageSize <= 0 || pageSize > 50 {
+		pageSize = 20
+	}
+	comments, total, err := h.svc.GetComments(postID, page, pageSize)
 	if err != nil {
 		response.InternalError(c, err.Error())
 		return

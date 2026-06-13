@@ -62,6 +62,22 @@ func (r *UserRepo) UpdateStatus(id int64, status int8) error {
 	return DB.Model(&model.User{}).Where("id = ?", id).Update("status", status).Error
 }
 
+func (r *UserRepo) CountByRole(role string) int64 {
+	var count int64
+	DB.Model(&model.User{}).Where("role = ?", role).Count(&count)
+	return count
+}
+
+func (r *UserRepo) CountByStatus(status int8) int64 {
+	var count int64
+	DB.Model(&model.User{}).Where("status = ?", status).Count(&count)
+	return count
+}
+
+func (r *UserRepo) UpdateFields(id int64, updates map[string]interface{}) error {
+	return DB.Model(&model.User{}).Where("id = ?", id).Updates(updates).Error
+}
+
 func (r *UserRepo) GetFollowCounts(userID int64) (following, followers int64) {
 	DB.Model(&model.Follow{}).Where("follower_id = ?", userID).Count(&following)
 	DB.Model(&model.Follow{}).Where("followee_id = ?", userID).Count(&followers)

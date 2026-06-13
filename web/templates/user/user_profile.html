@@ -1,10 +1,11 @@
 {{ template "header" . }}
 {{ $user := .ProfileUser }}
-<div class="row" x-data="profileFollow({{ $user.ID }}, {{ .IsFollowing }})"><div class="col-lg-8 mx-auto">
+<div x-data="profilePage({{ $user.ID }}, {{ .IsOwnProfile }}, {{ .IsFollowing }})">
+    <!-- Header -->
     <div class="profile-header">
         <img src="{{ $user.AvatarURL }}" class="profile-avatar" onerror="this.src='/static/img/default-avatar.svg'">
         <h4 class="mt-3 mb-1">{{ $user.Username }}</h4>
-        {{ if $user.Bio }}<p class="text-muted">{{ $user.Bio }}</p>{{ end }}
+        {{ if $user.Bio }}<p class="text-muted small">{{ $user.Bio }}</p>{{ end }}
         {{ if not .IsOwnProfile }}
         <button class="btn mt-2" :class="following ? 'btn-outline-secondary' : 'btn-primary'" @click="toggleFollow()">
             <i class="bi" :class="following ? 'bi-person-dash' : 'bi-person-plus'"></i>
@@ -14,22 +15,124 @@
         <a href="/post/create" class="btn btn-primary mt-2"><i class="bi bi-plus-square"></i> 发布新作品</a>
         {{ end }}
     </div>
-    <div class="profile-stats">
-        <div class="stat-item"><div class="stat-num">{{ .PostCount }}</div><div class="stat-label">作品</div></div>
-        <div class="stat-item"><div class="stat-num">{{ .Following }}</div><div class="stat-label">关注</div></div>
-        <div class="stat-item"><div class="stat-num">{{ .Followers }}</div><div class="stat-label">粉丝</div></div>
+
+    <!-- Stats: 3 equal columns -->
+    <div class="stats-row">
+        <div class="stats-col"><div class="stats-num">{{ .PostCount }}</div><div class="stats-label">作品</div></div>
+        <div class="stats-col"><div class="stats-num">{{ .Following }}</div><div class="stats-label">关注</div></div>
+        <div class="stats-col"><div class="stats-num">{{ .Followers }}</div><div class="stats-label">粉丝</div></div>
     </div>
-    <h5 class="mt-4 mb-3">作品墙</h5>
-    {{ if .Posts }}
-    <div class="user-post-grid">
+
+    <!-- Tabs: 3 equal-width buttons -->
+    {{ if .IsOwnProfile }}
+    <div class="profile-tabs">
+        <button class="profile-tab" :class="{ active: tab === 'posts' }" @click="switchTab('posts')">
+            <i class="bi bi-grid-3x3-gap"></i> 作品
+        </button>
+        <button class="profile-tab" :class="{ active: tab === 'likes' }" @click="switchTab('likes')">
+            <i class="bi bi-heart"></i> 点赞
+        </button>
+        <button class="profile-tab" :class="{ active: tab === 'favorites' }" @click="switchTab('favorites')">
+            <i class="bi bi-star"></i> 收藏
+        </button>
+    </div>
+    {{ end }}
+
+    <!-- Loading -->
+    <div x-show="loading" class="text-center py-5">
+        <div class="spinner-border text-warning" style="width:2rem;height:2rem"></div>
+    </div>
+
+    <!-- Post grid: 3 columns, tight spacing like Douyin -->
+    <div class="douyin-grid" id="profileGrid" x-show="!loading">
         {{ range .Posts }}
-        <a href="/post/{{ .ID }}" class="grid-item">
-            <img src="{{ .CoverImage }}" loading="lazy" onerror="this.style.background='#FFF0DC'">
-            <div class="overlay"><span><i class="bi bi-heart-fill"></i> {{ .LikeCount }}</span><span><i class="bi bi-chat-fill"></i> {{ .CommentCount }}</span></div>
+        <a href="/post/{{ .ID }}" class="douyin-item">
+            <img src="{{ .CoverImage }}" loading="lazy" onerror="this.style.background='var(--cream-dark)'">
+            <div class="douyin-overlay">
+                <span><i class="bi bi-heart-fill"></i> {{ .LikeCount }}</span>
+            </div>
         </a>
         {{ end }}
     </div>
-    {{ else }}<div class="text-center py-4 text-muted">还没有发布作品</div>{{ end }}
-</div></div>
-<script>function profileFollow(uid, init) { return { following: init, async toggleFollow() { const r = await fetch('/api/v1/users/'+uid+'/follow', {method:'POST'}); const d = await r.json(); if(d.code===0) this.following = d.data.following; } } }</script>
+
+    <!-- Empty -->
+    <div x-show="!loading && gridEmpty" class="text-center py-5 text-muted">
+        <i class="bi bi-camera" style="font-size:3rem"></i>
+        <p class="mt-2">还没有内容</p>
+    </div>
+
+    <!-- Load More -->
+    <div class="text-center mt-3" x-show="hasMore && !loading">
+        <button class="btn btn-outline-secondary btn-sm rounded-pill px-4" @click="loadMore()">加载更多</button>
+    </div>
+</div>
+
+<script>
+function profilePage(uid, isOwn, initFollowing) {
+    const pageSize = 12;
+    return {
+        tab: 'posts', page: 1, loading: false,
+        hasMore: {{ if .TotalPosts }}{{ if gt .TotalPosts 12 }}true{{ else }}false{{ end }}{{ else }}false{{ end }},
+        gridEmpty: {{ if .Posts }}false{{ else }}true{{ end }},
+        following: initFollowing,
+
+        async switchTab(t) {
+            if (this.tab === t) return;
+            this.tab = t; this.page = 1; this.loading = true; this.gridEmpty = false;
+            let url = t === 'posts' ? `/api/v1/feed?user_id=${uid}&page=1&page_size=${pageSize}`
+                    : t === 'likes' ? `/api/v1/likes?page=1&page_size=${pageSize}`
+                    : `/api/v1/favorites?page=1&page_size=${pageSize}`;
+            try { const r = await fetch(url); this.renderGrid(await r.json()); }
+            catch(e) { console.error(e); }
+            this.loading = false;
+        },
+
+        renderGrid(d) {
+            const grid = document.getElementById('profileGrid');
+            if (!grid) return;
+            grid.innerHTML = '';
+            if (d.code !== 0 || !d.data?.list?.length) { this.gridEmpty = true; this.hasMore = false; return; }
+            this.gridEmpty = false;
+            this.hasMore = d.data.list.length === pageSize;
+            d.data.list.forEach(p => {
+                const cover = p.cover_image || '';
+                grid.insertAdjacentHTML('beforeend',
+                    `<a href="/post/${p.id}" class="douyin-item">
+                        <img src="${cover}" loading="lazy" onerror="this.style.background='var(--cream-dark)'">
+                        <div class="douyin-overlay"><span><i class="bi bi-heart-fill"></i> ${p.like_count}</span></div>
+                    </a>`);
+            });
+        },
+
+        async loadMore() {
+            this.loading = true; this.page++;
+            let url = this.tab === 'posts' ? `/api/v1/feed?user_id=${uid}&page=${this.page}&page_size=${pageSize}`
+                    : this.tab === 'likes' ? `/api/v1/likes?page=${this.page}&page_size=${pageSize}`
+                    : `/api/v1/favorites?page=${this.page}&page_size=${pageSize}`;
+            try {
+                const r = await fetch(url); const d = await r.json();
+                const grid = document.getElementById('profileGrid');
+                if (d.code === 0 && d.data?.list?.length) {
+                    d.data.list.forEach(p => {
+                        const cover = p.cover_image || '';
+                        grid.insertAdjacentHTML('beforeend',
+                            `<a href="/post/${p.id}" class="douyin-item">
+                                <img src="${cover}" loading="lazy" onerror="this.style.background='var(--cream-dark)'">
+                                <div class="douyin-overlay"><span><i class="bi bi-heart-fill"></i> ${p.like_count}</span></div>
+                            </a>`);
+                    });
+                    this.hasMore = d.data.list.length === pageSize;
+                } else { this.hasMore = false; }
+            } catch(e) { console.error(e); }
+            this.loading = false;
+        },
+
+        async toggleFollow() {
+            const r = await fetch('/api/v1/users/'+uid+'/follow', {method:'POST'});
+            const d = await r.json();
+            if (d.code === 0) this.following = d.data.following;
+        }
+    };
+}
+</script>
 {{ template "footer" . }}
