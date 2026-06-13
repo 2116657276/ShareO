@@ -3,19 +3,39 @@
 ## 项目性质
 Go + Gin Web 应用，后端 API + 服务端渲染 HTML。数据库 MySQL，缓存 Redis，对象存储 MinIO。
 
+## 文件访问白名单
+
+### 测试 Agent 允许阅读（仅限这些）
+| 文件 | 用途 |
+|------|------|
+| `CLAUDE.md` | 本文档 — API 模板 + 规则 |
+| `FEATURES.md` | 功能清单 + 完整路由表 |
+| `TEST_CHECKLIST.md` | 分步测试用例 |
+| `PROJECT.md` | 项目架构说明 |
+| `feedback.md` | 已知 Bug 状态 |
+
+### 测试 Agent 禁止阅读
+- `internal/` 下所有文件（Go 源码）
+- `cmd/` 下所有文件（入口代码）
+- `migrations/` 下所有文件（SQL）
+- `web/` 下所有文件（模板/CSS）
+- `config.yaml` / `config.yaml.example`
+- `go.mod` / `go.sum` / `Makefile`
+- `.go` 后缀的所有文件
+
 ## 核心铁律
 
 ### 测试 Agent 规则（不可违反）
-1. **禁止阅读任何 .go 源代码文件** — 你是真实用户/管理员，不是开发者
-2. **禁止阅读 internal/ 目录下任何文件**
-3. **禁止阅读 migrations/ 目录下的 SQL 文件**
-4. **禁止直接连接 MySQL/Redis/MinIO** — 所有操作必须通过 HTTP API
-5. **禁止执行任何 SQL 语句** — 包括 SELECT/INSERT/UPDATE/DELETE
-6. 只能通过 `curl` 调用 `http://localhost:8080` 的 API 完成测试
-7. 测试用户命名规则: `test01`, `test02`, `test03`... 密码统一 `256500`
-8. 管理员账号: `admin` / `admin123`
-9. 可阅读的文件: `FEATURES.md`, `TEST_CHECKLIST.md`, `PROJECT.md`, `feedback.md`
-10. 测试结束后必须通过管理员 API 删除测试数据，保留原有帖子
+1. **你是真实用户/管理员，不是开发者** — 不知道系统内部实现
+2. **禁止阅读任何源代码** — 只读白名单中的 .md 文档
+3. **禁止直接连接 MySQL/Redis/MinIO** — 所有操作通过 HTTP API
+4. **禁止执行任何 SQL 语句**
+5. 只能通过 `curl` 调用 `http://localhost:8080` 的 API
+6. 也可以访问 Web 页面验证 HTML 渲染：`curl http://localhost:8080/login` 等
+7. 测试用户: `test01`, `test02`... 密码 `256500`
+8. 管理员: `admin` / `admin123`
+9. 测试结束后通过管理员 API 删除测试数据，保留原有帖子
+10. 每次 API 调用检查 HTTP 状态码和响应 JSON 的 `code` 字段
 
 ### 修复 Agent 规则
 1. 仅修改 `TASK.md` 中明确指定的文件和行
@@ -138,6 +158,26 @@ DELETE /api/v1/admin/posts/:id        管理员强制删帖
 GET  /api/v1/admin/users              用户列表
 PUT  /api/v1/admin/users/:id/status   封禁/解封 {status: 0|1}
 GET  /api/v1/admin/logs               系统日志
+```
+
+## Web 页面验证（模拟真实用户点击）
+测试 Agent 也应验证 HTML 页面渲染正确：
+```bash
+# 页面可访问性
+curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/          # 首页/登录页 → 200
+curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/login     # 登录页 → 200
+curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/register  # 注册页 → 200
+
+# 登录后页面（需带 cookie）
+curl -s -b "token=$TOKEN" -o /dev/null -w "%{http_code}" http://localhost:8080/home        # Feed → 200
+curl -s -b "token=$TOKEN" -o /dev/null -w "%{http_code}" http://localhost:8080/post/create  # 发布 → 200
+curl -s -b "token=$TOKEN" -o /dev/null -w "%{http_code}" http://localhost:8080/settings     # 设置 → 200
+
+# 管理员页面
+curl -s -b "token=$ADMIN_TOKEN" -o /dev/null -w "%{http_code}" http://localhost:8080/admin/  # 仪表盘 → 200
+
+# 权限验证（普通用户不能访问管理页）
+curl -s -b "token=$USER_TOKEN" -o /dev/null -w "%{http_code}" http://localhost:8080/admin/  # → 403
 ```
 
 ## 测试数据清理
