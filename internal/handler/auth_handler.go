@@ -66,12 +66,13 @@ func (h *AuthHandler) UpdateProfile(c *gin.Context) {
 	var req struct {
 		AvatarURL string `json:"avatar_url"`
 		Bio       string `json:"bio"`
+		Email     string `json:"email"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.BadRequest(c, err.Error())
 		return
 	}
-	if err := h.svc.UpdateProfile(userID, req.AvatarURL, req.Bio, ""); err != nil {
+	if err := h.svc.UpdateProfile(userID, req.AvatarURL, req.Bio, req.Email); err != nil {
 		response.InternalError(c, err.Error())
 		return
 	}

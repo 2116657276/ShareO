@@ -63,7 +63,7 @@ func (r *LikeRepo) GetUserLikedPosts(userID int64, page, pageSize int) ([]model.
 		Order("created_at DESC").Offset(offset).Limit(pageSize).Pluck("post_id", &postIDs)
 
 	if len(postIDs) == 0 {
-		return nil, total, nil
+		return []model.Post{}, total, nil
 	}
 
 	var posts []model.Post

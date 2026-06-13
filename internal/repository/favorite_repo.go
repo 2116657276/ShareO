@@ -47,7 +47,7 @@ func (r *FavoriteRepo) GetUserFavorites(userID int64, page, pageSize int) ([]mod
 		postIDs[i] = f.PostID
 	}
 	if len(postIDs) == 0 {
-		return nil, total, nil
+		return []model.Post{}, total, nil
 	}
 
 	var posts []model.Post

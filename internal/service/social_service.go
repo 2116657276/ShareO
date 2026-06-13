@@ -88,6 +88,11 @@ func (s *SocialService) CreateComment(userID int64, req CreateCommentReq) (*mode
 		return nil, errors.New("评论内容不能为空")
 	}
 
+	post, err := s.postRepo.FindByID(req.PostID)
+	if err != nil || post == nil || post.IsDeleted == 1 {
+		return nil, errors.New("帖子不存在")
+	}
+
 	comment := &model.Comment{
 		PostID:     req.PostID,
 		UserID:     userID,

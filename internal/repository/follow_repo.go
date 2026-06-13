@@ -48,7 +48,7 @@ func (r *FollowRepo) GetFollowing(userID int64, page, pageSize int) ([]model.Use
 		Order("created_at DESC").Offset(offset).Limit(pageSize).Pluck("followee_id", &followeeIDs)
 
 	if len(followeeIDs) == 0 {
-		return nil, total, nil
+		return []model.User{}, total, nil
 	}
 
 	var users []model.User
@@ -67,7 +67,7 @@ func (r *FollowRepo) GetFollowers(userID int64, page, pageSize int) ([]model.Use
 		Order("created_at DESC").Offset(offset).Limit(pageSize).Pluck("follower_id", &followerIDs)
 
 	if len(followerIDs) == 0 {
-		return nil, total, nil
+		return []model.User{}, total, nil
 	}
 
 	var users []model.User
