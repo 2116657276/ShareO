@@ -142,3 +142,32 @@ func (s *AuthService) UpdateProfileWeb(userID int64, email, bio string) error {
 	}
 	return s.userRepo.UpdateFields(userID, updates)
 }
+
+// ChangePassword validates the old password, updates to the new one, and clears login cache.
+func (s *AuthService) ChangePassword(userID int64, oldPassword, newPassword string) error {
+	if len(newPassword) < 6 {
+		return errors.New("新密码至少6个字符")
+	}
+	user, err := s.userRepo.FindByID(userID)
+	if err != nil {
+		return err
+	}
+	if user == nil {
+		return errors.New("用户不存在")
+	}
+	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(oldPassword)); err != nil {
+		return errors.New("原密码错误")
+	}
+	hashed, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
+	if err != nil {
+		return err
+	}
+	if err := s.userRepo.UpdateFields(userID, map[string]interface{}{"password_hash": string(hashed)}); err != nil {
+		return err
+	}
+	// Force re-login by deleting login cache
+	if err := repository.DeleteLoginToken(context.Background(), userID); err != nil {
+		log.Printf("AuthService.ChangePassword: failed to delete login cache for user %d: %v", userID, err)
+	}
+	return nil
+}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"log/slog"
 	"net/http"
+	"net/url"
 
 	"github.com/gin-gonic/gin"
 	"github.com/zhoujianlin/ShareO/internal/pkg/jwt"
@@ -229,4 +230,42 @@ func (h *AuthHandler) WebLogout(c *gin.Context) {
 		SameSite: http.SameSiteLaxMode,
 	})
 	c.Redirect(http.StatusFound, "/login")
+}
+
+// ChangePassword handles API password change (JSON).
+func (h *AuthHandler) ChangePassword(c *gin.Context) {
+	userID := c.GetInt64("user_id")
+	var req struct {
+		OldPassword string `json:"old_password" binding:"required"`
+		NewPassword string `json:"new_password" binding:"required,min=6"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
+	if err := h.svc.ChangePassword(userID, req.OldPassword, req.NewPassword); err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
+	response.Success(c, nil)
+}
+
+// WebChangePassword handles Web form password change.
+func (h *AuthHandler) WebChangePassword(c *gin.Context) {
+	userID := c.GetInt64("user_id")
+	oldPassword := c.PostForm("old_password")
+	newPassword := c.PostForm("new_password")
+	if err := h.svc.ChangePassword(userID, oldPassword, newPassword); err != nil {
+		c.HTML(http.StatusOK, "settings.html", userData(c, gin.H{
+			"title": "设置 - ShareO",
+			"Error": "密码修改失败: " + err.Error(),
+		}))
+		return
+	}
+	// Force re-login: clear cookie and redirect
+	http.SetCookie(c.Writer, &http.Cookie{
+		Name: "token", Value: "", Path: "/", MaxAge: -1,
+		HttpOnly: true, Secure: gin.Mode() == gin.ReleaseMode, SameSite: http.SameSiteLaxMode,
+	})
+	c.Redirect(http.StatusFound, "/login?message="+url.QueryEscape("密码已修改，请重新登录"))
 }

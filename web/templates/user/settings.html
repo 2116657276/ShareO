@@ -25,7 +25,18 @@
     </div>
     <div class="card border-0 shadow-sm rounded-4 p-4">
         <h6 class="mb-3">安全</h6>
-        <p class="text-muted small">密码修改功能即将上线</p>
+        <form method="POST" action="/settings/password">
+            <div class="mb-3">
+                <label class="form-label">当前密码</label>
+                <input type="password" name="old_password" class="form-control" required minlength="6" placeholder="请输入当前密码">
+            </div>
+            <div class="mb-3">
+                <label class="form-label">新密码</label>
+                <input type="password" name="new_password" class="form-control" required minlength="6" placeholder="至少6个字符">
+            </div>
+            <button type="submit" class="btn btn-warning"><i class="bi bi-shield-lock"></i> 修改密码</button>
+            <small class="text-muted d-block mt-2">修改后需要重新登录</small>
+        </form>
     </div>
 </div></div>
 {{ template "footer" . }}
