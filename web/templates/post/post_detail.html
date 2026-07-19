@@ -29,6 +29,12 @@
                 <br><small class="text-muted">{{ $post.CreatedAt.Format "2006-01-02 15:04" }}</small>
             </div>
             <span class="ms-auto text-muted small"><i class="bi bi-eye"></i> {{ $post.ViewCount }}</span>
+            {{ if and $.user_id (ne $.user_id $post.UserID) }}
+            <a href="/chat" class="btn btn-sm btn-outline-primary ms-2"
+               onclick="fetch('/api/v1/conversations',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user_id:{{$post.UserID}}})}).then(r=>r.json()).then(d=>{if(d.code===0)location.href='/chat?conv='+d.data.id})">
+                <i class="bi bi-chat-dots"></i> 私信
+            </a>
+            {{ end }}
         </div>
 
         {{ if and (eq $post.IsRepost 1) $post.RepostOf }}

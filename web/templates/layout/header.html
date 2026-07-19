@@ -31,6 +31,12 @@
                         <span class="badge position-absolute top-0 start-100 translate-middle bg-danger rounded-pill" style="font-size:0.55rem" x-show="unread > 0" x-text="unread"></span>
                     </a>
                 </li>
+                <li class="nav-item" x-data="{ unread: 0, init() { this.poll(); setInterval(() => this.poll(), 30000) }, async poll() { try { const r = await fetch('/api/v1/conversations/unread-count'); const d = await r.json(); if (d.code === 0) this.unread = d.data.total; } catch(e) {} } }">
+                    <a class="nav-link position-relative" href="/chat">
+                        <i class="bi bi-chat-dots"></i> 消息
+                        <span class="badge position-absolute top-0 start-100 translate-middle bg-danger rounded-pill" style="font-size:0.55rem" x-show="unread > 0" x-text="unread"></span>
+                    </a>
+                </li>
                 {{ if eq .role "admin" }}
                 <li class="nav-item"><a class="nav-link" href="/admin"><i class="bi bi-shield-check"></i> 管理</a></li>
                 {{ end }}
