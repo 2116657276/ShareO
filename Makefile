@@ -1,4 +1,4 @@
-.PHONY: run build migrate seed clean tidy start
+.PHONY: run build migrate seed clean tidy start fmt check
 
 # One-click start (check services + build + launch + open browser)
 start:
@@ -45,12 +45,29 @@ reset-db:
 setup: migrate seed
 	@echo "Setup complete. Run 'make run' to start."
 
+# Format check — fails if any Go file is not gofmt compliant
+fmt:
+	@if [ -n "$$(gofmt -l .)" ]; then \
+		echo "ERROR: unformatted Go files:"; \
+		gofmt -l .; \
+		exit 1; \
+	fi
+	@echo "All Go files are properly formatted."
+
+# One-command validation: format check + vet + test
+check: fmt
+	go vet ./...
+	go test -count=1 ./...
+	@echo "All checks passed."
+
 # Show help
 help:
 	@echo "ShareO Makefile targets:"
 	@echo "  make start     - 🚀 一键启动(检查服务+编译+打开浏览器)"
 	@echo "  make run       - Start development server (bare)"
 	@echo "  make build     - Build binary"
+	@echo "  make check     - Run fmt check + vet + test"
+	@echo "  make fmt       - Check code formatting (gofmt)"
 	@echo "  make migrate   - Run database migration"
 	@echo "  make seed      - Generate test data"
 	@echo "  make setup     - migrate + seed"
