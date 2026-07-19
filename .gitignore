@@ -45,3 +45,4 @@ resources/
 
 # Misc
 *.docx
+.playwright-mcp/
