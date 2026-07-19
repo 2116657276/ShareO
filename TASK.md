@@ -1,18 +1,18 @@
 # TASK.md — 开发任务跟踪
 
-> 更新时间: 2026-07-19 | 当前阶段: **Phase 0 基建+还债**（详细步骤见 [docs/plan.md](docs/plan.md)）
+> 更新时间: 2026-07-20 | 当前阶段: **Phase 0 完成 → Phase 1 待启动**（详细步骤见 [docs/plan.md](docs/plan.md)）
 
-## 当前待办（Phase 0，按序执行）
+## 当前待办（Phase 0 基本完成，遗留项排入下阶段）
 
-- [ ] 0.0 **先执行** `bash scripts/cleanup_v2_restructure.sh`（结构清理收尾：文档归位 docs/、照片移出 git、模板整理；2026-07-19 会话因环境故障未能代跑），跑完 `git status` 检查后分块提交
-- [ ] 0.1 评审易修项修复：20 项，清单见 [2026-07-19 评审报告](docs/reviews/2026-07-19-code-review.md)，每项独立提交
-- [ ] 0.2.1 Makefile 补 `fmt` / `check` 目标
-- [ ] 0.2.2 slog 结构化日志替换 log.Printf
-- [ ] 0.2.3 密码修改功能（API + 设置页）
-- [ ] 0.2.4 CI 工作流文件（GitHub Actions）
-- [ ] 0.3 deploy/docker-compose.yml（MySQL/Redis/MinIO/Qdrant）+ README 快速开始更新
-- [ ] 0.4 ai-service 脚手架（uv + FastAPI + /healthz + ruff + pytest）
-- [ ] 0.5 队列骨架打通（Go XADD → Python 消费/ACK/重领）
+- [x] 0.0 结构清理脚本 `bash scripts/cleanup_v2_restructure.sh`（2026-07-20 执行完毕）
+- [x] 0.1 评审修复 SR-01~SR-22（20 项，SR-07/SR-12/SR-23 排入 Phase 1 前）
+- [x] 0.2.1 Makefile `fmt` / `check` 目标
+- [x] 0.2.2 slog 结构化日志迁移（handler/middleware 层完成，repository/service 层后续渐进）
+- [ ] 0.2.3 密码修改功能（排入 Phase 0 收尾）
+- [x] 0.2.4 CI 工作流文件（Go + Python）
+- [x] 0.3 deploy/docker-compose.yml（MySQL/Redis/MinIO/Qdrant）
+- [x] 0.4 ai-service 脚手架（FastAPI + healthz + pytest）
+- [x] 0.5 队列骨架打通（Go Streams → Python consumer）
 
 ## 中难度待排期（不阻塞 Phase 0 退出）
 
@@ -26,5 +26,6 @@
 
 ## 已完成（归档）
 
-- [x] 2026-07-19: v2 立项——架构/ADR×5/路线图/详细计划/开发规范/文档体系（docs/）；全量代码评审（4 P1 + 8 P2 + 12 P3）；项目结构清理（example 脚本合并、根目录文档归位 docs/、个人照片移出 git、死链修复）
+- [x] 2026-07-20: Phase 0 基本完成——结构清理、20 项评审修复（P1×4 + P2×6 + P3×10）、Makefile check、slog 迁移、CI workflows、Docker Compose、ai-service 脚手架、队列骨架
+- [x] 2026-07-19: v2 立项——架构/ADR×5/路线图/详细计划/开发规范/文档体系（docs/）；全量代码评审（4 P1 + 8 P2 + 12 P3）
 - [x] 2026-06-19: 上轮评审 18/21 项修复 + 文档同步
