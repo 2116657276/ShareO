@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
@@ -29,13 +30,16 @@ var upgrader = websocket.Upgrader{
 	ReadBufferSize:  1024,
 	WriteBufferSize: 1024,
 	CheckOrigin: func(r *http.Request) bool {
-		// Allow same-origin and localhost for development.
-		// In production, restrict to the deployed domain.
 		origin := r.Header.Get("Origin")
 		if origin == "" {
-			return true // same-origin requests have no Origin header
+			return true // same-origin requests (browser pages) have no Origin header
 		}
-		return true // Phase 1: accept all origins (CSRF mitigated by JWT auth)
+		// Allow localhost origins for development
+		if strings.HasPrefix(origin, "http://localhost:") || strings.HasPrefix(origin, "http://127.0.0.1:") {
+			return true
+		}
+		// In production, add the deployed domain to the allowed origins
+		return false
 	},
 }
 
@@ -51,11 +55,11 @@ func (h *ChatHandler) ServeWS(c *gin.Context) {
 			userID = claims.UserID
 		}
 	}
-	// Fallback: query param for native clients (e.g., mobile apps)
+	// Fallback: Authorization header for native clients (e.g., mobile apps)
 	if userID == 0 {
-		qt := c.Query("token")
-		if qt != "" {
-			claims, parseErr := jwt.ParseToken(qt)
+		authHeader := c.GetHeader("Authorization")
+		if strings.HasPrefix(authHeader, "Bearer ") {
+			claims, parseErr := jwt.ParseToken(strings.TrimPrefix(authHeader, "Bearer "))
 			if parseErr == nil {
 				userID = claims.UserID
 			}
