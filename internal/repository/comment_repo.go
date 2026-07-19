@@ -20,6 +20,15 @@ func (r *CommentRepo) CountNonDeleted() int64 {
 	return count
 }
 
+// HasUserCommented checks whether a user has commented on a given post.
+func (r *CommentRepo) HasUserCommented(postID, userID int64) (bool, error) {
+	var count int64
+	err := DB.Model(&model.Comment{}).
+		Where("post_id = ? AND user_id = ? AND is_deleted = 0", postID, userID).
+		Count(&count).Error
+	return count > 0, err
+}
+
 func (r *CommentRepo) Create(comment *model.Comment) error {
 	return DB.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Create(comment).Error; err != nil {

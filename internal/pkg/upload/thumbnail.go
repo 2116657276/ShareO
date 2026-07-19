@@ -30,9 +30,14 @@ type UploadResult struct {
 	Thumb    string `json:"thumb"`
 }
 
+// uploadSem limits concurrent image processing to prevent OOM.
+var uploadSem = make(chan struct{}, 4)
+
 // ProcessAndUpload reads an image, generates thumb+medium sizes,
 // and uploads all three to MinIO. Returns URLs keyed by size.
 func ProcessAndUpload(reader io.Reader, size int64, contentType, originalName string) (*UploadResult, error) {
+	uploadSem <- struct{}{}
+	defer func() { <-uploadSem }()
 	// Read entire file into memory
 	data, err := io.ReadAll(reader)
 	if err != nil {

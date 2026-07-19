@@ -124,6 +124,24 @@ func (s *SocialService) CreateComment(userID int64, req CreateCommentReq) (*mode
 		return nil, ErrPostNotFound
 	}
 
+	// Validate reply_to_uid: target user must exist and be involved in the discussion
+	if req.ReplyToUID != nil && *req.ReplyToUID > 0 {
+		target, err := s.userRepo.FindByID(*req.ReplyToUID)
+		if err != nil {
+			return nil, err
+		}
+		if target == nil {
+			return nil, errors.New("回复的用户不存在")
+		}
+		// Only allow replying to post author or existing commenters
+		if *req.ReplyToUID != post.UserID {
+			hasComment, _ := s.commentRepo.HasUserCommented(post.ID, *req.ReplyToUID)
+			if !hasComment {
+				return nil, errors.New("只能回复帖子作者或已有评论的用户")
+			}
+		}
+	}
+
 	comment := &model.Comment{
 		PostID:     req.PostID,
 		UserID:     userID,
