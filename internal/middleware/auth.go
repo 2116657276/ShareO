@@ -2,7 +2,7 @@ package middleware
 
 import (
 	"context"
-	"log"
+	"log/slog"
 	"net/http"
 	"strings"
 
@@ -73,7 +73,7 @@ func AuthRequired() gin.HandlerFunc {
 				return
 			}
 			// Redis error — fail-open (consistent with rate limiter behavior)
-			log.Printf("AuthRequired: Redis error checking login cache for user %d: %v", claims.UserID, err)
+			slog.Warn("Redis error checking login cache", "user_id", claims.UserID, "err", err)
 		} else {
 			if cachedToken != token {
 				// Token mismatch — logged in from another device/session
@@ -90,7 +90,7 @@ func AuthRequired() gin.HandlerFunc {
 			}
 			// Token matches — refresh TTL (sliding window)
 			if err := repository.RefreshLoginToken(context.Background(), claims.UserID, repository.LoginCacheTTL); err != nil {
-				log.Printf("AuthRequired: failed to refresh login TTL for user %d: %v", claims.UserID, err)
+				slog.Warn("failed to refresh login TTL", "user_id", claims.UserID, "err", err)
 			}
 		}
 

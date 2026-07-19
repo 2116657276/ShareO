@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"html/template"
 	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -37,6 +38,15 @@ func main() {
 
 	// Set Gin mode
 	gin.SetMode(cfg.Server.Mode)
+
+	// Init structured logger
+	var slogHandler slog.Handler
+	if cfg.Server.Mode == "release" {
+		slogHandler = slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo})
+	} else {
+		slogHandler = slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug})
+	}
+	slog.SetDefault(slog.New(slogHandler))
 
 	// Init MySQL
 	if err := repository.InitDB(cfg.Database, cfg.Server.Mode); err != nil {
@@ -130,9 +140,8 @@ func main() {
 	})
 
 	addr := fmt.Sprintf(":%d", cfg.Server.Port)
-	log.Printf("ShareO server starting on http://localhost%s", addr)
-	log.Printf("Mode: %s", cfg.Server.Mode)
-	log.Printf("MinIO bucket: %s", cfg.MinIO.Bucket)
+	slog.Info("ShareO server starting", "addr", addr, "mode", cfg.Server.Mode)
+	slog.Info("MinIO bucket configured", "bucket", cfg.MinIO.Bucket)
 
 	// Print helpful startup info
 	fmt.Println()
@@ -159,12 +168,12 @@ func main() {
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
-	log.Println("Shutting down server...")
+	slog.Info("shutting down server...")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	if err := srv.Shutdown(ctx); err != nil {
 		log.Fatalf("Server forced to shutdown: %v", err)
 	}
-	log.Println("Server exited")
+	slog.Info("server exited")
 }

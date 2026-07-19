@@ -1,7 +1,7 @@
 package middleware
 
 import (
-	"log"
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -30,7 +30,7 @@ func RateLimit(maxRequests int, window time.Duration) gin.HandlerFunc {
 
 		// Fail-open when Redis is not initialized or unavailable
 		if repository.RDB == nil {
-			log.Printf("RateLimit: Redis not initialized (fail-open)")
+			slog.Warn("Redis not initialized, rate limiting disabled (fail-open)")
 			c.Next()
 			return
 		}
@@ -39,7 +39,7 @@ func RateLimit(maxRequests int, window time.Duration) gin.HandlerFunc {
 		count, err := setExpireScript.Run(ctx, repository.RDB, []string{key}, int(window.Seconds())).Int64()
 		if err != nil {
 			// Redis error: allow request to pass through (fail-open)
-			log.Printf("RateLimit: Redis error (fail-open): %v", err)
+			slog.Warn("Redis error in rate limiter (fail-open)", "err", err)
 			c.Next()
 			return
 		}

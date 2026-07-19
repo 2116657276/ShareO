@@ -2,7 +2,7 @@ package handler
 
 import (
 	"context"
-	"log"
+	"log/slog"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -70,7 +70,7 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 	userID := c.GetInt64("user_id")
 	if userID > 0 {
 		if err := repository.DeleteLoginToken(context.Background(), userID); err != nil {
-			log.Printf("Logout: failed to delete login cache for user %d: %v", userID, err)
+			slog.Warn("failed to delete login cache", "user_id", userID, "err", err)
 		}
 	}
 	http.SetCookie(c.Writer, &http.Cookie{
@@ -216,7 +216,7 @@ func (h *AuthHandler) WebLogout(c *gin.Context) {
 	userID := c.GetInt64("user_id")
 	if userID > 0 {
 		if err := repository.DeleteLoginToken(context.Background(), userID); err != nil {
-			log.Printf("WebLogout: failed to delete login cache for user %d: %v", userID, err)
+			slog.Warn("failed to delete login cache on web logout", "user_id", userID, "err", err)
 		}
 	}
 	http.SetCookie(c.Writer, &http.Cookie{
