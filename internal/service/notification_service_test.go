@@ -76,11 +76,6 @@ func TestNotificationService_Send_SkipsSelf(t *testing.T) {
 	if len(mock.notifs) != 0 {
 		t.Errorf("expected 0 notifications for self-action, got %d", len(mock.notifs))
 	}
-
-	total, failed := svc.Stats()
-	if total != 0 || failed != 0 {
-		t.Errorf("Stats after skipped send = (%d, %d), want (0, 0)", total, failed)
-	}
 }
 
 func TestNotificationService_Send_Success(t *testing.T) {
@@ -106,13 +101,6 @@ func TestNotificationService_Send_Success(t *testing.T) {
 		t.Errorf("TargetID = %d, want 42", n.TargetID)
 	}
 
-	total, failed := svc.Stats()
-	if total != 1 {
-		t.Errorf("total = %d, want 1", total)
-	}
-	if failed != 0 {
-		t.Errorf("failed = %d, want 0", failed)
-	}
 }
 
 func TestNotificationService_Send_RepoError(t *testing.T) {
@@ -126,33 +114,6 @@ func TestNotificationService_Send_RepoError(t *testing.T) {
 		t.Errorf("expected 0 notifications on repo error, got %d", len(mock.notifs))
 	}
 
-	// Stats should reflect the failure
-	total, failed := svc.Stats()
-	if total != 1 {
-		t.Errorf("total = %d, want 1 (even failed sends count towards total)", total)
-	}
-	if failed != 1 {
-		t.Errorf("failed = %d, want 1", failed)
-	}
-}
-
-func TestNotificationService_Stats_MultipleSends(t *testing.T) {
-	mock := &mockNotifRepo{}
-	svc := &NotificationService{repo: mock}
-
-	// 3 successful sends + 1 self-skip
-	svc.Send(2, 1, model.NotifTypeLike, 1)
-	svc.Send(3, 1, model.NotifTypeComment, 2)
-	svc.Send(1, 1, model.NotifTypeFollow, 3) // self → skipped
-	svc.Send(4, 1, model.NotifTypeRepost, 4)
-
-	total, failed := svc.Stats()
-	if total != 3 {
-		t.Errorf("total = %d, want 3 (self-skip not counted)", total)
-	}
-	if failed != 0 {
-		t.Errorf("failed = %d, want 0", failed)
-	}
 }
 
 func TestNotificationService_List_Defaults(t *testing.T) {

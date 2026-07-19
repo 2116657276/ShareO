@@ -24,8 +24,8 @@ import (
 
 var hashtagLinkRE = regexp.MustCompile(`#([\p{L}\p{N}_]+)`)
 var (
-	mediumToThumbRE   = regexp.MustCompile(`/posts/medium/`)
-	anyToMediumRE     = regexp.MustCompile(`/posts/(original|thumb)/`)
+	mediumToThumbRE = regexp.MustCompile(`/posts/medium/`)
+	anyToMediumRE   = regexp.MustCompile(`/posts/(original|thumb)/`)
 )
 
 func main() {
@@ -117,6 +117,9 @@ func main() {
 	rootFiles, _ := filepath.Glob("web/templates/*.html")
 	subFiles, _ := filepath.Glob("web/templates/*/*.html")
 	allTemplates := append(rootFiles, subFiles...)
+	if len(allTemplates) == 0 {
+		log.Fatal("no templates found in web/templates/ — check working directory")
+	}
 
 	// Reload templates after setting func map
 	r.LoadHTMLFiles(allTemplates...)

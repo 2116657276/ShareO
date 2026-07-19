@@ -52,18 +52,6 @@ func (r *TopicRepo) Delete(id int64) error {
 	return DB.Delete(&model.Topic{}, id).Error
 }
 
-func (r *TopicRepo) IncrementPostCount(topicID int64) {
-	if err := DB.Model(&model.Topic{}).Where("id = ?", topicID).UpdateColumn("post_count", DB.Raw("post_count + 1")).Error; err != nil {
-		log.Printf("TopicRepo.IncrementPostCount(%d): %v", topicID, err)
-	}
-}
-
-func (r *TopicRepo) DecrementPostCount(topicID int64) {
-	if err := DB.Model(&model.Topic{}).Where("id = ? AND post_count > 0", topicID).UpdateColumn("post_count", DB.Raw("post_count - 1")).Error; err != nil {
-		log.Printf("TopicRepo.DecrementPostCount(%d): %v", topicID, err)
-	}
-}
-
 func (r *TopicRepo) FindByName(name string) (*model.Topic, error) {
 	var topic model.Topic
 	err := DB.Where("LOWER(name) = LOWER(?)", name).First(&topic).Error
@@ -71,31 +59,6 @@ func (r *TopicRepo) FindByName(name string) (*model.Topic, error) {
 		return nil, nil
 	}
 	return &topic, err
-}
-
-func (r *TopicRepo) FindOrCreate(name string) (*model.Topic, bool, error) {
-	name = strings.ToLower(name)
-	topic, err := r.FindByName(name)
-	if err != nil {
-		return nil, false, err
-	}
-	if topic != nil {
-		return topic, false, nil
-	}
-	topic = &model.Topic{Name: name, Status: 1}
-	if err := r.Create(topic); err != nil {
-		return nil, false, err
-	}
-	return topic, true, nil
-}
-
-func (r *TopicRepo) AddPostToTopic(topicID, postID int64) error {
-	tp := model.TopicPost{TopicID: topicID, PostID: postID}
-	if err := DB.Create(&tp).Error; err != nil {
-		return err
-	}
-	r.IncrementPostCount(topicID)
-	return nil
 }
 
 // FindOrCreateWithTx finds or creates a topic within a transaction.

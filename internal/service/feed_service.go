@@ -11,9 +11,9 @@ import (
 )
 
 type FeedService struct {
-	postRepo  *repository.PostRepo
-	likeRepo  *repository.LikeRepo
-	favRepo   *repository.FavoriteRepo
+	postRepo *repository.PostRepo
+	likeRepo *repository.LikeRepo
+	favRepo  *repository.FavoriteRepo
 }
 
 func NewFeedService() *FeedService {
@@ -25,7 +25,7 @@ func NewFeedService() *FeedService {
 }
 
 type FeedReq struct {
-	Sort     string `form:"sort"`     // model.SortLatest (default) or "hot"
+	Sort     string `form:"sort"` // model.SortLatest (default) or "hot"
 	TopicID  *int64 `form:"topic_id"`
 	UserID   *int64 `form:"user_id"`
 	Page     int    `form:"page"`

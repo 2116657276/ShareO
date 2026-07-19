@@ -146,6 +146,7 @@ func (h *AdminHandler) UsersPage(c *gin.Context) {
 }
 
 func (h *AdminHandler) UpdateUserStatus(c *gin.Context) {
+	adminID := c.GetInt64("user_id")
 	userID := getInt64Param(c, "id")
 	var req struct {
 		Status int8 `json:"status"`
@@ -154,7 +155,7 @@ func (h *AdminHandler) UpdateUserStatus(c *gin.Context) {
 		response.BadRequest(c, err.Error())
 		return
 	}
-	if err := h.svc.UpdateUserStatus(userID, req.Status); err != nil {
+	if err := h.svc.UpdateUserStatus(adminID, userID, req.Status); err != nil {
 		response.BadRequest(c, err.Error())
 		return
 	}

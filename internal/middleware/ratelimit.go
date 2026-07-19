@@ -22,7 +22,7 @@ var setExpireScript = redis.NewScript(`
 
 // RateLimit returns a middleware that limits requests per IP+endpoint using Redis.
 // maxRequests: max requests allowed within the window
-// window: rolling time window
+// window: fixed window (INCR + EXPIRE)
 func RateLimit(maxRequests int, window time.Duration) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		ip := c.ClientIP()

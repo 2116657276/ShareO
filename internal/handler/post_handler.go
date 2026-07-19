@@ -103,7 +103,7 @@ func (h *PostHandler) DetailPage(c *gin.Context) {
 	c.HTML(http.StatusOK, "post_detail.html", userData(c, gin.H{
 		"title": post.Content,
 		"Post":  post,
-})) 
+	}))
 }
 
 func (h *PostHandler) EditPage(c *gin.Context) {
@@ -117,7 +117,7 @@ func (h *PostHandler) EditPage(c *gin.Context) {
 	c.HTML(http.StatusOK, "edit_post.html", userData(c, gin.H{
 		"title": "编辑帖子 - ShareO",
 		"Post":  post,
-})) 
+	}))
 }
 
 // WebCreate handles form-based post creation

@@ -31,14 +31,14 @@ func (h *AuthHandler) Register(c *gin.Context) {
 	}
 	// Set cookie for web
 	http.SetCookie(c.Writer, &http.Cookie{
-			Name:     "token",
-			Value:    resp.Token,
-			Path:     "/",
-			MaxAge:   int(jwt.ExpireDuration().Seconds()),
-			HttpOnly: true,
-			Secure:   gin.Mode() == gin.ReleaseMode,
-			SameSite: http.SameSiteLaxMode,
-		})
+		Name:     "token",
+		Value:    resp.Token,
+		Path:     "/",
+		MaxAge:   int(jwt.ExpireDuration().Seconds()),
+		HttpOnly: true,
+		Secure:   gin.Mode() == gin.ReleaseMode,
+		SameSite: http.SameSiteLaxMode,
+	})
 	response.Success(c, resp)
 }
 
@@ -54,14 +54,14 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		return
 	}
 	http.SetCookie(c.Writer, &http.Cookie{
-			Name:     "token",
-			Value:    resp.Token,
-			Path:     "/",
-			MaxAge:   int(jwt.ExpireDuration().Seconds()),
-			HttpOnly: true,
-			Secure:   gin.Mode() == gin.ReleaseMode,
-			SameSite: http.SameSiteLaxMode,
-		})
+		Name:     "token",
+		Value:    resp.Token,
+		Path:     "/",
+		MaxAge:   int(jwt.ExpireDuration().Seconds()),
+		HttpOnly: true,
+		Secure:   gin.Mode() == gin.ReleaseMode,
+		SameSite: http.SameSiteLaxMode,
+	})
 	response.Success(c, resp)
 }
 
@@ -133,14 +133,14 @@ func (h *AuthHandler) WebLogin(c *gin.Context) {
 		return
 	}
 	http.SetCookie(c.Writer, &http.Cookie{
-			Name:     "token",
-			Value:    resp.Token,
-			Path:     "/",
-			MaxAge:   int(jwt.ExpireDuration().Seconds()),
-			HttpOnly: true,
-			Secure:   gin.Mode() == gin.ReleaseMode,
-			SameSite: http.SameSiteLaxMode,
-		})
+		Name:     "token",
+		Value:    resp.Token,
+		Path:     "/",
+		MaxAge:   int(jwt.ExpireDuration().Seconds()),
+		HttpOnly: true,
+		Secure:   gin.Mode() == gin.ReleaseMode,
+		SameSite: http.SameSiteLaxMode,
+	})
 	if resp.User.Role == "admin" {
 		c.Redirect(http.StatusFound, "/admin")
 	} else {
@@ -158,14 +158,14 @@ func (h *AuthHandler) WebRegister(c *gin.Context) {
 		return
 	}
 	http.SetCookie(c.Writer, &http.Cookie{
-			Name:     "token",
-			Value:    resp.Token,
-			Path:     "/",
-			MaxAge:   int(jwt.ExpireDuration().Seconds()),
-			HttpOnly: true,
-			Secure:   gin.Mode() == gin.ReleaseMode,
-			SameSite: http.SameSiteLaxMode,
-		})
+		Name:     "token",
+		Value:    resp.Token,
+		Path:     "/",
+		MaxAge:   int(jwt.ExpireDuration().Seconds()),
+		HttpOnly: true,
+		Secure:   gin.Mode() == gin.ReleaseMode,
+		SameSite: http.SameSiteLaxMode,
+	})
 	c.Redirect(http.StatusFound, "/home")
 }
 
@@ -230,4 +230,3 @@ func (h *AuthHandler) WebLogout(c *gin.Context) {
 	})
 	c.Redirect(http.StatusFound, "/login")
 }
-

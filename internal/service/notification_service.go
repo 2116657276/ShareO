@@ -47,11 +47,6 @@ func (s *NotificationService) Send(userID, actorID int64, notifType string, targ
 	atomic.AddInt64(&s.totalCount, 1)
 }
 
-// Stats returns (total send attempts, failed sends) for observability.
-func (s *NotificationService) Stats() (total, failed int64) {
-	return atomic.LoadInt64(&s.totalCount), atomic.LoadInt64(&s.failCount)
-}
-
 func (s *NotificationService) List(userID int64, unreadOnly bool, page, pageSize int) ([]model.Notification, int64, error) {
 	if page <= 0 {
 		page = 1

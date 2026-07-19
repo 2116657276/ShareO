@@ -182,10 +182,10 @@ func TestError(t *testing.T) {
 
 func TestPageResponse(t *testing.T) {
 	pr := PageResponse{
-		List:      []int{1, 2, 3},
-		Total:     100,
-		Page:      1,
-		PageSize:  20,
+		List:       []int{1, 2, 3},
+		Total:      100,
+		Page:       1,
+		PageSize:   20,
 		TotalPages: 5,
 	}
 	b, _ := json.Marshal(pr)

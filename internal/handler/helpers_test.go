@@ -179,8 +179,8 @@ func TestRespondPage(t *testing.T) {
 	}
 
 	var resp struct {
-		Code    int      `json:"code"`
-		Message string   `json:"message"`
+		Code    int    `json:"code"`
+		Message string `json:"message"`
 		Data    struct {
 			List       []string `json:"list"`
 			Total      int64    `json:"total"`

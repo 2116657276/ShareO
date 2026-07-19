@@ -56,7 +56,7 @@ func (h *FeedHandler) GetFeed(c *gin.Context) {
 		Page:       req.Page,
 		PageSize:   pageSize,
 		TotalPages: totalPages,
-})
+	})
 }
 
 func (h *FeedHandler) HomePage(c *gin.Context) {
@@ -79,10 +79,10 @@ func (h *FeedHandler) HomePage(c *gin.Context) {
 
 	posts, total, err := h.svc.GetFeed(req, currentUserID)
 	if err != nil {
-		c.HTML(http.StatusOK, "feed.html", gin.H{
+		c.HTML(http.StatusOK, "feed.html", userData(c, gin.H{
 			"title": "ShareO - 发现美好",
 			"Error": err.Error(),
-})
+		}))
 		return
 	}
 

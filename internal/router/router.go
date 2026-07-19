@@ -120,8 +120,8 @@ func SetupRouter() *gin.Engine {
 	}
 
 	// === Web Pages (Public) ===
-	r.GET("/login", authH.LoginPage)
-	r.GET("/register", authH.RegisterPage)
+	r.GET("/login", middleware.RedirectIfAuth(), authH.LoginPage)
+	r.GET("/register", middleware.RedirectIfAuth(), authH.RegisterPage)
 	r.POST("/login", authLimiter, authH.WebLogin)
 	r.POST("/register", authLimiter, authH.WebRegister)
 

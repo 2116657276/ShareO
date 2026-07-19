@@ -3,6 +3,7 @@ package handler
 import (
 	"errors"
 	"net/http"
+	"net/url"
 
 	"github.com/gin-gonic/gin"
 	"github.com/zhoujianlin/ShareO/internal/pkg/response"
@@ -162,7 +163,7 @@ func (h *SocialHandler) WebCreateComment(c *gin.Context) {
 	content := c.PostForm("content")
 	_, err := h.svc.CreateComment(userID, service.CreateCommentReq{PostID: postID, Content: content})
 	if err != nil {
-		c.Redirect(http.StatusFound, "/post/"+c.Param("id")+"?error="+err.Error())
+		c.Redirect(http.StatusFound, "/post/"+c.Param("id")+"?error="+url.QueryEscape(err.Error()))
 		return
 	}
 	c.Redirect(http.StatusFound, "/post/"+c.Param("id"))

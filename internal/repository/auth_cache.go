@@ -35,7 +35,7 @@ func CacheLoginToken(ctx context.Context, userID int64, token string, ttl time.D
 }
 
 // GetLoginToken retrieves the cached JWT token for a user.
-// Returns ("", nil) if the key does not exist (login expired).
+// Returns ("", redis.Nil) if the key does not exist (login expired).
 func GetLoginToken(ctx context.Context, userID int64) (string, error) {
 	if RDB == nil {
 		return "", fmt.Errorf("redis not initialized")

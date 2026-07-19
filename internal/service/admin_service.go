@@ -83,44 +83,24 @@ func (s *AdminService) ListUsers(page, pageSize int, role string, status *int) (
 	return s.userRepo.List(page, pageSize, role, status)
 }
 
-func (s *AdminService) UpdateUserStatus(userID int64, status int8) error {
-	if status != model.UserStatusBanned && status != model.UserStatusActive {
-		return errors.New("状态值无效")
+func (s *AdminService) UpdateUserStatus(adminID, targetUserID int64, status int8) error {
+	if adminID == targetUserID {
+		return errors.New("不能封禁自己")
 	}
-	return s.userRepo.UpdateStatus(userID, status)
-}
-
-// --- Topic Management ---
-
-func (s *AdminService) CreateTopic(name, description string) (*model.Topic, error) {
-	topic := &model.Topic{
-		Name:        name,
-		Description: description,
-		Status:      1,
-	}
-	if err := s.topicRepo.Create(topic); err != nil {
-		return nil, err
-	}
-	return topic, nil
-}
-
-func (s *AdminService) UpdateTopic(id int64, name, description string, status int8) error {
-	topic, err := s.topicRepo.FindByID(id)
+	targetUser, err := s.userRepo.FindByID(targetUserID)
 	if err != nil {
 		return err
 	}
-	if name != "" {
-		topic.Name = name
+	if targetUser == nil {
+		return errors.New("用户不存在")
 	}
-	if description != "" {
-		topic.Description = description
+	if targetUser.Role == "admin" {
+		return errors.New("不能封禁其他管理员")
 	}
-	topic.Status = status
-	return s.topicRepo.Update(topic)
-}
-
-func (s *AdminService) DeleteTopic(id int64) error {
-	return s.topicRepo.Delete(id)
+	if status != model.UserStatusBanned && status != model.UserStatusActive {
+		return errors.New("状态值无效")
+	}
+	return s.userRepo.UpdateStatus(targetUserID, status)
 }
 
 // --- Logs ---
@@ -132,13 +112,13 @@ func (s *AdminService) GetLogs(page, pageSize int, userID *int64, action string)
 // --- Stats ---
 
 type DashboardStats struct {
-	TotalUsers       int64 `json:"total_users"`
-	TotalPosts       int64 `json:"total_posts"`
-	PendingPosts     int64 `json:"pending_posts"`
-	TotalLikes       int64 `json:"total_likes"`
-	TotalComments    int64 `json:"total_comments"`
-	ActiveTopics     int64 `json:"active_topics"`
-	BannedUsers      int64 `json:"banned_users"`
+	TotalUsers    int64 `json:"total_users"`
+	TotalPosts    int64 `json:"total_posts"`
+	PendingPosts  int64 `json:"pending_posts"`
+	TotalLikes    int64 `json:"total_likes"`
+	TotalComments int64 `json:"total_comments"`
+	ActiveTopics  int64 `json:"active_topics"`
+	BannedUsers   int64 `json:"banned_users"`
 }
 
 func (s *AdminService) GetDashboardStats() (*DashboardStats, error) {

@@ -103,10 +103,10 @@ func (r *PostRepo) SoftDelete(id, userID int64) error {
 
 // FeedQuery holds all possible feed query parameters
 type FeedQuery struct {
-	UserID   *int64  // filter by author
-	Status   string  // post status filter
-	TopicID  *int64  // filter by topic
-	Sort     string  // "latest" or "hot"
+	UserID   *int64 // filter by author
+	Status   string // post status filter
+	TopicID  *int64 // filter by topic
+	Sort     string // "latest" or "hot"
 	Page     int
 	PageSize int
 }

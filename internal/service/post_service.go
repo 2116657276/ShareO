@@ -30,9 +30,9 @@ func NewPostService() *PostService {
 }
 
 type CreatePostReq struct {
-	Content string   `json:"content"`
-	Images  []string `json:"images"`  // image URLs from upload
-	TopicIDs []int64 `json:"topic_ids"`
+	Content  string   `json:"content"`
+	Images   []string `json:"images"` // image URLs from upload
+	TopicIDs []int64  `json:"topic_ids"`
 }
 
 func (s *PostService) Create(userID int64, req CreatePostReq) (*model.Post, error) {

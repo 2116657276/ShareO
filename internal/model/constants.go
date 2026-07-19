@@ -21,8 +21,8 @@ const (
 
 // User status constants
 const (
-	UserStatusBanned  int8 = 0
-	UserStatusActive  int8 = 1
+	UserStatusBanned int8 = 0
+	UserStatusActive int8 = 1
 )
 
 // Topic status constants
