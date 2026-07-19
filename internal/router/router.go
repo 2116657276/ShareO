@@ -9,6 +9,9 @@ import (
 	"github.com/zhoujianlin/ShareO/internal/handler"
 	"github.com/zhoujianlin/ShareO/internal/middleware"
 	jwtpkg "github.com/zhoujianlin/ShareO/internal/pkg/jwt"
+	"github.com/zhoujianlin/ShareO/internal/repository"
+	"github.com/zhoujianlin/ShareO/internal/service"
+	"github.com/zhoujianlin/ShareO/internal/ws"
 )
 
 func SetupRouter() *gin.Engine {
@@ -28,6 +31,15 @@ func SetupRouter() *gin.Engine {
 	notifH := handler.NewNotificationHandler()
 	topicH := handler.NewTopicHandler()
 	internalH := handler.NewInternalHandler()
+
+	// WebSocket Hub — shared across all handlers
+	hub := ws.NewHub()
+
+	// Chat
+	chatRepo := repository.NewChatRepo(repository.DB)
+	userRepo := repository.NewUserRepo()
+	chatSvc := service.NewChatService(chatRepo, userRepo, hub)
+	chatH := handler.NewChatHandler(chatSvc, hub)
 
 	// === 首页：根据登录态分流 ===
 	// 未登录 → 登录页(区分admin/user入口)
@@ -102,6 +114,16 @@ func SetupRouter() *gin.Engine {
 		authAPI.PUT("/notifications/:id/read", notifH.MarkRead)
 		authAPI.PUT("/notifications/read-all", notifH.MarkAllRead)
 		authAPI.GET("/notifications/unread-count", notifH.UnreadCount)
+
+		// Chat
+		authAPI.GET("/conversations", chatH.ListConversations)
+		authAPI.POST("/conversations", chatH.CreateConversation)
+		authAPI.GET("/conversations/:id/messages", chatH.GetMessages)
+		authAPI.POST("/conversations/:id/messages", chatH.SendMessage)
+		authAPI.PUT("/conversations/:id/read", chatH.MarkRead)
+		authAPI.POST("/conversations/:id/join", chatH.JoinConversation)
+		authAPI.POST("/conversations/:id/leave", chatH.LeaveConversation)
+		authAPI.GET("/conversations/unread-count", chatH.UnreadCount)
 	}
 
 	api.GET("/images/*objectName", uploadH.ServeImage)
@@ -120,6 +142,9 @@ func SetupRouter() *gin.Engine {
 		adminAPI.PUT("/users/:id/status", adminH.UpdateUserStatus)
 		adminAPI.GET("/logs", adminH.GetLogs)
 	}
+
+	// === WebSocket (authenticated via Cookie/query, validated in handler) ===
+	r.GET("/ws", chatH.ServeWS)
 
 	// === Web Pages (Public) ===
 	r.GET("/login", middleware.RedirectIfAuth(), authH.LoginPage)
@@ -144,6 +169,7 @@ func SetupRouter() *gin.Engine {
 		needLogin.POST("/settings/password", authH.WebChangePassword)
 		needLogin.GET("/notifications", notifH.NotificationsPage)
 		needLogin.GET("/topic/:id", topicH.TopicPage)
+		needLogin.GET("/chat", chatH.ChatPage)
 		needLogin.GET("/logout", authH.WebLogout)
 	}
 
