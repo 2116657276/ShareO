@@ -4,6 +4,7 @@ import (
 	"errors"
 	"log"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/zhoujianlin/ShareO/internal/model"
@@ -203,22 +204,46 @@ func (r *PostRepo) CountByUser(userID int64) int64 {
 	return count
 }
 
+// sanitizeSearchQuery removes BOOLEAN mode operators from user input to prevent
+// MySQL FULLTEXT syntax errors. The characters removed are: + - ~ < > ( ) * " @
+func sanitizeSearchQuery(q string) string {
+	replacer := strings.NewReplacer(
+		"+", " ", "-", " ", "~", " ", "<", " ", ">", " ",
+		"(", " ", ")", " ", "*", " ", "\"", " ", "@", " ",
+	)
+	return replacer.Replace(q)
+}
+
+// escapeLikePattern escapes LIKE special characters % and _.
+func escapeLikePattern(q string) string {
+	q = strings.NewReplacer("%", "\\%", "_", "\\_").Replace(q)
+	return q
+}
+
 func (r *PostRepo) Search(q string, page, pageSize int) ([]model.Post, int64, error) {
 	var posts []model.Post
 	var total int64
 
 	base := DB.Model(&model.Post{}).Where("is_deleted = 0 AND status = ?", model.StatusApproved)
 
-	// Use LIKE search. FULLTEXT requires MySQL ngram index migration to be applied.
-	// When the index is available, hasFulltext will be true and FULLTEXT will be used instead.
 	if hasFulltext {
-		base = base.Where("MATCH(content) AGAINST(? IN BOOLEAN MODE)", q)
+		// Sanitize BOOLEAN operators to prevent syntax errors
+		clean := sanitizeSearchQuery(q)
+		base = base.Where("MATCH(content) AGAINST(? IN BOOLEAN MODE)", clean)
+		if err := base.Count(&total).Error; err != nil {
+			// FULLTEXT failed — fall back to LIKE with escaped pattern
+			log.Printf("PostRepo.Search: FULLTEXT failed, falling back to LIKE: %v", err)
+			base = DB.Model(&model.Post{}).Where("is_deleted = 0 AND status = ?", model.StatusApproved)
+			base = base.Where("content LIKE ?", "%"+escapeLikePattern(q)+"%")
+			if countErr := base.Count(&total).Error; countErr != nil {
+				return nil, 0, countErr
+			}
+		}
 	} else {
-		base = base.Where("content LIKE ?", "%"+q+"%")
-	}
-
-	if err := base.Count(&total).Error; err != nil {
-		return nil, 0, err
+		base = base.Where("content LIKE ?", "%"+escapeLikePattern(q)+"%")
+		if err := base.Count(&total).Error; err != nil {
+			return nil, 0, err
+		}
 	}
 
 	offset := (page - 1) * pageSize

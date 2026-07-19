@@ -26,7 +26,7 @@ func (h *FeedHandler) Search(c *gin.Context) {
 
 	posts, total, err := h.svc.Search(q, page, pageSize, currentUserID)
 	if err != nil {
-		response.InternalError(c, err.Error())
+		response.InternalError(c, "搜索失败，请稍后重试")
 		return
 	}
 	respondPage(c, page, pageSize, posts, total)
