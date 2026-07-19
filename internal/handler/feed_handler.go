@@ -21,8 +21,7 @@ func (h *FeedHandler) Search(c *gin.Context) {
 		response.BadRequest(c, "搜索关键词不能为空")
 		return
 	}
-	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
-	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "12"))
+	page, pageSize := getPageSizePair(c, 12)
 	currentUserID := c.GetInt64("user_id")
 
 	posts, total, err := h.svc.Search(q, page, pageSize, currentUserID)
@@ -30,15 +29,7 @@ func (h *FeedHandler) Search(c *gin.Context) {
 		response.InternalError(c, err.Error())
 		return
 	}
-	totalPages := (int(total) + pageSize - 1) / pageSize
-
-	response.Success(c, response.PageResponse{
-		List:       posts,
-		Total:      total,
-		Page:       page,
-		PageSize:   pageSize,
-		TotalPages: totalPages,
-})
+	respondPage(c, page, pageSize, posts, total)
 }
 
 func (h *FeedHandler) GetFeed(c *gin.Context) {

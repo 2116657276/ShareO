@@ -21,7 +21,7 @@ func (h *UserHandler) ProfilePage(c *gin.Context) {
 	currentUserID := c.GetInt64("user_id")
 
 	data, err := h.svc.GetProfile(profileUserID, currentUserID)
-	if err != nil || data.User == nil {
+	if err != nil || data == nil || data.User == nil {
 		c.HTML(http.StatusNotFound, "404.html", gin.H{"title": "用户不存在"})
 		return
 	}

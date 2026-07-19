@@ -126,3 +126,19 @@ func (s *AuthService) UpdateProfile(userID int64, avatarURL, bio, email string) 
 	}
 	return s.userRepo.UpdateFields(userID, updates)
 }
+
+// UpdateProfileWeb only updates fields submitted via the web settings form (email, bio).
+// It does NOT touch avatar_url, preventing the form from clearing API-uploaded avatars.
+func (s *AuthService) UpdateProfileWeb(userID int64, email, bio string) error {
+	updates := map[string]interface{}{}
+	if email != "" {
+		updates["email"] = email
+	}
+	if bio != "" {
+		updates["bio"] = bio
+	}
+	if len(updates) == 0 {
+		return nil
+	}
+	return s.userRepo.UpdateFields(userID, updates)
+}

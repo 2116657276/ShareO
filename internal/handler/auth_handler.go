@@ -171,11 +171,16 @@ func (h *AuthHandler) WebRegister(c *gin.Context) {
 
 func (h *AuthHandler) SettingsPage(c *gin.Context) {
 	userID := c.GetInt64("user_id")
-	user, _ := h.svc.GetProfile(userID)
+	user, err := h.svc.GetProfile(userID)
+	email, bio := "", ""
+	if err == nil && user != nil {
+		email = user.Email
+		bio = user.Bio
+	}
 	c.HTML(http.StatusOK, "settings.html", userData(c, gin.H{
 		"title": "设置 - ShareO",
-		"Email": user.Email,
-		"Bio":   user.Bio,
+		"Email": email,
+		"Bio":   bio,
 	}))
 }
 
@@ -183,8 +188,7 @@ func (h *AuthHandler) WebSettings(c *gin.Context) {
 	userID := c.GetInt64("user_id")
 	email := c.PostForm("email")
 	bio := c.PostForm("bio")
-	avatarURL := c.PostForm("avatar_url")
-	if err := h.svc.UpdateProfile(userID, avatarURL, bio, email); err != nil {
+	if err := h.svc.UpdateProfileWeb(userID, email, bio); err != nil {
 		c.HTML(http.StatusOK, "settings.html", userData(c, gin.H{
 			"title": "设置 - ShareO",
 			"Email": email, "Bio": bio,
@@ -192,12 +196,17 @@ func (h *AuthHandler) WebSettings(c *gin.Context) {
 		}))
 		return
 	}
-	// Also update email
-	user, _ := h.svc.GetProfile(userID)
+	// Re-fetch profile to show updated values
+	user, err := h.svc.GetProfile(userID)
+	userEmail, userBio := email, bio
+	if err == nil && user != nil {
+		userEmail = user.Email
+		userBio = user.Bio
+	}
 	c.HTML(http.StatusOK, "settings.html", userData(c, gin.H{
 		"title":   "设置 - ShareO",
-		"Email":   user.Email,
-		"Bio":     user.Bio,
+		"Email":   userEmail,
+		"Bio":     userBio,
 		"Success": "设置已保存",
 	}))
 }
