@@ -37,12 +37,17 @@ fi
 echo "User1 token: ${USER1:0:20}..."
 echo "User2 token: ${USER2:0:20}..."
 
+# Get actual user IDs
+USER1_ID=$(curl -sf "$BASE/auth/me" -H "Authorization: Bearer $USER1" | jq -r '.data.id')
+USER2_ID=$(curl -sf "$BASE/auth/me" -H "Authorization: Bearer $USER2" | jq -r '.data.id')
+echo "User1 ID: $USER1_ID, User2 ID: $USER2_ID"
+
 # 2. Create DM
 echo "--- Create DM ---"
 DM=$(curl -sf -X POST "$BASE/conversations" \
   -H "Authorization: Bearer $USER1" \
   -H "Content-Type: application/json" \
-  -d "{\"user_id\":2}" | jq '.data')
+  -d "{\"user_id\":$USER2_ID}" | jq '.data')
 CONV_ID=$(echo "$DM" | jq -r '.id')
 echo "DM conversation: $CONV_ID"
 [ "$CONV_ID" != "null" ] && [ "$CONV_ID" != "" ] || fail "Failed to create DM"
@@ -92,7 +97,7 @@ echo "--- Create group ---"
 GROUP=$(curl -sf -X POST "$BASE/conversations" \
   -H "Authorization: Bearer $USER1" \
   -H "Content-Type: application/json" \
-  -d '{"title":"Test Group","member_ids":[2]}' | jq '.data')
+  -d "{\"title\":\"Test Group\",\"member_ids\":[$USER2_ID]}" | jq '.data')
 GROUP_ID=$(echo "$GROUP" | jq -r '.id')
 [ "$GROUP_ID" != "null" ] && [ "$GROUP_ID" != "" ] || fail "Failed to create group"
 pass "Group created: $GROUP_ID"
