@@ -3,7 +3,7 @@ package service
 import (
 	"context"
 	"errors"
-	"log"
+	"log/slog"
 	"strings"
 
 	"github.com/zhoujianlin/ShareO/internal/model"
@@ -77,7 +77,7 @@ func (s *AuthService) Register(req RegisterReq) (*AuthResp, error) {
 
 	// Cache login state in Redis for 30-min sliding window
 	if err := repository.CacheLoginToken(context.Background(), user.ID, token, repository.LoginCacheTTL); err != nil {
-		log.Printf("AuthService.Register: failed to cache login token for user %d: %v", user.ID, err)
+		slog.Warn("failed to cache login token", "user_id", user.ID, "err", err)
 	}
 
 	return &AuthResp{Token: token, User: user}, nil
@@ -107,7 +107,7 @@ func (s *AuthService) Login(req LoginReq) (*AuthResp, error) {
 
 	// Cache login state in Redis for sliding window
 	if err := repository.CacheLoginToken(context.Background(), user.ID, token, repository.LoginCacheTTL); err != nil {
-		log.Printf("AuthService.Login: failed to cache login token for user %d: %v", user.ID, err)
+		slog.Warn("failed to cache login token", "user_id", user.ID, "err", err)
 	}
 
 	return &AuthResp{Token: token, User: user}, nil
@@ -167,7 +167,7 @@ func (s *AuthService) ChangePassword(userID int64, oldPassword, newPassword stri
 	}
 	// Force re-login by deleting login cache
 	if err := repository.DeleteLoginToken(context.Background(), userID); err != nil {
-		log.Printf("AuthService.ChangePassword: failed to delete login cache for user %d: %v", userID, err)
+		slog.Warn("failed to delete login cache on password change", "user_id", userID, "err", err)
 	}
 	return nil
 }
