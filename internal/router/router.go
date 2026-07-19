@@ -27,6 +27,7 @@ func SetupRouter() *gin.Engine {
 	uploadH := handler.NewUploadHandler()
 	notifH := handler.NewNotificationHandler()
 	topicH := handler.NewTopicHandler()
+	internalH := handler.NewInternalHandler()
 
 	// === 首页：根据登录态分流 ===
 	// 未登录 → 登录页(区分admin/user入口)
@@ -142,6 +143,13 @@ func SetupRouter() *gin.Engine {
 		needLogin.GET("/notifications", notifH.NotificationsPage)
 		needLogin.GET("/topic/:id", topicH.TopicPage)
 		needLogin.GET("/logout", authH.WebLogout)
+	}
+
+	// === Internal API (ai-service communication) ===
+	internalAPI := r.Group("/internal")
+	internalAPI.Use(middleware.InternalTokenAuth())
+	{
+		internalAPI.GET("/health", internalH.HealthCheck)
 	}
 
 	// === Admin Web Pages ===
