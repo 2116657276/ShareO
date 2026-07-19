@@ -133,7 +133,7 @@ type RepostReq struct {
 
 func (s *PostService) Repost(userID, originalPostID int64, req RepostReq) (*model.Post, error) {
 	original, err := s.postRepo.FindByID(originalPostID)
-	if err != nil || original == nil || original.IsDeleted == 1 {
+	if err != nil || original == nil || original.IsDeleted == 1 || original.Status != model.StatusApproved {
 		return nil, errors.New("原帖不存在")
 	}
 

@@ -36,8 +36,11 @@ func NewAdminService() *AdminService {
 func (s *AdminService) DeletePost(postID int64, adminID int64) error {
 	// Fetch post info before deletion to get author ID for notification
 	post, err := s.postRepo.FindByIDLight(postID)
-	if err != nil || post == nil {
+	if err != nil {
 		return err
+	}
+	if post == nil {
+		return errors.New("帖子不存在")
 	}
 
 	if err := s.postRepo.AdminSoftDelete(postID); err != nil {

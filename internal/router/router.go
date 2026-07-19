@@ -50,11 +50,12 @@ func SetupRouter() *gin.Engine {
 		}
 	})
 
+	// Rate limit auth endpoints: 10 requests per minute per IP
+	authLimiter := middleware.RateLimit(10, 1*time.Minute)
+
 	// === Public API ===
 	api := r.Group("/api/v1")
 	{
-		// Rate limit auth endpoints: 10 requests per minute per IP
-		authLimiter := middleware.RateLimit(10, 1*time.Minute)
 		api.POST("/auth/register", authLimiter, authH.Register)
 		api.POST("/auth/login", authLimiter, authH.Login)
 
@@ -101,7 +102,8 @@ func SetupRouter() *gin.Engine {
 		authAPI.GET("/notifications/unread-count", notifH.UnreadCount)
 	}
 
-	api.Any("/images/*objectName", uploadH.ServeImage)
+	api.GET("/images/*objectName", uploadH.ServeImage)
+	api.HEAD("/images/*objectName", uploadH.ServeImage)
 
 	// === Admin API ===
 	adminAPI := api.Group("/admin")
@@ -120,8 +122,8 @@ func SetupRouter() *gin.Engine {
 	// === Web Pages (Public) ===
 	r.GET("/login", authH.LoginPage)
 	r.GET("/register", authH.RegisterPage)
-	r.POST("/login", authH.WebLogin)
-	r.POST("/register", authH.WebRegister)
+	r.POST("/login", authLimiter, authH.WebLogin)
+	r.POST("/register", authLimiter, authH.WebRegister)
 
 	// === Web Pages (Auth required) ===
 	needLogin := r.Group("")

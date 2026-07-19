@@ -20,7 +20,9 @@ func (r *FavoriteRepo) Toggle(userID, postID int64) (bool, error) {
 		var existing model.Favorite
 		err := tx.Where("user_id = ? AND post_id = ?", userID, postID).First(&existing).Error
 		if err == nil {
-			tx.Delete(&existing)
+			if delErr := tx.Delete(&existing).Error; delErr != nil {
+				return delErr
+			}
 			// Sync post favorite_count via COUNT (idempotent, safe with triggers)
 			if syncErr := tx.Model(&model.Post{}).Where("id = ?", postID).UpdateColumn("favorite_count",
 				gorm.Expr("(SELECT COUNT(*) FROM favorites WHERE post_id = ?)", postID)).Error; syncErr != nil {

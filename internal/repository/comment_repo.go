@@ -21,15 +21,17 @@ func (r *CommentRepo) CountNonDeleted() int64 {
 }
 
 func (r *CommentRepo) Create(comment *model.Comment) error {
-	if err := DB.Create(comment).Error; err != nil {
-		return err
-	}
-	// Sync post comment_count via COUNT (idempotent, safe with triggers)
-	if syncErr := DB.Model(&model.Post{}).Where("id = ?", comment.PostID).UpdateColumn("comment_count",
-		gorm.Expr("(SELECT COUNT(*) FROM comments WHERE post_id = ? AND is_deleted = 0)", comment.PostID)).Error; syncErr != nil {
-		log.Printf("CommentRepo: failed to sync comment_count for post %d: %v", comment.PostID, syncErr)
-	}
-	return nil
+	return DB.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(comment).Error; err != nil {
+			return err
+		}
+		// Sync post comment_count via COUNT (idempotent, safe with triggers)
+		if syncErr := tx.Model(&model.Post{}).Where("id = ?", comment.PostID).UpdateColumn("comment_count",
+			gorm.Expr("(SELECT COUNT(*) FROM comments WHERE post_id = ? AND is_deleted = 0)", comment.PostID)).Error; syncErr != nil {
+			log.Printf("CommentRepo: failed to sync comment_count for post %d: %v", comment.PostID, syncErr)
+		}
+		return nil
+	})
 }
 
 func (r *CommentRepo) FindByPostID(postID int64, page, pageSize int) ([]model.Comment, int64, error) {
@@ -53,28 +55,30 @@ func (r *CommentRepo) FindByPostID(postID int64, page, pageSize int) ([]model.Co
 }
 
 func (r *CommentRepo) SoftDelete(id, userID int64) error {
-	// Find the comment first to get postID for count sync
-	var comment model.Comment
-	if err := DB.First(&comment, id).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
+	return DB.Transaction(func(tx *gorm.DB) error {
+		// Find the comment first to get postID for count sync
+		var comment model.Comment
+		if err := tx.First(&comment, id).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return gorm.ErrRecordNotFound
+			}
+			return err
+		}
+
+		result := tx.Model(&model.Comment{}).Where("id = ? AND user_id = ?", id, userID).
+			Update("is_deleted", 1)
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected == 0 {
 			return gorm.ErrRecordNotFound
 		}
-		return err
-	}
 
-	result := DB.Model(&model.Comment{}).Where("id = ? AND user_id = ?", id, userID).
-		Update("is_deleted", 1)
-	if result.Error != nil {
-		return result.Error
-	}
-	if result.RowsAffected == 0 {
-		return gorm.ErrRecordNotFound
-	}
-
-	// Sync post comment_count via COUNT (idempotent, safe with triggers)
-	if syncErr := DB.Model(&model.Post{}).Where("id = ?", comment.PostID).UpdateColumn("comment_count",
-		gorm.Expr("(SELECT COUNT(*) FROM comments WHERE post_id = ? AND is_deleted = 0)", comment.PostID)).Error; syncErr != nil {
-		log.Printf("CommentRepo: failed to sync comment_count for post %d: %v", comment.PostID, syncErr)
-	}
-	return nil
+		// Sync post comment_count via COUNT (idempotent, safe with triggers)
+		if syncErr := tx.Model(&model.Post{}).Where("id = ?", comment.PostID).UpdateColumn("comment_count",
+			gorm.Expr("(SELECT COUNT(*) FROM comments WHERE post_id = ? AND is_deleted = 0)", comment.PostID)).Error; syncErr != nil {
+			log.Printf("CommentRepo: failed to sync comment_count for post %d: %v", comment.PostID, syncErr)
+		}
+		return nil
+	})
 }
