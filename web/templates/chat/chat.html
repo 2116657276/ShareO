@@ -1,0 +1,230 @@
+{{ template "header" . }}
+<style>
+.chat-container { height: calc(100vh - 120px); }
+.conv-list { overflow-y: auto; border-right: 1px solid #dee2e6; }
+.conv-item { cursor: pointer; transition: background 0.15s; }
+.conv-item:hover, .conv-item.active { background: #f0f2f5; }
+.conv-item .online-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+.conv-item .online-dot.online { background: #22c55e; }
+.conv-item .online-dot.offline { background: #ccc; }
+.msg-area { overflow-y: auto; }
+.msg-bubble { max-width: 70%; word-wrap: break-word; }
+.msg-bubble.mine { background: #0d6efd; color: #fff; border-radius: 18px 18px 4px 18px; }
+.msg-bubble.other { background: #e9ecef; border-radius: 18px 18px 18px 4px; }
+</style>
+<div class="container-fluid chat-container" x-data="chatApp()" x-init="init()">
+    <div class="row h-100">
+        <!-- Conversation List -->
+        <div class="col-md-4 col-lg-3 conv-list p-0" x-show="!mobileMsg || !activeConv">
+            <div class="p-3 border-bottom">
+                <h5 class="mb-0">消息</h5>
+            </div>
+            <template x-if="loadingConvs">
+                <div class="text-center text-muted py-5">加载中...</div>
+            </template>
+            <template x-if="!loadingConvs && convs.length === 0">
+                <div class="text-center text-muted py-5">暂无消息</div>
+            </template>
+            <template x-for="c in convs" :key="c.id">
+                <div class="conv-item p-3 border-bottom d-flex align-items-center"
+                     :class="{ active: activeConv === c.id }"
+                     @click="openConv(c)">
+                    <div class="flex-grow-1">
+                        <div>
+                            <span class="online-dot me-1" :class="c.online ? 'online' : 'offline'"></span>
+                            <strong x-text="c.title || '聊天'"></strong>
+                        </div>
+                        <small class="text-muted" x-text="c.last_message ? c.last_message.content.substring(0, 30) : ''"></small>
+                    </div>
+                    <span x-show="c.unread_count > 0" class="badge bg-danger rounded-pill" x-text="c.unread_count"></span>
+                </div>
+            </template>
+        </div>
+
+        <!-- Message Area -->
+        <div class="col-md-8 col-lg-9 d-flex flex-column" x-show="activeConv || !mobileMsg">
+            <template x-if="!activeConv">
+                <div class="flex-grow-1 d-flex align-items-center justify-content-center text-muted">
+                    选择一个会话开始聊天
+                </div>
+            </template>
+            <template x-if="activeConv">
+                <div class="d-flex flex-column h-100">
+                    <!-- Header -->
+                    <div class="p-3 border-bottom d-flex align-items-center">
+                        <button class="btn btn-sm btn-outline-secondary me-2 d-md-none" @click="mobileMsg = false">&larr;</button>
+                        <strong x-text="activeConvTitle"></strong>
+                    </div>
+                    <!-- Messages -->
+                    <div class="flex-grow-1 msg-area p-3" x-ref="msgArea">
+                        <template x-if="loadingMsgs">
+                            <div class="text-center text-muted py-3">加载中...</div>
+                        </template>
+                        <template x-if="!loadingMsgs && hasMore">
+                            <div class="text-center py-2">
+                                <button class="btn btn-sm btn-link" @click="loadMore">加载更多</button>
+                            </div>
+                        </template>
+                        <template x-for="m in messages" :key="m.id">
+                            <div class="mb-2 d-flex" :class="m.sender_id === userId ? 'justify-content-end' : 'justify-content-start'">
+                                <div class="msg-bubble p-3" :class="m.sender_id === userId ? 'mine' : 'other'">
+                                    <div x-text="m.content"></div>
+                                    <small class="d-block mt-1" :class="m.sender_id === userId ? 'text-white-50' : 'text-muted'"
+                                           x-text="m.sender ? m.sender.username + ' · ' : ''"></small>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+                    <!-- Input -->
+                    <div class="p-3 border-top">
+                        <form @submit.prevent="sendMsg" class="input-group">
+                            <input type="text" class="form-control" x-model="newMsg" placeholder="输入消息..." maxlength="2000">
+                            <button class="btn btn-primary" :disabled="!newMsg.trim()">发送</button>
+                        </form>
+                    </div>
+                </div>
+            </template>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.8/dist/cdn.min.js"></script>
+<script>
+function chatApp() {
+    return {
+        userId: {{ .user_id }},
+        convs: [],
+        activeConv: null,
+        activeConvTitle: '',
+        messages: [],
+        newMsg: '',
+        loadingConvs: false,
+        loadingMsgs: false,
+        hasMore: false,
+        mobileMsg: false,
+        ws: null,
+        reconnectDelay: 1000,
+
+        init() {
+            this.loadConvs();
+            this.connectWS();
+        },
+
+        // --- Conversations ---
+        async loadConvs() {
+            this.loadingConvs = true;
+            try {
+                const r = await fetch('/api/v1/conversations');
+                if (r.ok) this.convs = (await r.json()).data || [];
+            } catch (e) { console.error('loadConvs', e); }
+            this.loadingConvs = false;
+        },
+
+        openConv(c) {
+            this.activeConv = c.id;
+            this.activeConvTitle = c.title || '聊天';
+            this.messages = [];
+            this.hasMore = false;
+            this.loadMsgs();
+            this.mobileMsg = true;
+            // Mark as read
+            if (c.last_message) this.markRead(c.last_message.id);
+        },
+
+        async loadMsgs(beforeId = 0) {
+            this.loadingMsgs = true;
+            try {
+                let url = `/api/v1/conversations/${this.activeConv}/messages?limit=30`;
+                if (beforeId > 0) url += `&before_id=${beforeId}`;
+                const r = await fetch(url);
+                if (r.ok) {
+                    const d = await r.json();
+                    const msgs = (d.data?.messages || []).reverse();
+                    if (beforeId > 0) {
+                        this.messages = [...msgs, ...this.messages];
+                    } else {
+                        this.messages = msgs;
+                    }
+                    this.hasMore = d.data?.has_more || false;
+                }
+            } catch (e) { console.error('loadMsgs', e); }
+            this.loadingMsgs = false;
+            // Scroll to bottom
+            this.$nextTick(() => {
+                const el = this.$refs.msgArea;
+                if (el) el.scrollTop = el.scrollHeight;
+            });
+        },
+
+        loadMore() {
+            if (this.messages.length > 0) {
+                this.loadMsgs(this.messages[0].id);
+            }
+        },
+
+        async sendMsg() {
+            const content = this.newMsg.trim();
+            if (!content || !this.activeConv) return;
+            this.newMsg = '';
+            try {
+                const r = await fetch(`/api/v1/conversations/${this.activeConv}/messages`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ content }),
+                });
+                if (r.ok) {
+                    const msg = (await r.json()).data;
+                    this.appendMsg(msg);
+                    this.markRead(msg.id);
+                }
+            } catch (e) { console.error('sendMsg', e); }
+        },
+
+        async markRead(msgId) {
+            try {
+                await fetch(`/api/v1/conversations/${this.activeConv}/read`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message_id: msgId }),
+                });
+            } catch (e) { /* non-critical */ }
+        },
+
+        appendMsg(msg) {
+            this.messages = [...this.messages, msg];
+            this.$nextTick(() => {
+                const el = this.$refs.msgArea;
+                if (el) el.scrollTop = el.scrollHeight;
+            });
+        },
+
+        // --- WebSocket ---
+        connectWS() {
+            const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const url = `${proto}//${location.host}/ws`;
+            this.ws = new WebSocket(url);
+            this.ws.onopen = () => { this.reconnectDelay = 1000; };
+            this.ws.onmessage = (e) => {
+                try {
+                    const data = JSON.parse(e.data);
+                    if (data.type === 'new_message' && data.data?.message) {
+                        const msg = data.data.message;
+                        // If this convo is open, append; otherwise update unread
+                        if (this.activeConv === msg.conversation_id) {
+                            this.appendMsg(msg);
+                            this.markRead(msg.id);
+                        }
+                        this.loadConvs(); // refresh conv list for unread count
+                    }
+                } catch (err) { console.error('ws msg parse', err); }
+            };
+            this.ws.onclose = () => {
+                // Exponential backoff reconnection
+                setTimeout(() => this.connectWS(), this.reconnectDelay);
+                this.reconnectDelay = Math.min(this.reconnectDelay * 2, 16000);
+            };
+        },
+    };
+}
+</script>
+{{ template "footer" . }}
