@@ -26,7 +26,7 @@ cp config.yaml.example config.yaml   # 填入本地 MySQL/Redis/MinIO 配置
 curl http://localhost:8080/healthz   # → {"status":"ok","service":"ShareO"}
 ```
 
-> 环境要求: Go 1.25+ / MySQL 8.0 / Redis / MinIO。Phase 0 将提供 `deploy/docker-compose.yml` 一键编排（含 Qdrant），届时以 compose 为首选路径。
+> 环境要求: Go 1.25+ / MySQL 8.0 / Redis / MinIO。Phase 0 已提供 `deploy/docker-compose.yml` 一键编排（含 Qdrant），推荐以 compose 为首选路径。
 
 常用命令：`make help`（start / run / build / migrate / seed / reset-db / clean）。
 
@@ -84,5 +84,7 @@ ShareO/
 
 - **开发规范**（分层规则 / Go / Python / API / Git / 测试 / 安全）: [docs/standards.md](docs/standards.md)
 - **文档规范**（何时写什么，与论文章节的映射）: [docs/README.md](docs/README.md)
-- **评审记录**: [docs/reviews/](docs/reviews/)（最新：2026-07-19 全量评审）
+- **评审记录**: [docs/reviews/](docs/reviews/)（最新：2026-07-19 全量评审，24/24 项已修复）
+- **CI**: GitHub Actions（`make check` 本地等价）: `.github/workflows/go.yml`
+- **AI 服务**: Python FastAPI 微服务（Phase 0 脚手架完成）: `ai-service/`
 - **测试**: 业务行为测试一律走 API 模拟（见 `scripts/test_api.sh`），禁止直改 SQL/Redis/MinIO 构造状态
