@@ -1,8 +1,10 @@
 # ShareO v2 详细开发计划
 
-> 更新时间: 2026-07-19 | 状态: 生效 | 上游: [roadmap.md](roadmap.md)（里程碑）/ [architecture.md](architecture.md)（架构）
+> 更新时间: 2026-07-20 | 状态: **Phase 0 ✅ → Phase 1 待启动** | 上游: [roadmap.md](roadmap.md)（里程碑）/ [architecture.md](architecture.md)（架构）
 >
 > 选型总原则：**优先标准库，其次成熟稳定的第三方库**，不引实验性依赖。每步给出验收标准；串行推进，Phase 内允许微调顺序。
+>
+> **Phase 0 完成于 2026-07-20**：22 项评审修复（24/24 含 SR-24）、密码修改、Makefile check、slog、CI、Docker Compose、ai-service 脚手架、队列骨架。详情见 [TASK.md](../../TASK.md)。
 
 ## Phase 0 — 基建 + 修复清单（2026-07 下旬 ~ 08 中旬）
 
