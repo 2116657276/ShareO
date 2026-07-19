@@ -1,10 +1,14 @@
 package handler
 
 import (
+	"context"
+	"log"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	"github.com/zhoujianlin/ShareO/internal/pkg/jwt"
 	"github.com/zhoujianlin/ShareO/internal/pkg/response"
+	"github.com/zhoujianlin/ShareO/internal/repository"
 	"github.com/zhoujianlin/ShareO/internal/service"
 )
 
@@ -30,8 +34,9 @@ func (h *AuthHandler) Register(c *gin.Context) {
 			Name:     "token",
 			Value:    resp.Token,
 			Path:     "/",
-			MaxAge:   3600 * 72,
+			MaxAge:   int(jwt.ExpireDuration().Seconds()),
 			HttpOnly: true,
+			Secure:   gin.Mode() == gin.ReleaseMode,
 			SameSite: http.SameSiteLaxMode,
 		})
 	response.Success(c, resp)
@@ -52,20 +57,29 @@ func (h *AuthHandler) Login(c *gin.Context) {
 			Name:     "token",
 			Value:    resp.Token,
 			Path:     "/",
-			MaxAge:   3600 * 72,
+			MaxAge:   int(jwt.ExpireDuration().Seconds()),
 			HttpOnly: true,
+			Secure:   gin.Mode() == gin.ReleaseMode,
 			SameSite: http.SameSiteLaxMode,
 		})
 	response.Success(c, resp)
 }
 
 func (h *AuthHandler) Logout(c *gin.Context) {
+	// Delete login cache to immediately invalidate the session
+	userID := c.GetInt64("user_id")
+	if userID > 0 {
+		if err := repository.DeleteLoginToken(context.Background(), userID); err != nil {
+			log.Printf("Logout: failed to delete login cache for user %d: %v", userID, err)
+		}
+	}
 	http.SetCookie(c.Writer, &http.Cookie{
 		Name:     "token",
 		Value:    "",
 		Path:     "/",
 		MaxAge:   -1,
 		HttpOnly: true,
+		Secure:   gin.Mode() == gin.ReleaseMode,
 		SameSite: http.SameSiteLaxMode,
 	})
 	response.Success(c, nil)
@@ -122,8 +136,9 @@ func (h *AuthHandler) WebLogin(c *gin.Context) {
 			Name:     "token",
 			Value:    resp.Token,
 			Path:     "/",
-			MaxAge:   3600 * 72,
+			MaxAge:   int(jwt.ExpireDuration().Seconds()),
 			HttpOnly: true,
+			Secure:   gin.Mode() == gin.ReleaseMode,
 			SameSite: http.SameSiteLaxMode,
 		})
 	if resp.User.Role == "admin" {
@@ -146,8 +161,9 @@ func (h *AuthHandler) WebRegister(c *gin.Context) {
 			Name:     "token",
 			Value:    resp.Token,
 			Path:     "/",
-			MaxAge:   3600 * 72,
+			MaxAge:   int(jwt.ExpireDuration().Seconds()),
 			HttpOnly: true,
+			Secure:   gin.Mode() == gin.ReleaseMode,
 			SameSite: http.SameSiteLaxMode,
 		})
 	c.Redirect(http.StatusFound, "/home")
@@ -187,12 +203,20 @@ func (h *AuthHandler) WebSettings(c *gin.Context) {
 }
 
 func (h *AuthHandler) WebLogout(c *gin.Context) {
+	// Delete login cache to immediately invalidate the session
+	userID := c.GetInt64("user_id")
+	if userID > 0 {
+		if err := repository.DeleteLoginToken(context.Background(), userID); err != nil {
+			log.Printf("WebLogout: failed to delete login cache for user %d: %v", userID, err)
+		}
+	}
 	http.SetCookie(c.Writer, &http.Cookie{
 		Name:     "token",
 		Value:    "",
 		Path:     "/",
 		MaxAge:   -1,
 		HttpOnly: true,
+		Secure:   gin.Mode() == gin.ReleaseMode,
 		SameSite: http.SameSiteLaxMode,
 	})
 	c.Redirect(http.StatusFound, "/login")

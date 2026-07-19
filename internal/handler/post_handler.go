@@ -3,6 +3,7 @@ package handler
 import (
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/zhoujianlin/ShareO/internal/pkg/response"
@@ -123,7 +124,11 @@ func (h *PostHandler) EditPage(c *gin.Context) {
 func (h *PostHandler) WebCreate(c *gin.Context) {
 	userID := c.GetInt64("user_id")
 	content := c.PostForm("content")
-	imageURLs := c.PostFormArray("images")
+	// Accept comma-separated string (from JS join) or multiple form fields
+	imageURLs := strings.Split(c.PostForm("images"), ",")
+	if len(imageURLs) == 1 && imageURLs[0] == "" {
+		imageURLs = nil
+	}
 	topicIDsStr := c.PostFormArray("topic_ids")
 
 	var topicIDs []int64

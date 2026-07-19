@@ -3,6 +3,7 @@ package repository
 import (
 	"errors"
 	"fmt"
+	"log"
 	"strings"
 
 	"github.com/zhoujianlin/ShareO/internal/model"
@@ -20,7 +21,9 @@ func (r *FollowRepo) Toggle(followerID, followeeID int64) (bool, error) {
 	var existing model.Follow
 	err := DB.Where("follower_id = ? AND followee_id = ?", followerID, followeeID).First(&existing).Error
 	if err == nil {
-		DB.Delete(&existing)
+		if delErr := DB.Delete(&existing).Error; delErr != nil {
+			return false, delErr
+		}
 		return false, nil
 	}
 	if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -35,7 +38,9 @@ func (r *FollowRepo) Toggle(followerID, followeeID int64) (bool, error) {
 
 func (r *FollowRepo) IsFollowing(followerID, followeeID int64) bool {
 	var count int64
-	DB.Model(&model.Follow{}).Where("follower_id = ? AND followee_id = ?", followerID, followeeID).Count(&count)
+	if err := DB.Model(&model.Follow{}).Where("follower_id = ? AND followee_id = ?", followerID, followeeID).Count(&count).Error; err != nil {
+		log.Printf("FollowRepo.IsFollowing(%d, %d): %v", followerID, followeeID, err)
+	}
 	return count > 0
 }
 

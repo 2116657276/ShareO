@@ -25,12 +25,21 @@ type TopicPageData struct {
 
 func (s *TopicService) GetTopicPage(param string, page, pageSize int) (*TopicPageData, error) {
 	// Try numeric ID first, then name lookup
-	topic, err := s.topicRepo.FindByID(parseInt64(param))
-	if err != nil || topic == nil {
-		topic, err = s.topicRepo.FindByName(param)
+	// Skip FindByID when param is not a valid numeric ID (parseInt64 returns 0)
+	var topic *model.Topic
+	id := parseInt64(param)
+	if id > 0 {
+		topic, _ = s.topicRepo.FindByID(id)
 	}
-	if err != nil || topic == nil {
-		return nil, err
+	if topic == nil {
+		var err error
+		topic, err = s.topicRepo.FindByName(param)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if topic == nil {
+		return nil, nil
 	}
 
 	if page <= 0 {
@@ -47,7 +56,10 @@ func (s *TopicService) GetTopicPage(param string, page, pageSize int) (*TopicPag
 		Page:     page,
 		PageSize: pageSize,
 	}
-	posts, total, _ := s.postRepo.Feed(q)
+	posts, total, err := s.postRepo.Feed(q)
+	if err != nil {
+		return nil, err
+	}
 
 	return &TopicPageData{
 		Topic:      topic,

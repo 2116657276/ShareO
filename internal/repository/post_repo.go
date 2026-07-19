@@ -2,6 +2,9 @@ package repository
 
 import (
 	"errors"
+	"log"
+	"sort"
+	"time"
 
 	"github.com/zhoujianlin/ShareO/internal/model"
 	"gorm.io/gorm"
@@ -19,14 +22,14 @@ func SetDB(db *gorm.DB) { DB = db }
 
 // DetectFulltext checks if FULLTEXT index is available on the posts table.
 // Called from InitDB after DB connection is established.
+// Uses INFORMATION_SCHEMA instead of MATCH...AGAINST to avoid false negatives on empty tables.
 func DetectFulltext() {
 	if DB != nil {
-		// GORM Raw() is lazy — must execute via Scan before checking Error.
-		var ok int
+		var count int64
 		err := DB.Raw(
-			"SELECT 1 FROM posts WHERE MATCH(content) AGAINST('test' IN BOOLEAN MODE) LIMIT 1",
-		).Scan(&ok).Error
-		hasFulltext = err == nil
+			"SELECT COUNT(*) FROM INFORMATION_SCHEMA.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'posts' AND INDEX_TYPE = 'FULLTEXT'",
+		).Scan(&count).Error
+		hasFulltext = err == nil && count > 0
 	}
 }
 
@@ -47,6 +50,33 @@ func (r *PostRepo) FindByID(id int64) (*model.Post, error) {
 	return &post, err
 }
 
+// FindByIDs fetches multiple posts by their IDs with full Preloads, preserving the input order.
+func (r *PostRepo) FindByIDs(ids []int64) ([]model.Post, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+	var posts []model.Post
+	err := DB.Where("id IN ? AND is_deleted = 0 AND status = ?", ids, model.StatusApproved).
+		Preload("User").Preload("Images", func(db *gorm.DB) *gorm.DB {
+		return db.Order("sort_order ASC")
+	}).Preload("Topics").
+		Preload("RepostOf").Preload("RepostOf.User").Preload("RepostOf.Images", func(db *gorm.DB) *gorm.DB {
+		return db.Order("sort_order ASC")
+	}).Find(&posts).Error
+	if err != nil {
+		return nil, err
+	}
+	// Preserve the original order from ids
+	orderMap := make(map[int64]int, len(ids))
+	for i, id := range ids {
+		orderMap[id] = i
+	}
+	sort.Slice(posts, func(i, j int) bool {
+		return orderMap[posts[i].ID] < orderMap[posts[j].ID]
+	})
+	return posts, nil
+}
+
 // FindByIDLight fetches only the post record without Preloads, for permission checks.
 func (r *PostRepo) FindByIDLight(id int64) (*model.Post, error) {
 	var post model.Post
@@ -58,7 +88,12 @@ func (r *PostRepo) FindByIDLight(id int64) (*model.Post, error) {
 }
 
 func (r *PostRepo) Update(post *model.Post) error {
-	return DB.Save(post).Error
+	// Use Updates with specific fields to avoid cascade-saving Preloaded associations
+	// (User, Images, Topics, RepostOf, etc.)
+	return DB.Model(post).Updates(map[string]interface{}{
+		"content": post.Content,
+		"status":  post.Status,
+	}).Error
 }
 
 func (r *PostRepo) SoftDelete(id, userID int64) error {
@@ -116,18 +151,26 @@ func (r *PostRepo) Feed(q FeedQuery) ([]model.Post, int64, error) {
 }
 
 func (r *PostRepo) IncrementView(id int64) {
-	DB.Model(&model.Post{}).Where("id = ?", id).UpdateColumn("view_count", gorm.Expr("view_count + 1"))
+	if err := DB.Model(&model.Post{}).Where("id = ?", id).UpdateColumn("view_count", gorm.Expr("view_count + 1")).Error; err != nil {
+		log.Printf("PostRepo.IncrementView(%d): %v", id, err)
+	}
 }
 
 func (r *PostRepo) IncrementShare(id int64) {
-	DB.Model(&model.Post{}).Where("id = ?", id).UpdateColumn("share_count", gorm.Expr("share_count + 1"))
+	if err := DB.Model(&model.Post{}).Where("id = ?", id).UpdateColumn("share_count", gorm.Expr("share_count + 1")).Error; err != nil {
+		log.Printf("PostRepo.IncrementShare(%d): %v", id, err)
+	}
 }
 
 func (r *PostRepo) UpdateStatus(id int64, status, comment string, reviewerID int64) error {
 	updates := map[string]interface{}{
-		"status":         status,
-		"review_comment": comment,
-		"reviewed_by":    reviewerID,
+		"status":      status,
+		"reviewed_by": reviewerID,
+		"reviewed_at": time.Now(),
+	}
+	// Only update review_comment if provided (preserve previous rejection reason on approve)
+	if comment != "" {
+		updates["review_comment"] = comment
 	}
 	return DB.Model(&model.Post{}).Where("id = ?", id).Updates(updates).Error
 }
@@ -138,19 +181,25 @@ func (r *PostRepo) AdminSoftDelete(id int64) error {
 
 func (r *PostRepo) CountByStatus(status string) int64 {
 	var count int64
-	DB.Model(&model.Post{}).Where("status = ? AND is_deleted = 0", status).Count(&count)
+	if err := DB.Model(&model.Post{}).Where("status = ? AND is_deleted = 0", status).Count(&count).Error; err != nil {
+		log.Printf("PostRepo.CountByStatus(%s): %v", status, err)
+	}
 	return count
 }
 
 func (r *PostRepo) CountTotal() int64 {
 	var count int64
-	DB.Model(&model.Post{}).Where("is_deleted = 0").Count(&count)
+	if err := DB.Model(&model.Post{}).Where("is_deleted = 0").Count(&count).Error; err != nil {
+		log.Printf("PostRepo.CountTotal: %v", err)
+	}
 	return count
 }
 
 func (r *PostRepo) CountByUser(userID int64) int64 {
 	var count int64
-	DB.Model(&model.Post{}).Where("user_id = ? AND is_deleted = 0 AND status = ?", userID, model.StatusApproved).Count(&count)
+	if err := DB.Model(&model.Post{}).Where("user_id = ? AND is_deleted = 0 AND status = ?", userID, model.StatusApproved).Count(&count).Error; err != nil {
+		log.Printf("PostRepo.CountByUser(%d): %v", userID, err)
+	}
 	return count
 }
 

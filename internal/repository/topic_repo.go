@@ -2,6 +2,7 @@ package repository
 
 import (
 	"errors"
+	"log"
 	"strings"
 
 	"github.com/zhoujianlin/ShareO/internal/model"
@@ -14,7 +15,9 @@ func NewTopicRepo() *TopicRepo { return &TopicRepo{} }
 
 func (r *TopicRepo) CountByStatus(status int8) int64 {
 	var count int64
-	DB.Model(&model.Topic{}).Where("status = ?", status).Count(&count)
+	if err := DB.Model(&model.Topic{}).Where("status = ?", status).Count(&count).Error; err != nil {
+		log.Printf("TopicRepo.CountByStatus(%d): %v", status, err)
+	}
 	return count
 }
 
@@ -50,11 +53,15 @@ func (r *TopicRepo) Delete(id int64) error {
 }
 
 func (r *TopicRepo) IncrementPostCount(topicID int64) {
-	DB.Model(&model.Topic{}).Where("id = ?", topicID).UpdateColumn("post_count", DB.Raw("post_count + 1"))
+	if err := DB.Model(&model.Topic{}).Where("id = ?", topicID).UpdateColumn("post_count", DB.Raw("post_count + 1")).Error; err != nil {
+		log.Printf("TopicRepo.IncrementPostCount(%d): %v", topicID, err)
+	}
 }
 
 func (r *TopicRepo) DecrementPostCount(topicID int64) {
-	DB.Model(&model.Topic{}).Where("id = ? AND post_count > 0", topicID).UpdateColumn("post_count", DB.Raw("post_count - 1"))
+	if err := DB.Model(&model.Topic{}).Where("id = ? AND post_count > 0", topicID).UpdateColumn("post_count", DB.Raw("post_count - 1")).Error; err != nil {
+		log.Printf("TopicRepo.DecrementPostCount(%d): %v", topicID, err)
+	}
 }
 
 func (r *TopicRepo) FindByName(name string) (*model.Topic, error) {
@@ -92,32 +99,76 @@ func (r *TopicRepo) AddPostToTopic(topicID, postID int64) error {
 }
 
 // FindOrCreateWithTx finds or creates a topic within a transaction.
+// Uses the provided tx for all queries to maintain transaction isolation.
 func (r *TopicRepo) FindOrCreateWithTx(tx *gorm.DB, name string) (*model.Topic, bool, error) {
 	name = strings.ToLower(name)
-	topic, err := r.FindByName(name)
-	if err != nil {
+	var topic model.Topic
+	err := tx.Where("LOWER(name) = LOWER(?)", name).First(&topic).Error
+	if err == nil {
+		return &topic, false, nil
+	}
+	if !errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, false, err
 	}
-	if topic != nil {
-		return topic, false, nil
-	}
-	topic = &model.Topic{Name: name, Status: 1}
-	if err := tx.Create(topic).Error; err != nil {
+	topic = model.Topic{Name: name, Status: 1}
+	if err := tx.Create(&topic).Error; err != nil {
 		return nil, false, err
 	}
-	return topic, true, nil
+	return &topic, true, nil
 }
 
 // ReplacePostTopics clears existing topic associations for a post and creates new ones within a transaction.
+// It correctly decrements post_count for removed topics and increments for newly added ones.
 func (r *TopicRepo) ReplacePostTopics(tx *gorm.DB, postID int64, topicIDs []int64) error {
+	// Collect old topic IDs before deletion so we can decrement their counts
+	var oldTopicIDs []int64
+	if err := tx.Model(&model.TopicPost{}).Where("post_id = ?", postID).Pluck("topic_id", &oldTopicIDs).Error; err != nil {
+		return err
+	}
+
+	// Build a set of new topic IDs for quick lookup
+	newSet := make(map[int64]bool, len(topicIDs))
+	for _, tid := range topicIDs {
+		newSet[tid] = true
+	}
+
+	// Decrement post_count for topics that are being removed
+	for _, tid := range oldTopicIDs {
+		if !newSet[tid] {
+			if err := tx.Model(&model.Topic{}).Where("id = ? AND post_count > 0", tid).
+				UpdateColumn("post_count", gorm.Expr("post_count - 1")).Error; err != nil {
+				log.Printf("TopicRepo.ReplacePostTopics: failed to decrement post_count for topic %d: %v", tid, err)
+			}
+		}
+	}
+
+	// Delete old topic-post associations
 	if err := tx.Where("post_id = ?", postID).Delete(&model.TopicPost{}).Error; err != nil {
 		return err
 	}
+
+	// Create new associations and increment post_count for topics that were not already present
 	for _, tid := range topicIDs {
 		if err := tx.Create(&model.TopicPost{TopicID: tid, PostID: postID}).Error; err != nil {
 			return err
 		}
-		tx.Model(&model.Topic{}).Where("id = ?", tid).UpdateColumn("post_count", gorm.Expr("post_count + 1"))
+		// Only increment if this topic wasn't already associated with the post
+		if !contains(oldTopicIDs, tid) {
+			if err := tx.Model(&model.Topic{}).Where("id = ?", tid).
+				UpdateColumn("post_count", gorm.Expr("post_count + 1")).Error; err != nil {
+				log.Printf("TopicRepo.ReplacePostTopics: failed to increment post_count for topic %d: %v", tid, err)
+			}
+		}
 	}
 	return nil
+}
+
+// contains checks if slice s contains element e.
+func contains(s []int64, e int64) bool {
+	for _, v := range s {
+		if v == e {
+			return true
+		}
+	}
+	return false
 }

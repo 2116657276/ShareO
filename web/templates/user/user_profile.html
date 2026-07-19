@@ -68,6 +68,11 @@
 </div>
 
 <script>
+function escapeHTML(str) {
+    const div = document.createElement('div');
+    div.appendChild(document.createTextNode(str || ''));
+    return div.innerHTML;
+}
 function profilePage(uid, isOwn, initFollowing) {
     const pageSize = 12;
     return {
@@ -95,7 +100,7 @@ function profilePage(uid, isOwn, initFollowing) {
             this.gridEmpty = false;
             this.hasMore = d.data.list.length === pageSize;
             d.data.list.forEach(p => {
-                const cover = p.cover_image || '';
+                const cover = escapeHTML(p.cover_image || '');
                 grid.insertAdjacentHTML('beforeend',
                     `<a href="/post/${p.id}" class="douyin-item">
                         <img src="${cover}" loading="lazy" onerror="this.style.background='var(--cream-dark)'">

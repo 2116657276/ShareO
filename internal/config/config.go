@@ -60,8 +60,9 @@ type MinIOConfig struct {
 }
 
 type JWTConfig struct {
-	Secret      string `mapstructure:"secret"`
-	ExpireHours int    `mapstructure:"expire_hours"`
+	Secret           string `mapstructure:"secret"`
+	ExpireHours      int    `mapstructure:"expire_hours"`
+	LoginCacheTTLMin int    `mapstructure:"login_cache_ttl_min"`
 }
 
 func (j JWTConfig) ExpireDuration() time.Duration {
@@ -144,6 +145,9 @@ func (c *Config) Validate() error {
 	if c.Database.DBName == "" {
 		return fmt.Errorf("database.dbname is required")
 	}
+	if c.Database.ConnMaxLifetime < 60 {
+		c.Database.ConnMaxLifetime = 300 // 默认 5 分钟，防止连接永不过期
+	}
 
 	if c.Redis.Host == "" {
 		return fmt.Errorf("redis.host is required")
@@ -164,6 +168,9 @@ func (c *Config) Validate() error {
 	}
 	if c.JWT.ExpireHours <= 0 {
 		c.JWT.ExpireHours = 72
+	}
+	if c.JWT.LoginCacheTTLMin <= 0 {
+		c.JWT.LoginCacheTTLMin = 30
 	}
 
 	if c.Upload.MaxSize <= 0 {

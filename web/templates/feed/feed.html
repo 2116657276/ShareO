@@ -69,13 +69,19 @@
 </div>
 
 <script>
+function escapeHTML(str) {
+    const div = document.createElement('div');
+    div.appendChild(document.createTextNode(str || ''));
+    return div.innerHTML;
+}
 function thumbUrl(url) { return url ? url.replace('/posts/medium/', '/posts/thumb/') : url; }
 
 function renderPostCard(post) {
     const imgCount = post.images ? post.images.length : 1;
-    const content = post.content || '';
-    const username = post.user ? post.user.username : '';
-    const avatar = post.user && post.user.avatar_url ? post.user.avatar_url : '/static/img/default-avatar.svg';
+    const content = escapeHTML(post.content || '');
+    const username = escapeHTML(post.user ? post.user.username : '');
+    const avatar = escapeHTML(post.user && post.user.avatar_url ? post.user.avatar_url : '/static/img/default-avatar.svg');
+    const coverImg = escapeHTML(post.cover_image || '');
     const likeIcon = post.is_liked ? 'bi-heart-fill liked' : 'bi-heart';
     const badgeHtml = imgCount > 1 ? `<span class="card-img-badge"><i class="bi bi-images"></i> ${imgCount}</span>` : '';
 
@@ -86,7 +92,7 @@ function renderPostCard(post) {
     return `<a href="/post/${post.id}" class="text-decoration-none feed-item">
         <div class="feed-card">
             <div class="card-img-container skeleton-bg">
-                <img src="${thumbUrl(post.cover_image)}" alt="cover" decoding="async" loading="eager"
+                <img src="${coverImg}" alt="cover" decoding="async" loading="eager"
                      onload="this.parentElement.classList.remove('skeleton-bg')"
                      onerror="this.parentElement.classList.remove('skeleton-bg');this.parentElement.classList.add('img-error')">
                 ${badgeHtml}
@@ -104,10 +110,14 @@ function renderPostCard(post) {
 
 function renderRepostCard(post, likeIcon) {
     const orig = post.repost_of;
-    const origUser = orig.user ? orig.user.username : '';
-    const origAvatar = orig.user && orig.user.avatar_url ? orig.user.avatar_url : '/static/img/default-avatar.svg';
-    const username = post.user ? post.user.username : '';
-    const avatar = post.user && post.user.avatar_url ? post.user.avatar_url : '/static/img/default-avatar.svg';
+    const origUser = escapeHTML(orig.user ? orig.user.username : '');
+    const origAvatar = escapeHTML(orig.user && orig.user.avatar_url ? orig.user.avatar_url : '/static/img/default-avatar.svg');
+    const origContent = escapeHTML(orig.content || '');
+    const origCover = escapeHTML(orig.cover_image || '');
+    const username = escapeHTML(post.user ? post.user.username : '');
+    const avatar = escapeHTML(post.user && post.user.avatar_url ? post.user.avatar_url : '/static/img/default-avatar.svg');
+    const repostContent = escapeHTML(post.content || '');
+    const repostCover = escapeHTML(post.cover_image || '');
     const origImgCount = orig.images ? orig.images.length : 0;
     const repostImgCount = post.images ? post.images.length : 0;
     const hasBothImages = repostImgCount > 0 && origImgCount > 0;
@@ -115,13 +125,13 @@ function renderRepostCard(post, likeIcon) {
     let imageSection = '';
     if (hasBothImages) {
         imageSection = `<div class="pip-container">
-            <div class="pip-main"><img src="${thumbUrl(post.cover_image)}" decoding="async" loading="eager" onload="this.parentElement.classList.remove('skeleton-bg')" onerror="this.parentElement.classList.add('img-error')"></div>
-            <div class="pip-original"><img src="${thumbUrl(orig.cover_image)}" decoding="async" loading="eager" onload="this.parentElement.classList.remove('skeleton-bg')" onerror="this.parentElement.classList.add('img-error')"></div>
+            <div class="pip-main"><img src="${repostCover}" decoding="async" loading="eager" onload="this.parentElement.classList.remove('skeleton-bg')" onerror="this.parentElement.classList.add('img-error')"></div>
+            <div class="pip-original"><img src="${origCover}" decoding="async" loading="eager" onload="this.parentElement.classList.remove('skeleton-bg')" onerror="this.parentElement.classList.add('img-error')"></div>
         </div>`;
     } else if (repostImgCount > 0) {
-        imageSection = `<div class="card-img-container skeleton-bg"><img src="${thumbUrl(post.cover_image)}" decoding="async" loading="eager" onload="this.parentElement.classList.remove('skeleton-bg')" onerror="this.parentElement.classList.add('img-error')"></div>`;
+        imageSection = `<div class="card-img-container skeleton-bg"><img src="${repostCover}" decoding="async" loading="eager" onload="this.parentElement.classList.remove('skeleton-bg')" onerror="this.parentElement.classList.add('img-error')"></div>`;
     } else if (origImgCount > 0) {
-        imageSection = `<div class="card-img-container skeleton-bg"><img src="${thumbUrl(orig.cover_image)}" decoding="async" loading="eager" onload="this.parentElement.classList.remove('skeleton-bg')" onerror="this.parentElement.classList.add('img-error')"></div>`;
+        imageSection = `<div class="card-img-container skeleton-bg"><img src="${origCover}" decoding="async" loading="eager" onload="this.parentElement.classList.remove('skeleton-bg')" onerror="this.parentElement.classList.add('img-error')"></div>`;
     }
 
     return `<a href="/post/${post.id}" class="text-decoration-none feed-item">
@@ -130,14 +140,14 @@ function renderRepostCard(post, likeIcon) {
                 <img src="${avatar}" class="author-avatar" onerror="this.src='/static/img/default-avatar.svg'">
                 <span class="repost-indicator"><i class="bi bi-repeat"></i> ${username} 转帖</span>
             </div>
-            ${post.content ? `<div class="repost-main-text">${post.content}</div>` : ''}
+            ${post.content ? `<div class="repost-main-text">${repostContent}</div>` : ''}
             ${imageSection}
             <div class="repost-original">
                 <div class="repost-original-header">
                     <img src="${origAvatar}" class="author-avatar" onerror="this.src='/static/img/default-avatar.svg'">
                     <span>${origUser}</span>
                 </div>
-                <div class="repost-original-body">${orig.content || '无标题'}</div>
+                <div class="repost-original-body">${origContent || '无标题'}</div>
             </div>
             <div class="card-body" style="padding:8px 12px">
                 <div class="card-meta">

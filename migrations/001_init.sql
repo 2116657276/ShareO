@@ -193,7 +193,6 @@ CREATE TRIGGER trg_after_like_insert
 AFTER INSERT ON likes
 FOR EACH ROW
 BEGIN
-    UPDATE posts SET like_count = like_count + 1 WHERE id = NEW.post_id;
     INSERT INTO system_logs (user_id, action, detail)
     VALUES (NEW.user_id, 'like_post', CONCAT('User ', NEW.user_id, ' liked post ', NEW.post_id));
 END //
@@ -202,7 +201,6 @@ CREATE TRIGGER trg_after_like_delete
 AFTER DELETE ON likes
 FOR EACH ROW
 BEGIN
-    UPDATE posts SET like_count = GREATEST(like_count - 1, 0) WHERE id = OLD.post_id;
     INSERT INTO system_logs (user_id, action, detail)
     VALUES (OLD.user_id, 'unlike_post', CONCAT('User ', OLD.user_id, ' unliked post ', OLD.post_id));
 END //
@@ -211,7 +209,6 @@ CREATE TRIGGER trg_after_comment_insert
 AFTER INSERT ON comments
 FOR EACH ROW
 BEGIN
-    UPDATE posts SET comment_count = comment_count + 1 WHERE id = NEW.post_id;
     INSERT INTO system_logs (user_id, action, detail)
     VALUES (NEW.user_id, 'comment_post', CONCAT('User ', NEW.user_id, ' commented on post ', NEW.post_id));
 END //
@@ -334,4 +331,4 @@ DELIMITER ;
 -- 默认管理员账号 (password: admin123)
 -- ============================================================
 INSERT IGNORE INTO users (username, password_hash, email, role, status)
-VALUES ('admin', '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy', 'admin@shareo.com', 'admin', 1);
+VALUES ('admin', '$2a$10$vbn5lSmj3e6arCkbXzKNqutbx5B/iqtnk6tHoYvETGh1qdnG/5Rd2', 'admin@shareo.com', 'admin', 1);

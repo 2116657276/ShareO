@@ -18,6 +18,11 @@ func TestParseInt64(t *testing.T) {
 		{"name_chinese", "风光", 0},
 		{"mixed", "abc123", 0},
 		{"empty", "", 0},
+		// Additional edge cases
+		{"negative", "-1", 0}, // parseInt64 only handles positive integers; '-' is non-digit → 0
+		{"whitespace", " 123 ", 0},
+		{"float", "1.5", 0},
+		{"max_int64", "9223372036854775807", 9223372036854775807},
 	}
 
 	for _, tt := range tests {
@@ -27,5 +32,15 @@ func TestParseInt64(t *testing.T) {
 				t.Errorf("parseInt64(%q) = %d, want %d", tt.input, got, tt.want)
 			}
 		})
+	}
+}
+
+func TestParseInt64_NonNumeric(t *testing.T) {
+	nonNumeric := []string{"hello", "#tag", "user_name", "abc-def"}
+	for _, input := range nonNumeric {
+		got := parseInt64(input)
+		if got != 0 {
+			t.Errorf("parseInt64(%q) = %d, want 0 (non-numeric should return 0)", input, got)
+		}
 	}
 }

@@ -55,16 +55,16 @@ func (s *PostService) Create(userID int64, req CreatePostReq) (*model.Post, erro
 		})
 	}
 
-	if err := s.postRepo.Create(post); err != nil {
-		return nil, err
-	}
-
-	// 关联话题：合并显式 topic_ids + 正文 #hashtag 自动解析（事务内，避免孤儿 Topic）
-	if err := repository.DB.Transaction(func(tx *gorm.DB) error {
+	// Create post and associate topics in a single transaction to avoid orphan posts
+	err := repository.DB.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(post).Error; err != nil {
+			return err
+		}
 		topicIDs := s.resolveTopicIDsInTx(tx, req.Content, req.TopicIDs)
 		return s.topicRepo.ReplacePostTopics(tx, post.ID, topicIDs)
-	}); err != nil {
-		log.Printf("PostService.Create: failed to associate topics for post %d: %v", post.ID, err)
+	})
+	if err != nil {
+		return nil, err
 	}
 
 	s.feedSvc.InvalidateCache()
@@ -95,7 +95,8 @@ func (s *PostService) Update(userID, postID int64, content string) (*model.Post,
 		log.Printf("PostService.Update: failed to re-associate topics for post %d: %v", postID, err)
 	}
 
-	return post, nil
+	// Re-fetch to get fresh data (updated_at, etc.)
+	return s.postRepo.FindByID(postID)
 }
 
 // resolveTopicIDsInTx resolves topic IDs within a transaction to avoid orphan topics.
@@ -104,7 +105,11 @@ func (s *PostService) resolveTopicIDsInTx(tx *gorm.DB, content string, explicit 
 	var ids []int64
 
 	for _, tag := range ParseHashtags(content) {
-		topic, _, _ := s.topicRepo.FindOrCreateWithTx(tx, tag)
+		topic, _, err := s.topicRepo.FindOrCreateWithTx(tx, tag)
+		if err != nil {
+			log.Printf("PostService.resolveTopicIDsInTx: failed to resolve topic %q: %v", tag, err)
+			continue
+		}
 		if topic != nil && !seen[topic.ID] {
 			seen[topic.ID] = true
 			ids = append(ids, topic.ID)
@@ -185,7 +190,15 @@ func (s *PostService) GetByID(postID int64, currentUserID int64) (*model.Post, e
 		return nil, errors.New("帖子已被删除")
 	}
 
-	s.postRepo.IncrementView(postID)
+	// Hide pending/rejected posts from non-owner non-admin users
+	if post.Status != model.StatusApproved && post.UserID != currentUserID {
+		return nil, errors.New("帖子不存在")
+	}
+
+	// Don't count the author's own views
+	if post.UserID != currentUserID {
+		s.postRepo.IncrementView(postID)
+	}
 
 	if currentUserID > 0 {
 		post.IsLiked = s.likeRepo.IsLiked(currentUserID, postID)

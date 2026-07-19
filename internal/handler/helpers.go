@@ -70,10 +70,11 @@ func calcPages(total int64, pageSize int) int {
 // respondPage writes a paginated success response.
 func respondPage(c *gin.Context, page, pageSize int, list interface{}, total int64) {
 	response.Success(c, response.PageResponse{
-		List:     list,
-		Total:    total,
-		Page:     page,
-		PageSize: pageSize,
+		List:       list,
+		Total:      total,
+		Page:       page,
+		PageSize:   pageSize,
+		TotalPages: calcPages(total, pageSize),
 	})
 }
 

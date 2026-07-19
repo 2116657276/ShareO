@@ -8,8 +8,18 @@ import (
 	"github.com/zhoujianlin/ShareO/internal/repository"
 )
 
+// notifRepo defines the methods NotificationService needs from the repository layer.
+// *repository.NotificationRepo satisfies this interface automatically.
+type notifRepo interface {
+	Create(notif *model.Notification) error
+	List(userID int64, unreadOnly bool, page, pageSize int) ([]model.Notification, int64, error)
+	MarkRead(id, userID int64) error
+	MarkAllRead(userID int64) error
+	UnreadCount(userID int64) int64
+}
+
 type NotificationService struct {
-	repo       *repository.NotificationRepo
+	repo       notifRepo
 	failCount  int64 // atomic counter for failed sends
 	totalCount int64 // atomic counter for total send attempts
 }

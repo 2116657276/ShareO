@@ -28,6 +28,13 @@ func RateLimit(maxRequests int, window time.Duration) gin.HandlerFunc {
 		ip := c.ClientIP()
 		key := "ratelimit:" + ip + ":" + c.Request.URL.Path
 
+		// Fail-open when Redis is not initialized or unavailable
+		if repository.RDB == nil {
+			log.Printf("RateLimit: Redis not initialized (fail-open)")
+			c.Next()
+			return
+		}
+
 		ctx := c.Request.Context()
 		count, err := setExpireScript.Run(ctx, repository.RDB, []string{key}, int(window.Seconds())).Int64()
 		if err != nil {

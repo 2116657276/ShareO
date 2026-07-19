@@ -2,6 +2,7 @@ package repository
 
 import (
 	"errors"
+	"log"
 
 	"github.com/zhoujianlin/ShareO/internal/model"
 	"gorm.io/gorm"
@@ -11,43 +12,58 @@ type LikeRepo struct{}
 
 func NewLikeRepo() *LikeRepo { return &LikeRepo{} }
 
-// Toggle returns true if liked, false if unliked
+// Toggle returns true if liked, false if unliked.
+// All operations run within a transaction to ensure like record and post like_count stay consistent.
 func (r *LikeRepo) Toggle(userID, postID int64) (bool, error) {
-	var existing model.Like
-	err := DB.Where("user_id = ? AND post_id = ?", userID, postID).First(&existing).Error
-	if err == nil {
-		// exists → unlike
-		if delErr := DB.Delete(&existing).Error; delErr != nil {
-			return false, delErr
+	var liked bool
+	err := DB.Transaction(func(tx *gorm.DB) error {
+		var existing model.Like
+		err := tx.Where("user_id = ? AND post_id = ?", userID, postID).First(&existing).Error
+		if err == nil {
+			// exists → unlike
+			if delErr := tx.Delete(&existing).Error; delErr != nil {
+				return delErr
+			}
+			// Sync post like_count via COUNT (idempotent, safe with triggers)
+			if syncErr := tx.Model(&model.Post{}).Where("id = ?", postID).UpdateColumn("like_count",
+				gorm.Expr("(SELECT COUNT(*) FROM likes WHERE post_id = ?)", postID)).Error; syncErr != nil {
+				log.Printf("LikeRepo.Toggle(unlike): failed to sync like_count for post %d: %v", postID, syncErr)
+			}
+			liked = false
+			return nil
 		}
-		// Sync post like_count via COUNT (idempotent, safe with triggers)
-		DB.Model(&model.Post{}).Where("id = ?", postID).UpdateColumn("like_count",
-			gorm.Expr("(SELECT COUNT(*) FROM likes WHERE post_id = ?)", postID))
-		return false, nil
-	}
-	if errors.Is(err, gorm.ErrRecordNotFound) {
-		// not exists → like
-		like := model.Like{UserID: userID, PostID: postID}
-		if createErr := DB.Create(&like).Error; createErr != nil {
-			return false, createErr
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			// not exists → like
+			like := model.Like{UserID: userID, PostID: postID}
+			if createErr := tx.Create(&like).Error; createErr != nil {
+				return createErr
+			}
+			// Sync post like_count via COUNT (idempotent, safe with triggers)
+			if syncErr := tx.Model(&model.Post{}).Where("id = ?", postID).UpdateColumn("like_count",
+				gorm.Expr("(SELECT COUNT(*) FROM likes WHERE post_id = ?)", postID)).Error; syncErr != nil {
+				log.Printf("LikeRepo.Toggle(like): failed to sync like_count for post %d: %v", postID, syncErr)
+			}
+			liked = true
+			return nil
 		}
-		// Sync post like_count via COUNT (idempotent, safe with triggers)
-		DB.Model(&model.Post{}).Where("id = ?", postID).UpdateColumn("like_count",
-			gorm.Expr("(SELECT COUNT(*) FROM likes WHERE post_id = ?)", postID))
-		return true, nil
-	}
-	return false, err
+		return err
+	})
+	return liked, err
 }
 
 func (r *LikeRepo) CountTotal() int64 {
 	var count int64
-	DB.Model(&model.Like{}).Count(&count)
+	if err := DB.Model(&model.Like{}).Count(&count).Error; err != nil {
+		log.Printf("LikeRepo.CountTotal: %v", err)
+	}
 	return count
 }
 
 func (r *LikeRepo) IsLiked(userID, postID int64) bool {
 	var count int64
-	DB.Model(&model.Like{}).Where("user_id = ? AND post_id = ?", userID, postID).Count(&count)
+	if err := DB.Model(&model.Like{}).Where("user_id = ? AND post_id = ?", userID, postID).Count(&count).Error; err != nil {
+		log.Printf("LikeRepo.IsLiked(%d, %d): %v", userID, postID, err)
+	}
 	return count > 0
 }
 

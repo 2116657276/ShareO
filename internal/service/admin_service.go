@@ -33,11 +33,19 @@ func NewAdminService() *AdminService {
 
 // --- Post Review ---
 
-func (s *AdminService) DeletePost(postID int64) error {
+func (s *AdminService) DeletePost(postID int64, adminID int64) error {
+	// Fetch post info before deletion to get author ID for notification
+	post, err := s.postRepo.FindByIDLight(postID)
+	if err != nil || post == nil {
+		return err
+	}
+
 	if err := s.postRepo.AdminSoftDelete(postID); err != nil {
 		return err
 	}
 	s.feedSvc.InvalidateCache()
+	// Notify the author about forced deletion
+	s.notifSvc.Send(post.UserID, adminID, model.NotifTypeReview, postID)
 	return nil
 }
 

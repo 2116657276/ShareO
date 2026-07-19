@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"encoding/json"
 	"net/http/httptest"
 	"testing"
 
@@ -163,5 +164,85 @@ func TestUserData_WithCachedAvatar(t *testing.T) {
 	data := userData(c, gin.H{})
 	if data["user_avatar"].(string) != "http://example.com/avatar.jpg" {
 		t.Errorf("avatar = %v, want http://example.com/avatar.jpg", data["user_avatar"])
+	}
+}
+
+func TestRespondPage(t *testing.T) {
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest("GET", "/test", nil)
+
+	respondPage(c, 1, 20, []string{"a", "b"}, 100)
+
+	if w.Code != 200 {
+		t.Errorf("expected 200, got %d", w.Code)
+	}
+
+	var resp struct {
+		Code    int      `json:"code"`
+		Message string   `json:"message"`
+		Data    struct {
+			List       []string `json:"list"`
+			Total      int64    `json:"total"`
+			Page       int      `json:"page"`
+			PageSize   int      `json:"page_size"`
+			TotalPages int      `json:"total_pages"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to unmarshal response: %v", err)
+	}
+	if resp.Code != 0 {
+		t.Errorf("code = %d, want 0", resp.Code)
+	}
+	if resp.Data.Total != 100 {
+		t.Errorf("total = %d, want 100", resp.Data.Total)
+	}
+	if resp.Data.Page != 1 {
+		t.Errorf("page = %d, want 1", resp.Data.Page)
+	}
+	if resp.Data.PageSize != 20 {
+		t.Errorf("page_size = %d, want 20", resp.Data.PageSize)
+	}
+	if resp.Data.TotalPages != 5 {
+		t.Errorf("total_pages = %d, want 5", resp.Data.TotalPages)
+	}
+	if len(resp.Data.List) != 2 || resp.Data.List[0] != "a" || resp.Data.List[1] != "b" {
+		t.Errorf("list = %v, want [a b]", resp.Data.List)
+	}
+}
+
+func TestGetPageSizePair_Boundary(t *testing.T) {
+	tests := []struct {
+		name        string
+		queryString string
+		defaultSize int
+		wantSize    int
+	}{
+		{"zero clamped", "page_size=0", 50, 50},
+		{"max allowed", "page_size=200", 50, 200},
+		{"over max", "page_size=201", 50, 50},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			w := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(w)
+			c.Request = httptest.NewRequest("GET", "/test?"+tt.queryString, nil)
+			_, ps := getPageSizePair(c, tt.defaultSize)
+			if ps != tt.wantSize {
+				t.Errorf("pageSize = %d, want %d", ps, tt.wantSize)
+			}
+		})
+	}
+}
+
+func TestGetPageSizePair_NegativePageSize(t *testing.T) {
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest("GET", "/test?page_size=-1", nil)
+
+	_, pageSize := getPageSizePair(c, 50)
+	if pageSize != 50 {
+		t.Errorf("negative page_size should clamp to default 50, got %d", pageSize)
 	}
 }

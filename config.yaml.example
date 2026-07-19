@@ -30,6 +30,7 @@ minio:
 jwt:
   secret: change-this-to-a-random-string  # Or use env: SHAREO_JWT_SECRET
   expire_hours: 72
+  login_cache_ttl_min: 30  # Redis login cache TTL in minutes (0 to disable)
 
 upload:
   max_size: 52428800  # 50MB

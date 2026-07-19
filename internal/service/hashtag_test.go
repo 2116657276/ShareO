@@ -1,7 +1,6 @@
 package service
 
 import (
-	"regexp"
 	"testing"
 )
 
@@ -80,11 +79,9 @@ func TestParseHashtags_EdgeCases(t *testing.T) {
 }
 
 func TestHashtagRegex_CasePreservation(t *testing.T) {
-	// Verify regex preserves exact case from input
-	re := regexp.MustCompile(`#([\p{L}\p{N}_]+)`)
-	input := "check #CamelCase here"
-	matches := re.FindAllStringSubmatch(input, -1)
-	if len(matches) != 1 || matches[0][1] != "CamelCase" {
-		t.Errorf("regex case: input=%q, got=%v", input, matches)
+	// ParseHashtags applies ToLower, so results should be lowercased
+	got := ParseHashtags("check #CamelCase here")
+	if len(got) != 1 || got[0] != "camelcase" {
+		t.Errorf("ParseHashtags with mixed case: got=%v, want=[camelcase]", got)
 	}
 }

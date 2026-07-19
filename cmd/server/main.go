@@ -56,6 +56,9 @@ func main() {
 	// Init JWT
 	jwt.Init(cfg.JWT.Secret, cfg.JWT.ExpireHours)
 
+	// Init login cache TTL
+	repository.InitLoginCache(cfg.JWT.LoginCacheTTLMin)
+
 	// Setup router with custom functions
 	r := router.SetupRouter()
 	r.SetFuncMap(template.FuncMap{
@@ -82,11 +85,31 @@ func main() {
 			return anyToMediumRE.ReplaceAllString(url, "/posts/medium/")
 		},
 		"renderHashtags": func(content string) template.HTML {
-			safe := hashtagLinkRE.ReplaceAllStringFunc(content, func(match string) string {
+			// Split content by hashtag matches, escape plain text parts,
+			// and build safe hashtag links. Prevents stored XSS.
+			var buf strings.Builder
+			indices := hashtagLinkRE.FindAllStringIndex(content, -1)
+			last := 0
+			for _, idx := range indices {
+				// Escape plain text before the hashtag
+				if idx[0] > last {
+					buf.WriteString(template.HTMLEscapeString(content[last:idx[0]]))
+				}
+				// Build safe hashtag link
+				match := content[idx[0]:idx[1]]
 				name := strings.TrimPrefix(match, "#")
-				return `<a href="/topic/` + template.HTMLEscapeString(name) + `" class="hashtag-link">#` + template.HTMLEscapeString(name) + `</a>`
-			})
-			return template.HTML(safe)
+				buf.WriteString(`<a href="/topic/`)
+				buf.WriteString(template.HTMLEscapeString(name))
+				buf.WriteString(`" class="hashtag-link">#`)
+				buf.WriteString(template.HTMLEscapeString(name))
+				buf.WriteString(`</a>`)
+				last = idx[1]
+			}
+			// Escape remaining plain text after the last hashtag
+			if last < len(content) {
+				buf.WriteString(template.HTMLEscapeString(content[last:]))
+			}
+			return template.HTML(buf.String())
 		},
 	})
 
@@ -114,7 +137,7 @@ func main() {
 	fmt.Println("  ShareO - 拍摄与作品管理系统")
 	fmt.Println("========================================")
 	fmt.Printf("  Web:     http://localhost%s\n", addr)
-	fmt.Printf("  管理员:  admin / admin123\n")
+	fmt.Printf("  管理员账号已创建，密码见 migrations/001_init.sql\n")
 	fmt.Printf("  用户:    注册后登录\n")
 	fmt.Println("========================================")
 

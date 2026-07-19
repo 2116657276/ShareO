@@ -105,15 +105,24 @@ func (s *FeedService) fillUserInteraction(posts []model.Post, userID int64) {
 	}
 }
 
+// cachedFeedData stores only post IDs and total count — not full Post objects.
+// This reduces Redis memory pressure and ensures user data (avatars, usernames) is always fresh.
 type cachedFeedData struct {
-	Posts []model.Post `json:"posts"`
-	Total int64        `json:"total"`
+	PostIDs []int64 `json:"post_ids"`
+	Total   int64   `json:"total"`
 }
 
 func (s *FeedService) cacheFeed(posts []model.Post, total int64) {
+	if repository.RDB == nil {
+		return
+	}
 	ctx := context.Background()
 	key := "feed:latest:page1"
-	data, err := json.Marshal(cachedFeedData{Posts: posts, Total: total})
+	ids := make([]int64, len(posts))
+	for i, p := range posts {
+		ids[i] = p.ID
+	}
+	data, err := json.Marshal(cachedFeedData{PostIDs: ids, Total: total})
 	if err != nil {
 		return
 	}
@@ -121,6 +130,9 @@ func (s *FeedService) cacheFeed(posts []model.Post, total int64) {
 }
 
 func (s *FeedService) InvalidateCache() {
+	if repository.RDB == nil {
+		return
+	}
 	repository.RDB.Del(context.Background(), "feed:latest:page1")
 }
 
@@ -135,6 +147,12 @@ func (s *FeedService) getCachedFeed() ([]model.Post, int64, bool) {
 	if err := json.Unmarshal(bytes, &data); err != nil {
 		return nil, 0, false
 	}
-	log.Println("feed served from Redis cache")
-	return data.Posts, data.Total, true
+	// Re-query from DB to get fresh data (avatars, usernames, etc.)
+	posts, err := s.postRepo.FindByIDs(data.PostIDs)
+	if err != nil {
+		log.Printf("FeedService.getCachedFeed: failed to re-query posts from cache IDs: %v", err)
+		return nil, 0, false
+	}
+	log.Println("feed served from Redis cache (IDs only, re-queried)")
+	return posts, data.Total, true
 }

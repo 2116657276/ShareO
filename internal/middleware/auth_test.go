@@ -16,12 +16,13 @@ func init() {
 }
 
 func TestAuthRequired_NoToken(t *testing.T) {
+	// API path returns JSON 401
 	r := gin.New()
 	r.Use(AuthRequired())
-	r.GET("/test", func(c *gin.Context) { c.JSON(200, gin.H{"ok": true}) })
+	r.GET("/api/v1/test", func(c *gin.Context) { c.JSON(200, gin.H{"ok": true}) })
 
 	w := httptest.NewRecorder()
-	req, _ := http.NewRequest("GET", "/test", nil)
+	req, _ := http.NewRequest("GET", "/api/v1/test", nil)
 	r.ServeHTTP(w, req)
 
 	if w.Code != http.StatusUnauthorized {
@@ -29,18 +30,56 @@ func TestAuthRequired_NoToken(t *testing.T) {
 	}
 }
 
-func TestAuthRequired_InvalidToken(t *testing.T) {
+func TestAuthRequired_NoToken_WebRedirect(t *testing.T) {
+	// Web path redirects to /login
 	r := gin.New()
 	r.Use(AuthRequired())
 	r.GET("/test", func(c *gin.Context) { c.JSON(200, gin.H{"ok": true}) })
 
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", "/test", nil)
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusFound {
+		t.Errorf("expected 302, got %d", w.Code)
+	}
+	if loc := w.Header().Get("Location"); loc != "/login" {
+		t.Errorf("expected Location /login, got %s", loc)
+	}
+}
+
+func TestAuthRequired_InvalidToken(t *testing.T) {
+	// API path with invalid token returns JSON 401
+	r := gin.New()
+	r.Use(AuthRequired())
+	r.GET("/api/v1/test", func(c *gin.Context) { c.JSON(200, gin.H{"ok": true}) })
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("GET", "/api/v1/test", nil)
 	req.Header.Set("Authorization", "Bearer invalid-token")
 	r.ServeHTTP(w, req)
 
 	if w.Code != http.StatusUnauthorized {
 		t.Errorf("expected 401, got %d", w.Code)
+	}
+}
+
+func TestAuthRequired_InvalidToken_WebRedirect(t *testing.T) {
+	// Web path with invalid cookie token redirects to /login
+	r := gin.New()
+	r.Use(AuthRequired())
+	r.GET("/home", func(c *gin.Context) { c.JSON(200, gin.H{"ok": true}) })
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("GET", "/home", nil)
+	req.AddCookie(&http.Cookie{Name: "token", Value: "invalid-token"})
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusFound {
+		t.Errorf("expected 302, got %d", w.Code)
+	}
+	if loc := w.Header().Get("Location"); loc != "/login" {
+		t.Errorf("expected Location /login, got %s", loc)
 	}
 }
 
@@ -100,16 +139,40 @@ func TestAdminRequired_AsUser(t *testing.T) {
 		c.Next()
 	})
 	r.Use(AdminRequired())
-	r.GET("/admin/test", func(c *gin.Context) {
+	r.GET("/api/v1/admin/test", func(c *gin.Context) {
 		c.JSON(200, gin.H{"ok": true})
 	})
 
 	w := httptest.NewRecorder()
-	req, _ := http.NewRequest("GET", "/admin/test", nil)
+	req, _ := http.NewRequest("GET", "/api/v1/admin/test", nil)
 	r.ServeHTTP(w, req)
 
 	if w.Code != http.StatusForbidden {
 		t.Errorf("expected 403, got %d", w.Code)
+	}
+}
+
+func TestAdminRequired_AsUser_WebRedirect(t *testing.T) {
+	// Web path with non-admin role redirects to /
+	r := gin.New()
+	r.Use(func(c *gin.Context) {
+		c.Set("role", "user")
+		c.Next()
+	})
+	r.Use(AdminRequired())
+	r.GET("/admin/", func(c *gin.Context) {
+		c.JSON(200, gin.H{"ok": true})
+	})
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("GET", "/admin/", nil)
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusFound {
+		t.Errorf("expected 302, got %d", w.Code)
+	}
+	if loc := w.Header().Get("Location"); loc != "/" {
+		t.Errorf("expected Location /, got %s", loc)
 	}
 }
 

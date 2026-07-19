@@ -1,180 +1,334 @@
 # ShareO 功能清单
 
-> 更新时间: 2026-06-13 | 版本: v4 终版
-
-## 项目概述
-ShareO — Go + Gin 摄影作品管理与社区分享平台，支持用户发帖社交互动、管理员审核管理。
-
-## 技术栈
-Go + Gin + GORM + MySQL 8.0 + Redis + MinIO + Bootstrap 5 + Alpine.js
+> 更新时间: 2026-06-19 | 版本: v5 | 58 路由 · 11 表 · 85 测试用例
 
 ---
 
-## 已实现功能
+## 1. 认证系统
 
-### 1. 认证系统
-- 用户注册/登录（bcrypt 加密，JWT 72h 过期）
-- 登录页 Tab 切换（用户/管理员模式）
-- 已登录自动分流（admin→/admin，user→/home）
-- 个人信息查询与更新（bio/email/avatar）
-- XSS 防护：用户名拒绝 `<>"'&/\\` 字符
-- 封禁用户拒绝登录
+**功能**: 注册、登录、登出、JWT 72h、个人信息、资料更新、XSS 防护、封禁拦截、Redis 登录缓存(30 分钟免登录)
 
-### 2. Feed 流
-- 12 列卡片网格，最新/热门排序
-- "加载更多" 按钮（非传统分页）
-- Redis 缓存首页最新 Feed（2min TTL，发帖/删帖/审核自动失效）
-- gzip 压缩，骨架屏 + 首屏 6 张 eager 预加载 + 悬停放大 1.2x
-
-### 3. 帖子管理
-- 创建帖子（多图 + 文字 + 话题标签）
-- 编辑帖子（仅作者，修改后重新审核）
-- 软删除帖子（仅作者）
-- 帖子详情页（图片轮播 + 作者信息 + 操作栏）
-
-### 4. 图片上传
-- MinIO 对象存储
-- 支持 JPG/PNG/WebP/GIF，单文件 ≤50MB
-- 魔数（magic number）检测真实类型，防 Content-Type 伪造
-- 服务端 + 客户端双重校验
-- 图片代理（HEAD/GET，24h 浏览器缓存）
-- 拖拽上传
-
-### 5. 社交互动
-- 点赞/收藏/关注（Toggle 模式，防重复）
-- 应用层 + 触发器双层计数保护（like_count/favorite_count/comment_count）
-- 评论（多级回复 parent_id + reply_to_uid）
-- 评论嵌套 children
-- 关注/粉丝列表，收藏列表
-- 边界校验完善（自关注/不存在帖/不存在评论）
-- 错误码分级：业务错误(400) vs 资源不存在(404)
-
-### 6. 转帖系统
-- 纯文字转帖 / 带图片转帖
-- Feed 差异化卡片：转帖文字 + 嵌入原帖 + PIP 画中画（双图时）
-- 详情页 "查看原文" 跳转
-- share_count 自动递增
-
-### 7. 搜索
-- FULLTEXT 全文搜索（ngram 分词，中文友好）
-- 启动时检测 FULLTEXT 索引可用性，缓存结果
-- 无 FULLTEXT 索引时自动降级 LIKE
-- 分页支持
-
-### 8. 用户主页
-- 头像 + 简介 + 统计（作品数/关注/粉丝）
-- 3 列作品墙 + 关注按钮
-- isOwnProfile / isFollowing 状态
-
-### 9. 管理员功能
-- 仪表盘统计（用户/帖子/待审/点赞/评论/封禁）
-- 帖子审核（通过/驳回 + 理由）
-- 用户管理（封禁/解封）
-- 系统日志查看
-- 强制删帖
-- 可折叠面板，不跳转
-
-### 10. 安全与权限
-- 4 层中间件：OptionalAuth / AuthRequired / AdminRequired / RateLimit
-- Redis 滑动窗口 API 限流（登录 10次/分, 发帖 30次/分, 上传 20次/分, Lua 原子操作）
-- JWT Cookie SameSite=Lax + HttpOnly（防 XSS/CSRF）
-- JWT 密钥 nil 保护（GenerateToken/ParseToken 双重检查）
-- 上传魔数校验（Magic Number + WebP 手动检测 + io.MultiReader）
-- 错误信息脱敏，不暴露内部实现
-- 密钥环境变量覆盖（SHAREO_* 5 项），config.yaml 不提交 Git
-- 启动时配置 Validate() + Graceful Shutdown (10s 超时)
-- 业务错误码体系（0+1001~1006），与 HTTP 状态码解耦
-
-### 11. 前端
-- Cammate 暖黄色调主题（#E8A840）
-- 毛玻璃导航栏 + 汉堡菜单 Offcanvas
-- 全局 NoCache + 响应式布局（768px / 480px 断点）
-
-### 12. 通知系统 🆕
-- 5 类通知：点赞/评论/关注/转帖/审核结果
-- API：列表(GET) + 标记已读(PUT) + 全部已读(PUT) + 未读数(GET)
-- 导航栏铃铛图标 + 红色未读徽章
-- 通知页面（Alpine.js 渲染，时间友好显示，加载更多分页）
-- 5 个触发点自动集成（SocialService/PostService/AdminService）
-
-### 13. 话题系统 🆕
-- 正文 `#话题名` 正则自动提取（支持中/英/数字/下划线）
-- 话题不存在时自动创建 + 自动关联帖子
-- 编辑帖子时重新解析并更新话题关联
-- 话题聚合页 `GET /topic/:id_or_name`（作品墙 + 作品数统计）
-- 帖子正文 #话题 渲染为可点击链接
-
-### 14. 图片缩略图 🆕
-- 上传时自动生成 3 档尺寸：thumb(300x300) / medium(1200x1200) / original
-- Feed 卡片使用 thumb，详情页使用 medium
-- 正方裁剪（中心）+ Lanczos 重采样 + JPEG Q85 编码
-- GIF 跳过 resize 保留动画
-
-### 15. 数据库
-- 11 张业务表（含 notifications）+ 触发器 + 视图 + 存储过程
-- FULLTEXT ngram 索引（posts.content）
-- B+Tree 索引（时间/热度/外键）
-- 软删除 + 审计日志触发器
+| 层 | 文件 | 关键函数 |
+|----|------|---------|
+| Router | `internal/router/router.go` | 13 条认证路由 |
+| Handler | `internal/handler/auth_handler.go` | `Register`, `Login`, `Logout`, `Me`, `UpdateProfile`, `WebLogin`, `WebRegister`, `WebLogout`, `SettingsPage`, `WebSettings` |
+| Service | `internal/service/auth_service.go` | `Register`, `Login`, `GetProfile`, `UpdateProfile` |
+| Repository | `internal/repository/user_repo.go` | `Create`, `FindByID`, `FindByUsername`, `UpdateFields` |
+| JWT | `internal/pkg/jwt/jwt.go` | `Init`, `GenerateToken`, `ParseToken`, `ExpireDuration` |
+| Login Cache | `internal/repository/auth_cache.go` | `CacheLoginToken`, `GetLoginToken`, `DeleteLoginToken`, `RefreshLoginToken` |
+| Model | `internal/model/user.go` | `User` struct |
+| Templates | `web/templates/auth/login.html`, `register.html`; `web/templates/user/settings.html` | |
+| Migration | `migrations/001_init.sql` | `users` 表 |
 
 ---
 
-## 路由总览（54 条）
+## 2. Feed 流
 
-### 页面路由（16 条）
-| 方法 | 路径 | 权限 | 说明 |
-|------|------|------|------|
-| GET | / | public | 登录页（已登录分流） |
-| GET | /login | public | 登录页 |
-| GET | /register | public | 注册页 |
-| GET | /home | user | Feed 主页 |
-| GET | /post/create | user | 发布作品 |
-| GET | /post/:id | user | 帖子详情 |
-| GET | /post/:id/edit | user | 编辑帖子 |
-| GET | /user/:id | user | 用户主页 |
-| GET | /settings | user | 账号设置 |
-| GET | /notifications | user | 通知列表 🆕 |
-| GET | /topic/:id | user | 话题聚合页 🆕 |
-| GET | /logout | user | 退出 |
-| GET | /admin/ | admin | 仪表盘 |
-| GET | /admin/review | admin | 审核页 |
-| GET | /admin/users | admin | 用户管理 |
-| GET | /admin/logs | admin | 日志 |
+**功能**: 卡片网格、最新/热门排序、"加载更多"分页、Redis 首页缓存(2min TTL)、骨架屏、gzip
 
-### API 路由（38 条）
-| 方法 | 路径 | 权限 | 限流 |
-|------|------|------|------|
-| POST | /api/v1/auth/register | public | 10/min |
-| POST | /api/v1/auth/login | public | 10/min |
-| GET | /api/v1/auth/me | user | — |
-| POST | /api/v1/auth/logout | user | — |
-| PUT | /api/v1/auth/profile | user | — |
-| GET | /api/v1/feed | public | — |
-| GET | /api/v1/search | public | — |
-| GET | /api/v1/posts/:id | public | — |
-| POST | /api/v1/posts | user | 30/min |
-| PUT | /api/v1/posts/:id | user | — |
-| DELETE | /api/v1/posts/:id | user | — |
-| POST | /api/v1/posts/:id/repost | user | — |
-| POST | /api/v1/posts/:id/like | user | — |
-| POST | /api/v1/posts/:id/favorite | user | — |
-| GET | /api/v1/favorites | user | — |
-| POST | /api/v1/posts/:id/comments | user | — |
-| GET | /api/v1/posts/:id/comments | public | — |
-| DELETE | /api/v1/comments/:cid | user | — |
-| POST | /api/v1/users/:id/follow | user | — |
-| GET | /api/v1/users/:id/following | public | — |
-| GET | /api/v1/users/:id/followers | public | — |
-| POST | /api/v1/upload | user | 20/min |
-| GET | /api/v1/images/* | public | — |
-| GET | /api/v1/notifications | user | — 🆕 |
-| PUT | /api/v1/notifications/:id/read | user | — 🆕 |
-| PUT | /api/v1/notifications/read-all | user | — 🆕 |
-| GET | /api/v1/notifications/unread-count | user | — 🆕 |
-| GET | /api/v1/admin/stats | admin | — |
-| GET | /api/v1/admin/pending-posts | admin | — |
-| DELETE | /api/v1/admin/posts/:id | admin | — |
-| POST | /api/v1/admin/posts/:id/approve | admin | — |
-| POST | /api/v1/admin/posts/:id/reject | admin | — |
-| GET | /api/v1/admin/users | admin | — |
-| PUT | /api/v1/admin/users/:id/status | admin | — |
-| GET | /api/v1/admin/logs | admin | — |
+| 层 | 文件 | 关键函数 |
+|----|------|---------|
+| Router | `internal/router/router.go` | `GET /api/v1/feed`, `GET /home` |
+| Handler | `internal/handler/feed_handler.go` | `GetFeed`, `HomePage`, `Search` |
+| Service | `internal/service/feed_service.go` | `GetFeed`, `fillUserInteraction`, `cacheFeed`, `InvalidateCache`, `getCachedFeed` |
+| Repository | `internal/repository/post_repo.go` | `Feed` (加权热度排序: `like*3+comment*2+view`) |
+| Model | `internal/model/constants.go` | `SortLatest`, `SortHot` |
+| Templates | `web/templates/feed/feed.html` | Alpine.js `feedPage` 组件 + LazyLoad |
+| CSS | `web/static/css/style.css` | Feed 卡片样式 |
+
+---
+
+## 3. 帖子管理
+
+**功能**: 创建(多图+文字+话题)、编辑(仅作者, 事务重关联)、软删除、详情页(图片轮播)
+
+| 层 | 文件 | 关键函数 |
+|----|------|---------|
+| Router | `internal/router/router.go` | 8 条帖子路由 |
+| Handler | `internal/handler/post_handler.go` | `Create`, `Update`, `Delete`, `GetByID`, `Repost`, `WebCreate`, `WebUpdate` |
+| Service | `internal/service/post_service.go` | `Create`, `Update`, `Delete`, `GetByID`, `Repost`, `resolveTopicIDsInTx` |
+| Repository | `internal/repository/post_repo.go` | `Create`, `FindByID`, `FindByIDLight`, `Update`, `SoftDelete`, `IncrementView`, `IncrementShare` |
+| Model | `internal/model/post.go`, `internal/model/post_image.go` | `Post`, `PostImage` |
+| Templates | `web/templates/post/create_post.html`, `edit_post.html`, `post_detail.html` | |
+| Migration | `migrations/001_init.sql`, `migrations/005_repost.sql` | `posts`, `post_images` 表 |
+
+---
+
+## 4. 图片上传与缩略图
+
+**功能**: MinIO 存储、魔数检测(防 Content-Type 伪造)、Lanczos 三档缩略图(thumb 300 / medium 1200 / original)、图片代理(24h 缓存)、拖拽上传
+
+| 层 | 文件 | 关键函数 |
+|----|------|---------|
+| Router | `internal/router/router.go` | `POST /api/v1/upload`, `ANY /api/v1/images/*` |
+| Handler | `internal/handler/upload_handler.go` | `UploadImage` , `ServeImage` |
+| Upload Pkg | `internal/pkg/upload/minio.go` | `Init`, `MaxUploadSize`, `UploadImage`, `GetImage` |
+| Thumbnail | `internal/pkg/upload/thumbnail.go` | `ProcessAndUpload`, `squareCrop`, `decodeImage`, `encodeJPEG` |
+| Test | `internal/handler/upload_magic_test.go` | 11 项魔数测试 |
+| Model | `internal/model/post_image.go` | `PostImage` |
+
+---
+
+## 5. 社交互动
+
+**功能**: 点赞/收藏/关注(Toggle 模式)、评论(多级回复)、计数同步(COUNT(*) 子查询, 天然幂等)
+
+| 层 | 文件 | 关键函数 |
+|----|------|---------|
+| Router | `internal/router/router.go` | 11 条社交路由 |
+| Handler | `internal/handler/social_handler.go` | `ToggleLike`, `ToggleFavorite`, `ToggleFollow`, `CreateComment`, `DeleteComment` |
+| Service | `internal/service/social_service.go` | `ToggleLike` , `ToggleFavorite`, `ToggleFollow`, `CreateComment` |
+| Repository (Like) | `internal/repository/like_repo.go` | `Toggle`, `IsLiked`, `GetUserLikedPostIDs`, `GetUserLikedPosts` |
+| Repository (Favorite) | `internal/repository/favorite_repo.go` | `Toggle`, `IsFavorited`, `GetUserFavoritedPostIDs`, `GetUserFavorites` |
+| Repository (Follow) | `internal/repository/follow_repo.go` | `Toggle`, `IsFollowing`, `GetFollowing`, `GetFollowers` |
+| Repository (Comment) | `internal/repository/comment_repo.go` | `Create`, `FindByPostID`, `SoftDelete` |
+| Models | `internal/model/like.go`, `favorite.go`, `follow.go`, `comment.go` | |
+| Migration | `migrations/001_init.sql` | `likes`, `favorites`, `follows`, `comments` 表 |
+
+---
+
+## 6. 转帖系统
+
+**功能**: 纯文字/图片转帖、Feed PIP 画中画、详情页"查看原文"、share_count 计数
+
+| 层 | 文件 | 关键函数 |
+|----|------|---------|
+| Router | `internal/router/router.go` | `POST /api/v1/posts/:id/repost` |
+| Handler | `internal/handler/post_handler.go` | `Repost` |
+| Service | `internal/service/post_service.go` | `Repost` (设置 `IsRepost=1`, `RepostOfID`, 递增 share_count, 发送通知) |
+| Repository | `internal/repository/post_repo.go` | `IncrementShare` |
+| Model | `internal/model/post.go,30` | `Post.IsRepost`, `Post.RepostOfID`, `Post.RepostOf` |
+| Migration | `migrations/005_repost.sql` | 添加 repost 字段 |
+
+---
+
+## 7. 搜索
+
+**功能**: FULLTEXT ngram 全文搜索(中文友好)、启动时检测索引可用性、无索引时自动降级 LIKE
+
+| 层 | 文件 | 关键函数 |
+|----|------|---------|
+| Router | `internal/router/router.go` | `GET /api/v1/search` |
+| Handler | `internal/handler/feed_handler.go` | `Search` |
+| Service | `internal/service/feed_service.go` | `Search` |
+| Repository | `internal/repository/post_repo.go` | `Search` (FULLTEXT, LIKE 降级) |
+| FULLTEXT检测 | `internal/repository/post_repo.go` | `DetectFulltext` (查询 `INFORMATION_SCHEMA`) |
+| Migration | `migrations/006_fulltext.sql` | `FULLTEXT INDEX idx_posts_content_ft` (ngram) |
+
+---
+
+## 8. 用户主页
+
+**功能**: 头像+简介+统计、作品墙(3 列)、关注按钮、isOwnProfile/isFollowing 状态
+
+| 层 | 文件 | 关键函数 |
+|----|------|---------|
+| Router | `internal/router/router.go` | `GET /user/:id` |
+| Handler | `internal/handler/user_handler.go` | `ProfilePage` |
+| Service | `internal/service/user_service.go` | `GetProfile` |
+| Repository | `internal/repository/user_repo.go,81-87` | `FindByID`, `GetFollowCounts` |
+| Model | `internal/model/user.go` | `User` |
+| Template | `web/templates/user/user_profile.html` | Alpine.js `profilePage` 组件 |
+
+---
+
+## 9. 管理员功能
+
+**功能**: 仪表盘统计、帖子审核(通过/驳回+通知)、用户管理(封禁/解封)、系统日志、强制删帖
+
+| 层 | 文件 | 关键函数 |
+|----|------|---------|
+| Router | `internal/router/router.go` | 12 条管理员路由 (中间件: `AuthRequired` + `AdminRequired`) |
+| Handler | `internal/handler/admin_handler.go` | `GetStats`, `GetPendingPosts`, `ApprovePost`, `RejectPost`, `DeletePost`, `GetUsers`, `UpdateUserStatus`, `GetLogs` |
+| Service | `internal/service/admin_service.go` | `GetDashboardStats`, `GetPendingPosts`, `ReviewPost` , `ListUsers`, `UpdateUserStatus`, `GetLogs` |
+| Repository (Post) | `internal/repository/post_repo.go` | `UpdateStatus`, `AdminSoftDelete`, `CountByStatus`, `CountTotal` |
+| Repository (User) | `internal/repository/user_repo.go` | `List`, `UpdateStatus`, `CountByRole`, `CountByStatus` |
+| Repository (Log) | `internal/repository/log_repo.go` | `List` |
+| Templates | `web/templates/admin/admin_dashboard.html`, `admin_review.html`, `admin_users.html`, `admin_logs.html` | |
+| Migration | `migrations/001_init.sql`, `migrations/003_triggers.sql` | `system_logs` 表, 触发器 |
+
+---
+
+## 10. 通知系统
+
+**功能**: 5 类通知(like/comment/follow/repost/review)、列表、单条已读、全部已读、未读数、铃铛徽章
+
+| 层 | 文件 | 关键函数 |
+|----|------|---------|
+| Router | `internal/router/router.go` | 5 条通知路由 |
+| Handler | `internal/handler/notification_handler.go` | `List`, `MarkRead`, `MarkAllRead`, `UnreadCount`, `NotificationsPage` |
+| Service | `internal/service/notification_service.go` | `Send` , `List`, `MarkRead`, `MarkAllRead`, `UnreadCount`, `Stats` |
+| Repository | `internal/repository/notification_repo.go` | `Create`, `List`, `MarkRead`, `MarkAllRead`, `UnreadCount` |
+| Model | `internal/model/notification.go,14` | `NotifType*` 常量, `Notification` struct |
+| Template | `web/templates/notifications.html` | Alpine.js 渲染 + 铃铛徽章在 `layout/header.html` |
+| 触发点 | `social_service.go,123,126,76`; `post_service.go`; `admin_service.go` | |
+| Migration | `migrations/007_notifications.sql` | `notifications` 表 |
+
+---
+
+## 11. 话题系统
+
+**功能**: `#话题` 正则提取、自动创建/关联、编辑重关联、聚合页(ID/名称双通)、模板 `#链接` 渲染
+
+| 层 | 文件 | 关键函数 |
+|----|------|---------|
+| Router | `internal/router/router.go` | `GET /topic/:id` |
+| Handler | `internal/handler/topic_handler.go` | `TopicPage` |
+| Service | `internal/service/topic_service.go` | `GetTopicPage` |
+| Hashtag 解析 | `internal/service/hashtag.go` | `ParseHashtags` |
+| Repository | `internal/repository/topic_repo.go` | `FindByID`, `FindByName`, `FindOrCreate`, `ReplacePostTopics` |
+| 模板函数 | `cmd/server/main.go` | `renderHashtags` (分段转义防 XSS) |
+| Models | `internal/model/topic.go`, `internal/model/topic_post.go` | `Topic`, `TopicPost` |
+| Template | `web/templates/topic.html` | |
+| Migration | `migrations/001_init.sql` | `topics`, `topic_posts` 表 |
+
+---
+
+## 12. 安全与中间件
+
+**功能**: 4 层认证、Redis 滑动窗口限流、NoCache、魔数校验、JWT nil 保护、SameSite Cookie、错误脱敏、业务错误码
+
+| 层 | 文件 | 关键函数 |
+|----|------|---------|
+| Auth 中间件 | `internal/middleware/auth.go` | `AuthRequired` , `OptionalAuth`, `AdminRequired`, `RedirectIfAuth` |
+| RateLimit | `internal/middleware/ratelimit.go` | `RateLimit` |
+| NoCache | `internal/middleware/nocache.go` | `NoCache` |
+| 响应格式 | `internal/pkg/response/response.go` | `Success`, `BadRequest`(1001), `Unauthorized`(1002), `Forbidden`(1003), `NotFound`(1004), `InternalError`(1005), `RateLimit`(1006) |
+| 限流配置 | `internal/router/router.go` | 登录 10/min, 发帖 30/min, 上传 20/min |
+
+---
+
+## 13. 配置与启动
+
+**功能**: YAML 配置加载、环境变量覆盖(5 项)、启动校验、Graceful Shutdown(10s 超时)
+
+| 层 | 文件 | 关键函数 |
+|----|------|---------|
+| Entry | `cmd/server/main.go` | `main` (初始化顺序: Config→DB→Redis→MinIO→JWT→LoginCache→Router) |
+| Config | `internal/config/config.go` | `Load`, `applyEnvOverrides` , `Validate` |
+| DB | `internal/repository/db.go` | `InitDB` (pool 配置) |
+| Redis | `internal/repository/redis.go` | `InitRedis` |
+| 工具函数 | `internal/handler/helpers.go` | `userData` (头像缓存), `getPageSizePair`, `calcPages`, `respondPage` |
+| 配置模板 | `config.yaml.example` | |
+
+---
+
+## 14. 前端 UI
+
+**功能**: Cammate 暖黄色调(#E8A840)、毛玻璃导航栏、汉堡菜单 Offcanvas、响应式布局(768px/480px 断点)
+
+| 类别 | 文件 |
+|------|------|
+| 布局 | `web/templates/layout/header.html`, `footer.html` |
+| CSS | `web/static/css/style.css` |
+| CDN 依赖 | Bootstrap 5.3.3 + Bootstrap Icons 1.11.3 + Alpine.js 3.14.1 |
+| 静态资源 | `web/static/img/default-avatar.svg`, `placeholder.svg` |
+
+---
+
+## 数据库完整表清单
+
+| 表 | Model | Repository | Migration |
+|----|-------|-----------|-----------|
+| `users` | `model/user.go` | `user_repo.go` | `001_init.sql` |
+| `posts` | `model/post.go` | `post_repo.go` | `001_init.sql` |
+| `post_images` | `model/post_image.go` | — (随 Post Preload) | `001_init.sql` |
+| `comments` | `model/comment.go` | `comment_repo.go` | `001_init.sql` |
+| `likes` | `model/like.go` | `like_repo.go` | `001_init.sql` |
+| `favorites` | `model/favorite.go` | `favorite_repo.go` | `001_init.sql` |
+| `follows` | `model/follow.go` | `follow_repo.go` | `001_init.sql` |
+| `topics` | `model/topic.go` | `topic_repo.go` | `001_init.sql` |
+| `topic_posts` | `model/topic_post.go` | — (随 Topic) | `001_init.sql` |
+| `notifications` | `model/notification.go` | `notification_repo.go` | `007_notifications.sql` |
+| `system_logs` | `model/system_log.go` | `log_repo.go` | `001_init.sql` |
+
+---
+
+## 完整路由总览 (58 条)
+
+### API 路由 (38 条)
+| 方法 | 路径 | Handler | 权限 | 限流 |
+|------|------|---------|------|------|
+| POST | `/api/v1/auth/register` | `authH.Register` | public | 10/min |
+| POST | `/api/v1/auth/login` | `authH.Login` | public | 10/min |
+| GET | `/api/v1/feed` | `feedH.GetFeed` | public | — |
+| GET | `/api/v1/search` | `feedH.Search` | public | — |
+| GET | `/api/v1/posts/:id` | `postH.GetByID` | public | — |
+| GET | `/api/v1/posts/:id/comments` | `socialH.GetComments` | public | — |
+| GET | `/api/v1/users/:id/following` | `socialH.GetFollowing` | public | — |
+| GET | `/api/v1/users/:id/followers` | `socialH.GetFollowers` | public | — |
+| POST | `/api/v1/auth/logout` | `authH.Logout` | user | — |
+| GET | `/api/v1/auth/me` | `authH.Me` | user | — |
+| PUT | `/api/v1/auth/profile` | `authH.UpdateProfile` | user | — |
+| POST | `/api/v1/posts` | `postH.Create` | user | 30/min |
+| PUT | `/api/v1/posts/:id` | `postH.Update` | user | — |
+| DELETE | `/api/v1/posts/:id` | `postH.Delete` | user | — |
+| POST | `/api/v1/posts/:id/repost` | `postH.Repost` | user | — |
+| POST | `/api/v1/posts/:id/like` | `socialH.ToggleLike` | user | — |
+| POST | `/api/v1/posts/:id/favorite` | `socialH.ToggleFavorite` | user | — |
+| GET | `/api/v1/favorites` | `socialH.GetFavorites` | user | — |
+| GET | `/api/v1/likes` | `socialH.GetLikes` | user | — |
+| POST | `/api/v1/posts/:id/comments` | `socialH.CreateComment` | user | — |
+| DELETE | `/api/v1/comments/:cid` | `socialH.DeleteComment` | user | — |
+| POST | `/api/v1/users/:id/follow` | `socialH.ToggleFollow` | user | — |
+| POST | `/api/v1/upload` | `uploadH.UploadImage` | user | 20/min |
+| GET | `/api/v1/notifications` | `notifH.List` | user | — |
+| PUT | `/api/v1/notifications/:id/read` | `notifH.MarkRead` | user | — |
+| PUT | `/api/v1/notifications/read-all` | `notifH.MarkAllRead` | user | — |
+| GET | `/api/v1/notifications/unread-count` | `notifH.UnreadCount` | user | — |
+| ANY | `/api/v1/images/*objectName` | `uploadH.ServeImage` | public | — |
+| GET | `/api/v1/admin/stats` | `adminH.GetStats` | admin | — |
+| GET | `/api/v1/admin/pending-posts` | `adminH.GetPendingPosts` | admin | — |
+| DELETE | `/api/v1/admin/posts/:id` | `adminH.DeletePost` | admin | — |
+| POST | `/api/v1/admin/posts/:id/approve` | `adminH.ApprovePost` | admin | — |
+| POST | `/api/v1/admin/posts/:id/reject` | `adminH.RejectPost` | admin | — |
+| GET | `/api/v1/admin/users` | `adminH.GetUsers` | admin | — |
+| PUT | `/api/v1/admin/users/:id/status` | `adminH.UpdateUserStatus` | admin | — |
+| GET | `/api/v1/admin/logs` | `adminH.GetLogs` | admin | — |
+
+### Web 页面路由 (16 条)
+| 方法 | 路径 | Handler | 权限 |
+|------|------|---------|------|
+| GET | `/` | `rootRedirect` | public (已登录分流) |
+| GET | `/login` | `authH.LoginPage` | public |
+| GET | `/register` | `authH.RegisterPage` | public |
+| POST | `/login` | `authH.WebLogin` | public |
+| POST | `/register` | `authH.WebRegister` | public |
+| GET | `/home` | `feedH.HomePage` | user |
+| GET | `/post/create` | `postH.CreatePage` | user |
+| POST | `/post/create` | `postH.WebCreate` | user |
+| GET | `/post/:id` | `postH.DetailPage` | user |
+| GET | `/post/:id/edit` | `postH.EditPage` | user |
+| POST | `/post/:id/edit` | `postH.WebUpdate` | user |
+| POST | `/post/:id/comment` | `socialH.WebCreateComment` | user |
+| GET | `/user/:id` | `userH.ProfilePage` | user |
+| GET | `/settings` | `authH.SettingsPage` | user |
+| POST | `/settings` | `authH.WebSettings` | user |
+| GET | `/logout` | `authH.WebLogout` | user |
+| GET | `/notifications` | `notifH.NotificationsPage` | user |
+| GET | `/topic/:id` | `topicH.TopicPage` | user |
+| GET | `/admin/` | `adminH.Dashboard` | admin |
+| GET | `/admin/review` | `adminH.Review` | admin |
+| GET | `/admin/users` | `adminH.UsersPage` | admin |
+| GET | `/admin/logs` | `adminH.LogsPage` | admin |
+
+### 其他 (2 条)
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/healthz` | 健康检查 |
+| Static | `/static/*` | 静态文件服务 |
+
+---
+
+## 迁移文件清单 (8 个)
+
+| 文件 | 内容 |
+|------|------|
+| `migrations/001_init.sql` | 10 张表 + 触发器 + 视图 + 存储过程 + 默认 admin 账号 |
+| `migrations/002_seed.sql` | 50 用户 + ~130 帖子测试数据 |
+| `migrations/003_triggers.sql` | 系统日志触发器 (like/unlike/comment/post) |
+| `migrations/004_clean_demo_posts.sql` | 清理演示占位数据 |
+| `migrations/005_repost.sql` | 转帖系统 (is_repost, repost_of_id, repost_text) |
+| `migrations/006_fulltext.sql` | `posts.content` FULLTEXT ngram 索引 |
+| `migrations/007_notifications.sql` | `notifications` 通知表 |
+| `migrations/008_reply_to_uid_index.sql` | `comments.reply_to_uid` 索引 |

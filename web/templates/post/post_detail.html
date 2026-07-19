@@ -153,13 +153,13 @@ function postDetail(postId, initialLiked, initialFavorited) {
             this.busy = false;
         },
         async handleRepostUpload(e) {
-            const files = Array.from(e.target.files);
+            const files = Array.from(e.target.files).filter(f => f.type.startsWith('image/') && f.size <= 50*1024*1024);
+            if (!files.length) { e.target.value = ''; return; }
             for (const f of files) {
-                if (f.size > 50*1024*1024) { alert(f.name + ' 超过50MB'); continue; }
                 const reader = new FileReader();
-                const preview = await new Promise(r => { reader.onload = e => r(e.target.result); });
+                const p = new Promise(r => { reader.onload = ev => r(ev.target.result); });
                 reader.readAsDataURL(f);
-                this.repostImages.push({preview: preview, name: f.name});
+                this.repostImages.push({ preview: await p, name: f.name });
                 const fd = new FormData(); fd.append('file', f);
                 const r = await fetch('/api/v1/upload', {method:'POST', body:fd});
                 const d = await r.json();

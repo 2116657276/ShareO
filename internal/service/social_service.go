@@ -51,6 +51,7 @@ func (s *SocialService) ToggleLike(userID, postID int64) (bool, error) {
 }
 
 func (s *SocialService) GetLikedPosts(userID int64, page, pageSize int) ([]model.Post, int64, error) {
+	page, pageSize = clampPage(page, pageSize)
 	return s.likeRepo.GetUserLikedPosts(userID, page, pageSize)
 }
 
@@ -65,6 +66,7 @@ func (s *SocialService) ToggleFavorite(userID, postID int64) (bool, error) {
 }
 
 func (s *SocialService) GetFavorites(userID int64, page, pageSize int) ([]model.Post, int64, error) {
+	page, pageSize = clampPage(page, pageSize)
 	return s.favoriteRepo.GetUserFavorites(userID, page, pageSize)
 }
 
@@ -83,11 +85,24 @@ func (s *SocialService) IsFollowing(followerID, followeeID int64) bool {
 }
 
 func (s *SocialService) GetFollowing(userID int64, page, pageSize int) ([]model.User, int64, error) {
+	page, pageSize = clampPage(page, pageSize)
 	return s.followRepo.GetFollowing(userID, page, pageSize)
 }
 
 func (s *SocialService) GetFollowers(userID int64, page, pageSize int) ([]model.User, int64, error) {
+	page, pageSize = clampPage(page, pageSize)
 	return s.followRepo.GetFollowers(userID, page, pageSize)
+}
+
+// clampPage returns sanitized page and pageSize values.
+func clampPage(page, pageSize int) (int, int) {
+	if page <= 0 {
+		page = 1
+	}
+	if pageSize <= 0 || pageSize > 50 {
+		pageSize = 20
+	}
+	return page, pageSize
 }
 
 // --- Comment ---

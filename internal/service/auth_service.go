@@ -1,7 +1,9 @@
 package service
 
 import (
+	"context"
 	"errors"
+	"log"
 	"strings"
 
 	"github.com/zhoujianlin/ShareO/internal/model"
@@ -73,6 +75,11 @@ func (s *AuthService) Register(req RegisterReq) (*AuthResp, error) {
 		return nil, err
 	}
 
+	// Cache login state in Redis for 30-min sliding window
+	if err := repository.CacheLoginToken(context.Background(), user.ID, token, repository.LoginCacheTTL); err != nil {
+		log.Printf("AuthService.Register: failed to cache login token for user %d: %v", user.ID, err)
+	}
+
 	return &AuthResp{Token: token, User: user}, nil
 }
 
@@ -98,6 +105,11 @@ func (s *AuthService) Login(req LoginReq) (*AuthResp, error) {
 		return nil, err
 	}
 
+	// Cache login state in Redis for sliding window
+	if err := repository.CacheLoginToken(context.Background(), user.ID, token, repository.LoginCacheTTL); err != nil {
+		log.Printf("AuthService.Login: failed to cache login token for user %d: %v", user.ID, err)
+	}
+
 	return &AuthResp{Token: token, User: user}, nil
 }
 
@@ -106,18 +118,11 @@ func (s *AuthService) GetProfile(userID int64) (*model.User, error) {
 }
 
 func (s *AuthService) UpdateProfile(userID int64, avatarURL, bio, email string) error {
-	updates := map[string]interface{}{}
-	if avatarURL != "" {
-		updates["avatar_url"] = avatarURL
-	}
-	if bio != "" {
-		updates["bio"] = bio
-	}
-	if email != "" {
-		updates["email"] = email
-	}
-	if len(updates) == 0 {
-		return nil
+	// Always update all fields — empty strings clear the field
+	updates := map[string]interface{}{
+		"avatar_url": avatarURL,
+		"bio":        bio,
+		"email":      email,
 	}
 	return s.userRepo.UpdateFields(userID, updates)
 }

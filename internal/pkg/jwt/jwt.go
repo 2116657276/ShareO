@@ -24,6 +24,11 @@ func Init(secret string, expireHours int) {
 	expireDuration = time.Duration(expireHours) * time.Hour
 }
 
+// ExpireDuration returns the configured JWT expiration duration.
+func ExpireDuration() time.Duration {
+	return expireDuration
+}
+
 func GenerateToken(userID int64, username, role string) (string, error) {
 	if len(secretKey) == 0 {
 		return "", errors.New("jwt: secret key not initialized")

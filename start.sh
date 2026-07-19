@@ -26,6 +26,16 @@ log_warn()  { echo -e "${YELLOW}[WARN]${NC}  $1"; }
 log_fail()  { echo -e "${RED}[FAIL]${NC}  $1"; }
 log_step()  { echo -e "\n${BOLD}${YELLOW}▶ $1${NC}"; }
 
+# Read MySQL password from config.yaml if not set via env
+if [ -z "$MYSQL_PASS" ] && [ -f "$PROJECT_DIR/config.yaml" ]; then
+    MYSQL_PASS=$(python3 "$PROJECT_DIR/scripts/read_config.py" database password 2>/dev/null)
+    if [ -n "$MYSQL_PASS" ]; then
+        log_info "从 config.yaml 读取到数据库密码"
+    else
+        log_warn "无法从 config.yaml 读取密码，尝试无密码连接 MySQL"
+    fi
+fi
+
 check_port() {
     lsof -i ":$1" -sTCP:LISTEN -t >/dev/null 2>&1
 }
@@ -61,8 +71,16 @@ else
     wait_for_port 3306 "MySQL" 30 || exit 1
 fi
 
-# Verify connectivity
-if mysql -u root -p"${MYSQL_PASS}" -e "SELECT 1" >/dev/null 2>&1; then
+# Verify connectivity (try with password first, then without)
+_mysql_test() {
+    mysql -u root -p"${MYSQL_PASS}" -e "SELECT 1" >/dev/null 2>&1 && return 0
+    if [ -n "$MYSQL_PASS" ]; then
+        # Password failed, try without (root may have no password)
+        mysql -u root -e "SELECT 1" >/dev/null 2>&1 && return 0
+    fi
+    return 1
+}
+if _mysql_test; then
     log_ok "MySQL 连接验证通过"
 else
     log_fail "MySQL 连接失败，请检查 config.yaml 中的密码"
@@ -116,15 +134,21 @@ log_step "4/4 编译并启动 ShareO"
 
 cd "$PROJECT_DIR"
 
-# Kill any existing instance
+# Kill any existing instance gracefully
 if check_port 8080; then
     log_warn "端口 8080 被占用，关闭旧进程..."
-    lsof -ti :8080 | xargs kill -9 2>/dev/null
-    sleep 1
+    lsof -ti :8080 | xargs kill 2>/dev/null
+    sleep 2
+    # Force kill if still running
+    if check_port 8080; then
+        lsof -ti :8080 | xargs kill -9 2>/dev/null
+        sleep 1
+    fi
 fi
 
-# Clear stale feed cache
+# Clear stale caches (feed + login tokens) to prevent 401 after restart
 redis-cli DEL feed:latest:page1 2>/dev/null || true
+redis-cli --scan --pattern "login:token:*" 2>/dev/null | xargs -r redis-cli DEL 2>/dev/null || true
 
 log_info "编译 ShareO..."
 if go build -o bin/shareo cmd/server/main.go; then

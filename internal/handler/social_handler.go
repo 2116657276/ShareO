@@ -3,7 +3,6 @@ package handler
 import (
 	"errors"
 	"net/http"
-	"strconv"
 
 	"github.com/gin-gonic/gin"
 	"github.com/zhoujianlin/ShareO/internal/pkg/response"
@@ -35,8 +34,7 @@ func (h *SocialHandler) ToggleLike(c *gin.Context) {
 
 func (h *SocialHandler) GetLikes(c *gin.Context) {
 	userID := c.GetInt64("user_id")
-	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
-	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "12"))
+	page, pageSize := getPageSizePair(c, 12)
 	posts, total, err := h.svc.GetLikedPosts(userID, page, pageSize)
 	if err != nil {
 		response.InternalError(c, err.Error())
@@ -66,8 +64,7 @@ func (h *SocialHandler) ToggleFavorite(c *gin.Context) {
 
 func (h *SocialHandler) GetFavorites(c *gin.Context) {
 	userID := c.GetInt64("user_id")
-	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
-	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "12"))
+	page, pageSize := getPageSizePair(c, 12)
 	posts, total, err := h.svc.GetFavorites(userID, page, pageSize)
 	if err != nil {
 		response.InternalError(c, err.Error())
@@ -93,8 +90,8 @@ func (h *SocialHandler) ToggleFollow(c *gin.Context) {
 
 func (h *SocialHandler) GetFollowing(c *gin.Context) {
 	userID := getInt64Param(c, "id")
-	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
-	users, total, err := h.svc.GetFollowing(userID, page, 20)
+	page, pageSize := getPageSizePair(c, 20)
+	users, total, err := h.svc.GetFollowing(userID, page, pageSize)
 	if err != nil {
 		response.InternalError(c, err.Error())
 		return
@@ -104,8 +101,8 @@ func (h *SocialHandler) GetFollowing(c *gin.Context) {
 
 func (h *SocialHandler) GetFollowers(c *gin.Context) {
 	userID := getInt64Param(c, "id")
-	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
-	users, total, err := h.svc.GetFollowers(userID, page, 20)
+	page, pageSize := getPageSizePair(c, 20)
+	users, total, err := h.svc.GetFollowers(userID, page, pageSize)
 	if err != nil {
 		response.InternalError(c, err.Error())
 		return
@@ -123,10 +120,8 @@ func (h *SocialHandler) CreateComment(c *gin.Context) {
 		response.BadRequest(c, err.Error())
 		return
 	}
-	// Prefer URL post_id over body (Bug 4 fix: remove redundant post_id requirement)
-	if req.PostID == 0 {
-		req.PostID = postID
-	}
+	// Always use URL post_id (prevents cross-post comment injection)
+	req.PostID = postID
 	comment, err := h.svc.CreateComment(userID, req)
 	if err != nil {
 		if errors.Is(err, service.ErrPostNotFound) {
@@ -138,14 +133,9 @@ func (h *SocialHandler) CreateComment(c *gin.Context) {
 	}
 	response.Success(c, comment)
 }
-
 func (h *SocialHandler) GetComments(c *gin.Context) {
 	postID := getInt64Param(c, "id")
-	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
-	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
-	if pageSize <= 0 || pageSize > 50 {
-		pageSize = 20
-	}
+	page, pageSize := getPageSizePair(c, 20)
 	comments, total, err := h.svc.GetComments(postID, page, pageSize)
 	if err != nil {
 		response.InternalError(c, err.Error())

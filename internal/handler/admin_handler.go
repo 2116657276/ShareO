@@ -58,7 +58,8 @@ func (h *AdminHandler) Review(c *gin.Context) {
 
 func (h *AdminHandler) DeletePost(c *gin.Context) {
 	postID := getInt64Param(c, "id")
-	if err := h.svc.DeletePost(postID); err != nil {
+	adminID := c.GetInt64("user_id")
+	if err := h.svc.DeletePost(postID, adminID); err != nil {
 		response.BadRequest(c, err.Error())
 		return
 	}
@@ -100,6 +101,7 @@ func (h *AdminHandler) GetLogs(c *gin.Context) {
 func (h *AdminHandler) ApprovePost(c *gin.Context) {
 	reviewerID := c.GetInt64("user_id")
 	postID := getInt64Param(c, "id")
+	// Approve without overwriting review_comment (preserve any previous rejection reason)
 	if err := h.svc.ReviewPost(postID, model.StatusApproved, "", reviewerID); err != nil {
 		response.BadRequest(c, err.Error())
 		return

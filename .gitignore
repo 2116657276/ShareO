@@ -40,8 +40,8 @@ config.yaml
 # Dependencies
 vendor/
 
-# Local test scripts (contain credentials)
-test_*.sh
-start.sh
-Makefile
+# Local test material (personal photos etc.) — not part of the repo
+resources/
+
+# Misc
 *.docx

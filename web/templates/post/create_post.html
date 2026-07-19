@@ -64,15 +64,17 @@ function uploadForm() {
             const files = Array.from(e.target.files).filter(f => f.size <= 50*1024*1024);
             if (!files.length) { e.target.value = ''; return; }
             this.uploading = true;
-            // Show previews immediately
             for (const f of files) {
                 const reader = new FileReader();
-                const p = new Promise(r => { reader.onload = e => r(e.target.result); });
+                const p = new Promise(r => { reader.onload = ev => r(ev.target.result); });
                 reader.readAsDataURL(f);
                 this.images.push({ preview: await p, name: f.name });
             }
-            // Upload concurrently
-            await Promise.all(files.map(f => this.uploadFile(f)));
+            try {
+                await Promise.all(files.map(f => this.uploadFile(f)));
+            } catch(e) {
+                console.error('Upload failed:', e);
+            }
             this.uploading = false;
             e.target.value = '';
         },
@@ -84,11 +86,15 @@ function uploadForm() {
             this.uploading = true;
             for (const f of files) {
                 const reader = new FileReader();
-                const p = new Promise(r => { reader.onload = e => r(e.target.result); });
+                const p = new Promise(r => { reader.onload = ev => r(ev.target.result); });
                 reader.readAsDataURL(f);
                 this.images.push({ preview: await p, name: f.name });
             }
-            await Promise.all(files.map(f => this.uploadFile(f)));
+            try {
+                await Promise.all(files.map(f => this.uploadFile(f)));
+            } catch(e) {
+                console.error('Upload failed:', e);
+            }
             this.uploading = false;
         },
 

@@ -1,13 +1,22 @@
 package middleware
 
 import (
+	"context"
+	"log"
 	"net/http"
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	"github.com/redis/go-redis/v9"
 	"github.com/zhoujianlin/ShareO/internal/pkg/jwt"
 	"github.com/zhoujianlin/ShareO/internal/pkg/response"
+	"github.com/zhoujianlin/ShareO/internal/repository"
 )
+
+// isWebRequest returns true if the request is a browser page visit (not an API call).
+func isWebRequest(c *gin.Context) bool {
+	return !strings.HasPrefix(c.Request.URL.Path, "/api/")
+}
 
 func AuthRequired() gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -16,7 +25,11 @@ func AuthRequired() gin.HandlerFunc {
 			// Check cookie for web pages
 			token, err := c.Cookie("token")
 			if err != nil || token == "" {
-				response.Unauthorized(c, "请先登录")
+				if isWebRequest(c) {
+					c.Redirect(http.StatusFound, "/login")
+				} else {
+					response.Unauthorized(c, "请先登录")
+				}
 				c.Abort()
 				return
 			}
@@ -26,7 +39,15 @@ func AuthRequired() gin.HandlerFunc {
 		token := strings.TrimPrefix(authHeader, "Bearer ")
 		claims, err := jwt.ParseToken(token)
 		if err != nil {
-			response.Unauthorized(c, "token无效或已过期")
+			if isWebRequest(c) {
+				// Clear invalid cookie and redirect to login
+				http.SetCookie(c.Writer, &http.Cookie{
+					Name: "token", Value: "", Path: "/", MaxAge: -1, HttpOnly: true,
+				})
+				c.Redirect(http.StatusFound, "/login")
+			} else {
+				response.Unauthorized(c, "token无效或已过期")
+			}
 			c.Abort()
 			return
 		}
@@ -34,6 +55,45 @@ func AuthRequired() gin.HandlerFunc {
 		c.Set("user_id", claims.UserID)
 		c.Set("username", claims.Username)
 		c.Set("role", claims.Role)
+
+		// Redis login state check: verify token is still cached, refresh TTL
+		cachedToken, err := repository.GetLoginToken(context.Background(), claims.UserID)
+		if err != nil {
+			if err == redis.Nil {
+				// Cache expired — redirect web pages to login, return JSON for API
+				if isWebRequest(c) {
+					http.SetCookie(c.Writer, &http.Cookie{
+						Name: "token", Value: "", Path: "/", MaxAge: -1, HttpOnly: true,
+					})
+					c.Redirect(http.StatusFound, "/login")
+				} else {
+					response.Unauthorized(c, "登录已过期，请重新登录")
+				}
+				c.Abort()
+				return
+			}
+			// Redis error — fail-open (consistent with rate limiter behavior)
+			log.Printf("AuthRequired: Redis error checking login cache for user %d: %v", claims.UserID, err)
+		} else {
+			if cachedToken != token {
+				// Token mismatch — logged in from another device/session
+				if isWebRequest(c) {
+					http.SetCookie(c.Writer, &http.Cookie{
+						Name: "token", Value: "", Path: "/", MaxAge: -1, HttpOnly: true,
+					})
+					c.Redirect(http.StatusFound, "/login")
+				} else {
+					response.Unauthorized(c, "账号已在其他设备登录，请重新登录")
+				}
+				c.Abort()
+				return
+			}
+			// Token matches — refresh TTL (sliding window)
+			if err := repository.RefreshLoginToken(context.Background(), claims.UserID, repository.LoginCacheTTL); err != nil {
+				log.Printf("AuthRequired: failed to refresh login TTL for user %d: %v", claims.UserID, err)
+			}
+		}
+
 		c.Next()
 	}
 }
@@ -42,7 +102,11 @@ func AdminRequired() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		role, exists := c.Get("role")
 		if !exists || role.(string) != "admin" {
-			response.Forbidden(c, "需要管理员权限")
+			if isWebRequest(c) {
+				c.Redirect(http.StatusFound, "/")
+			} else {
+				response.Forbidden(c, "需要管理员权限")
+			}
 			c.Abort()
 			return
 		}

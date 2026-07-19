@@ -14,9 +14,9 @@ import (
 func SetupRouter() *gin.Engine {
 	r := gin.Default()
 
+	r.Static("/static", "web/static") // 在 NoCache 之前挂载，静态资源可被浏览器缓存
 	r.Use(middleware.NoCache())
 	r.Use(gzip.Gzip(gzip.DefaultCompression)) // gzip压缩，大幅减少HTML/JSON/CSS传输
-	r.Static("/static", "web/static")
 
 	authH := handler.NewAuthHandler()
 	postH := handler.NewPostHandler()
