@@ -15,12 +15,12 @@
 
 - [x] Chinese-CLIP 懒加载、设备选择、512 维向量和 Qdrant `images`
 - [x] 审核/删除索引事件、Go 图片代理 worker、公开搜索 API、回填命令
-- [x] 独立 Qdrant 本地命令与 AI API/worker 运行命令（待提交）
-- [x] 固定模型 revision、后台预热、搜索专用 readiness 和元信息（待提交）
-- [x] collection schema 校验与 `post_id` payload index（待提交）
-- [x] 每帖最高分去重、稳定公开响应、搜索结构化日志（待提交）
+- [x] 独立 Qdrant 本地命令与 AI API/worker 运行命令（`5c6e087`）
+- [x] 固定模型 revision、后台预热、搜索专用 readiness 和元信息（`5c6e087`）
+- [x] collection schema 校验与 `post_id` payload index（`5c6e087`）
+- [x] 每帖最高分去重、稳定公开响应、搜索结构化日志（`5c6e087`）
 - [ ] 隔离 E2E：上传→审核→索引→命中→删除→不可见
-- [x] 索引对账 dry-run/apply 与 40 条评测模板/执行器（待提交；数据待人工标注）
+- [x] 索引对账 dry-run/apply 与 40 条评测模板/执行器（`5c6e087`；数据待人工标注）
 - [ ] 真实依赖故障注入、评测集标注与质量/性能报告
 
 ## 发布验收线

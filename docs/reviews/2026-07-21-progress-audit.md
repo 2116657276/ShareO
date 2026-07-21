@@ -101,6 +101,7 @@ Phase 0 和 Phase 1 只有在 `TASK.md` 最终门禁全部有可复核证据时�
 
 ## 11. Phase 2 成熟化与文档分阶段重构
 
+- 本轮代码、测试、脚本和阶段文档提交为 `5c6e087`；以下完成项均以该提交为实现证据。
 - `TASK.md` 只保留当前状态和证据入口；`docs/plan.md` 改为执行索引，Phase 0–4 各自使用独立阶段文档。
 - 固定 Chinese-CLIP revision，增加模型后台预热、搜索专用 readiness/meta、并发限制、8 秒调用超时、Qdrant schema 拒绝覆盖和 `post_id` payload index。
 - 公网结果按帖子最高分去重且不暴露 `object_key`；增加索引 dry-run/apply 对账和拒绝空标签的 40 条查询评测器。
