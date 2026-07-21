@@ -33,7 +33,9 @@ func SetupRouter(trustedOrigins ...string) *gin.Engine {
 	uploadH := handler.NewUploadHandler()
 	notifH := handler.NewNotificationHandler()
 	topicH := handler.NewTopicHandler()
-	internalH := handler.NewInternalHandler()
+	postRepo := repository.NewPostRepo()
+	internalH := handler.NewInternalHandler(postRepo)
+	imageSearchH := handler.NewImageSearchHandler(postRepo)
 
 	// Chat
 	chatRepo := repository.NewChatRepo(repository.DB)
@@ -77,6 +79,7 @@ func SetupRouter(trustedOrigins ...string) *gin.Engine {
 		{
 			pub.GET("/feed", feedH.GetFeed)
 			pub.GET("/search", feedH.Search)
+			pub.GET("/search/images", imageSearchH.Search)
 			pub.GET("/posts/:id", postH.GetByID)
 			pub.POST("/posts/:id/view", postH.RecordView)
 			pub.GET("/posts/:id/comments", socialH.GetComments)
@@ -181,6 +184,7 @@ func SetupRouter(trustedOrigins ...string) *gin.Engine {
 	internalAPI.Use(middleware.InternalTokenAuth())
 	{
 		internalAPI.GET("/health", internalH.HealthCheck)
+		internalAPI.GET("/posts/:id/index-payload", internalH.IndexPayload)
 	}
 
 	// === Admin Web Pages ===

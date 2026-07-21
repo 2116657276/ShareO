@@ -3,10 +3,14 @@
 import asyncio
 import logging
 
+import httpx
 from redis.asyncio import Redis
 
 from app.config import settings
 from app.workers.consumer import StreamConsumer
+from app.core.embedding import ImageEmbedder
+from app.core.vectorstore import ImageVectorStore
+from app.workers.indexer import ImageIndexer
 
 STREAM_INDEX_POST = "shareo:stream:index_post"
 STREAM_BOT_TASKS = "shareo:stream:bot_tasks"
@@ -17,10 +21,9 @@ async def main():
     logging.basicConfig(level=settings.log_level)
     logger = logging.getLogger(__name__)
     redis = Redis.from_url(settings.redis_url, decode_responses=True)
-
-    async def handle_index_post(msg_id: str, fields: dict):
-        logger.info("index_post: id=%s fields=%s", msg_id, fields)
-        # TODO: implement in Phase 2 — vectorize and upsert to Qdrant
+    http_client = httpx.AsyncClient(timeout=10.0)
+    vector_store = ImageVectorStore(settings.qdrant_url)
+    indexer = ImageIndexer(http_client, ImageEmbedder(), vector_store)
 
     async def handle_bot_task(msg_id: str, fields: dict):
         logger.info("bot_task: id=%s fields=%s", msg_id, fields)
@@ -32,13 +35,15 @@ async def main():
     ]
 
     handlers = {
-        STREAM_INDEX_POST: handle_index_post,
+        STREAM_INDEX_POST: indexer.handle,
         STREAM_BOT_TASKS: handle_bot_task,
     }
 
     try:
         await asyncio.gather(*(c.run(handlers[c.stream]) for c in consumers))
     finally:
+        await http_client.aclose()
+        await vector_store.close()
         await redis.aclose()
 
 

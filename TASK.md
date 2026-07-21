@@ -1,6 +1,6 @@
 # TASK.md — 开发任务跟踪
 
-> 更新时间: 2026-07-21 | 当前阶段: **Phase 0 本地门禁完成、远端 CI 待确认 / Phase 1 后端加固中** | 详细计划: [docs/plan.md](docs/plan.md)
+> 更新时间: 2026-07-21 | 当前阶段: **Phase 0 本地门禁完成、Phase 1 后端加固中 / Phase 2 语义搜图后端垂直切片进行中** | 详细计划: [docs/plan.md](docs/plan.md)
 >
 > 本文件与 `docs/plan.md` 是任务状态的事实来源。GitHub Issues 仅用于可选协作，不决定阶段完成度。
 
@@ -47,4 +47,14 @@
 
 ## Phase 2–4
 
-本轮不实现。任务和时间线保留在 `docs/plan.md` 与 `docs/roadmap.md`。
+Phase 2 语义搜图后端已开始：
+
+- [x] Chinese-CLIP 懒加载、CUDA → MPS → CPU 设备选择、512 维归一化输出
+- [x] Qdrant `images` collection、索引载荷和 token 保护的 AI 搜索 API
+- [x] 审核/删除事件、Go 图片代理 worker、幂等 upsert/delete、`make backfill-index`
+- [x] Go `GET /api/v1/search/images` 可见性过滤和统一错误映射
+- [x] Python 单测、worker 单测和 `scripts/test_image_search.sh` 终端验收脚本
+- [ ] Homebrew MinIO + Qdrant + Chinese-CLIP 实际上传→审核→搜索→删除端到端证据
+- [ ] 搜索页面、浏览器验收、评测集与 4060 吞吐实验（按当前范围暂缓）
+
+任务和时间线保留在 `docs/plan.md` 与 `docs/roadmap.md`；没有真实 Qdrant/模型端到端证据前，Phase 2 不标记完成。

@@ -92,15 +92,17 @@
 
 ## Phase 2 — 语义搜图（2026-10 ~ 11 中旬）
 
+2026-07-21 起先实现后端/API 垂直切片：本地 Homebrew 数据已按 [本地存储说明](operations/local-storage.md) 重置；浏览器和搜索页面暂缓。worker 首轮通过 Go 图片代理读取 MinIO，不新增 Python MinIO 凭证。详细接口见 [语义搜图设计](design/image-search.md)。
+
 | 步骤 | 内容 | 技术选型 | 验收 |
 |------|------|----------|------|
 | 2.1 | 设计文档 `design/image-search.md` | — | 评审定稿 |
-| 2.2 | `core/embedding.py`：Chinese-CLIP 封装（懒加载、device 自动 cuda>mps>cpu、批处理接口）；`core/vectorstore.py`：ensure_collection `images`（512 维 cosine，payload: post_id/image_id/created_at） | **transformers + torch**，模型 `OFA-Sys/chinese-clip-vit-base-patch16` | 单测：同图自相似度≈1 |
-| 2.3 | Go 事件挂钩：ReviewPost(approve→upsert / reject→delete)、Delete/AdminSoftDelete(→delete)、Update 重审通过后 upsert | queue（0.5 产物） | 事件日志可见 |
-| 2.4 | `GET /internal/posts/:id/index-payload`：返回 status/content/images(object keys)，供 worker 拉取 | — | curl 带 token 可用 |
-| 2.5 | worker `index_post`：upsert 流程用 **medium 尺寸图**（省算力且 CLIP 输入 224px 足够）；delete 按 post_id 过滤删 | minio-py? → 不引，直接 **httpx 走图片代理** 或 MinIO SDK（设计文档定，倾向 `minio` 官方 SDK 只读凭证） | 发帖过审→向量出现；删帖→向量消失 |
-| 2.6 | 搜索链路：Python `POST /v1/search/images`（编码+KNN）→ Go `GET /api/v1/search/images`（补全+可见性过滤）→ 搜索页双模式 tab（关键词/语义） | — | 端到端演示 |
-| 2.7 | 回填：`make backfill-index`（Go 侧扫 approved 分页发事件） | — | 存量图可搜 |
+| 2.2 | `core/embedding.py`：Chinese-CLIP 封装（懒加载、device 自动 cuda>mps>cpu、批处理接口）；`core/vectorstore.py`：ensure_collection `images`（512 维 cosine，完整 payload） | **transformers + torch**，模型 `OFA-Sys/chinese-clip-vit-base-patch16` | 输入/输出维度、设备选择单测 |
+| 2.3 | Go 事件挂钩：ReviewPost(approve→upsert / reject→delete)、Delete/AdminSoftDelete(→delete)、Update 进入 pending→delete | queue（0.5 产物） | Go 单测/Streams 检查 |
+| 2.4 | `GET /internal/posts/:id/index-payload`：返回 approved 帖子和图片 object key，受 token 保护 | — | curl 带 token 可用 |
+| 2.5 | worker `index_post`：用 **medium 尺寸图**，通过 Go 图片代理读取；delete 按 post_id 过滤删 | httpx + Pillow，不引 MinIO SDK/凭证 | worker 幂等单测 |
+| 2.6 | 搜索链路：Python `POST /v1/search/images`（token+编码+KNN）→ Go `GET /api/v1/search/images`（补全+可见性过滤） | — | API 错误/超时单测 |
+| 2.7 | 回填：`make backfill-index`（Go 侧扫 approved 分页发事件） | — | 命令可投递存量图 |
 | 2.8 | **评测**：`docs/eval/image_search_v1.jsonl`（30~50 query 标注）；`ai-service` 内评测脚本输出 Recall@5/10、MRR；基线=FULLTEXT 关键词搜索 | — | 报告写入 docs/eval/experiments.md |
 | 2.9 | 4060 部署试跑 + 吞吐对比（CPU vs MPS vs CUDA，imgs/sec-批大小曲线） | Ollama 无关，纯 torch | 实验记录 |
 

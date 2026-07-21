@@ -33,14 +33,16 @@ v1 是 Go 单体的摄影社区（Feed/帖子/评论/关注/话题/通知/审核
 |------|------|----------|
 | Go 主服务 | 全部业务逻辑、页面、WebSocket、事件生产 | MySQL 的唯一写者（含聊天消息、Bot 回复落库） |
 | ai-service API 进程 | 文本编码、向量搜索、RAG 问答 | 不对公网暴露，仅内网被 Go 调用 |
-| ai-service Worker 进程 | 消费 Streams：图片/文本向量化、Bot 任务 | 与 API 进程同一代码库，两个入口 |
+| ai-service Worker 进程 | 消费 Streams：图片/文本向量化、Bot 任务 | 与 API 进程同一代码库；Phase 2 首轮通过 Go 图片代理读图 |
 | MySQL | 业务数据 | 只有 Go 访问 |
 | Redis | 缓存、限流、在线状态、**Redis Streams 队列** | 双方共用 |
-| MinIO | 图片对象存储 | Go 读写；Python 只读（独立只读凭证） |
+| MinIO | 图片对象存储 | Go 读写；Phase 2 Python 通过 Go 图片代理读取，不持有 MinIO 凭证 |
 | Qdrant | 向量库：`images`（图片向量）、`post_chunks`（文本块向量） | 只有 Python 访问 |
 | LLM API | Bot 对话生成 | 经 ai-service 统一封装，provider 可切换 |
 
 ## 4. 三条关键数据流
+
+本地开发的 MinIO 运行约定与 Compose 存储隔离见 [本地存储说明](operations/local-storage.md)。Go 通过 `/api/v1/images/...` 提供图片代理；AI worker 首轮通过该代理读取图片，不新增 MinIO 凭证。
 
 ### 4.1 帖子索引管线（向量化）
 
@@ -50,13 +52,13 @@ v1 是 Go 单体的摄影社区（Feed/帖子/评论/关注/话题/通知/审核
 
 Worker 消费 (consumer group: ai-workers):
   upsert: 调 Go 内部接口取索引载荷(文本+图片 object_key 列表)
-          → MinIO 拉图 → Chinese-CLIP 编码 → upsert Qdrant `images`
+          → Go 图片代理拉 medium 图 → Chinese-CLIP 编码 → upsert Qdrant `images`
           → 正文分块 → BGE 编码 → upsert Qdrant `post_chunks`
   delete: 按 post_id 过滤删除两个 collection 中的全部向量
 ```
 
 - **触发点选在审核通过而非上传**：pending/rejected 的内容不允许被搜到。
-- **幂等**：向量点 ID 由 image_id / (post_id, chunk_no) 确定性生成，重复消费安全。
+- **幂等**：向量点 ID 使用 image_id，重复消费先按 post_id 清理再 upsert，安全可重放。
 - **回填**：提供管理命令遍历存量 approved 帖子批量投递 upsert 事件。
 
 ### 4.2 自然语言搜图
@@ -130,7 +132,7 @@ ShareO/
 
 ## 7. 服务间约定
 
-- **内部认证**：Go ↔ ai-service 互调带 `X-Internal-Token`（环境变量 `SHAREO_INTERNAL_TOKEN`，双侧共享）；ai-service 监听内网地址。
+- **内部认证**：Go ↔ ai-service 互调带 `X-Internal-Token`（Go 使用 `SHAREO_INTERNAL_TOKEN`，Python 使用同值的 `SHAREO_AI_INTERNAL_TOKEN`）；ai-service 监听内网地址。
 - **Streams 命名**：`shareo:stream:index_post`、`shareo:stream:bot_tasks`；消费组统一 `ai-workers`。
 - **可靠性约定**：消费成功才 XACK；每 10 秒扫描并重领 idle 30 秒的 pending；首次处理后最多重试 3 次（共 4 次），最终记录 stream/message/fields/exception/attempts 后 XACK。遵守 ADR-002，不设死信队列。
 - **配置**：沿用 `SHAREO_*` 环境变量注入敏感值的现有惯例，ai-service 侧用 `SHAREO_AI_*` 前缀。

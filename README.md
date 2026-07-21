@@ -37,6 +37,8 @@ make run                           # 启动 Go 主服务
 
 常用命令：`make check`、`make test-integration`（需 `SHAREO_TEST_MYSQL_DSN` 与 `SHAREO_TEST_REDIS_URL`）、`make dev-reset`、`make dev-clean-data`、`make help`。
 
+本机 Homebrew 路径使用 `$HOME/minio_data` 的 MinIO，默认 API/Console 端口为 `9000/9001`；执行 `make start` 或 `make brew-minio-ready`。Homebrew MinIO 当前不是 `brew services` 可调度服务，详见 [本地存储说明](docs/operations/local-storage.md)。清空本机旧数据使用 `make brew-reset-data`，该命令会清除 MySQL `shareo`、Redis DB 0 和 MinIO `shareo` bucket。
+
 ## 项目结构
 
 ```
@@ -100,4 +102,6 @@ ShareO/
 - **评审记录**: [docs/reviews/](docs/reviews/)（最新：2026-07-19 全量评审，24/24 项已修复）
 - **CI**: GitHub Actions；本地门禁为 `make check`
 - **AI 服务**: Python FastAPI API + Streams Worker: `ai-service/`
+
+Phase 2 后端语义搜图通过 `GET /api/v1/search/images?q=...&limit=...` 提供 API。Go 负责图片代理和帖子可见性过滤，Python worker 只通过 Go 读取图片，不需要 MinIO 凭证。Go 与 ai-service 必须共享 `SHAREO_INTERNAL_TOKEN`；Compose worker 默认通过 `host.docker.internal:8080` 访问本机 Go 服务。
 - **测试**: 单元测试不依赖外部服务；真实 MySQL/Redis 用 `make test-integration`；API 行为见 `scripts/test_api.sh` 与 `scripts/test_chat.sh`

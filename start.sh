@@ -112,20 +112,13 @@ else
 fi
 
 # ============================================================
-# Step 3: MinIO
+# Step 3: Homebrew MinIO
 # ============================================================
 log_step "3/4 检查 MinIO"
-if check_port 9000; then
-    log_ok "MinIO 已在运行 (API:9000, Console:9001)"
-else
-    log_warn "MinIO 未运行，启动中..."
-    mkdir -p "$MINIO_DATA_DIR"
-    MINIO_ROOT_USER="$MINIO_ACCESS_KEY" \
-    MINIO_ROOT_PASSWORD="$MINIO_SECRET_KEY" \
-    minio server "$MINIO_DATA_DIR" --address "$MINIO_ADDR" --console-address "$MINIO_CONSOLE" > /tmp/minio.log 2>&1 &
-    wait_for_port 9000 "MinIO API" 15 || exit 1
-    log_info "MinIO Console: http://localhost:9001 (minioadmin / minioadmin)"
-fi
+SHAREO_MINIO_DATA_DIR="$MINIO_DATA_DIR" \
+SHAREO_MINIO_ACCESS_KEY="$MINIO_ACCESS_KEY" \
+SHAREO_MINIO_SECRET_KEY="$MINIO_SECRET_KEY" \
+bash "$PROJECT_DIR/scripts/start_minio_homebrew.sh"
 
 # ============================================================
 # Step 4: Build & Start ShareO

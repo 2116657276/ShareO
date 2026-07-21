@@ -85,6 +85,7 @@ func (s *PostService) Update(userID, postID int64, content string) (*model.Post,
 	if err := s.postRepo.Update(post); err != nil {
 		return nil, err
 	}
+	publishIndexAction("delete", postID)
 
 	// Re-associate hashtag topics in a transaction (resolve + clear old + re-add)
 	if err := repository.DB.Transaction(func(tx *gorm.DB) error {
@@ -176,6 +177,7 @@ func (s *PostService) Delete(userID, postID int64) error {
 	}
 	err = s.postRepo.SoftDelete(postID, userID)
 	if err == nil {
+		publishIndexAction("delete", postID)
 		s.feedSvc.InvalidateCache()
 	}
 	return err

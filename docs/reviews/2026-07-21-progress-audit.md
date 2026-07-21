@@ -84,3 +84,17 @@ Phase 0 和 Phase 1 只有在 `TASK.md` 最终门禁全部有可复核证据时�
 - `TASK.md`、`docs/plan.md`、`docs/roadmap.md` 统一标记为“Phase 0 本地门禁完成、远端 CI 待确认 / Phase 1 后端加固中”。
 - 本地 Markdown 链接检查（48 个文件）与 `git diff --check` 已通过；本轮修改已形成本地提交并发布到 `agent/phase0-phase1-closeout`。由于 SSH/HTTPS Git transport 受当前网络限制，远端分支通过 GitHub API 写入等价快照，文件树已与本地 HEAD 核对一致；远端 CI 结果待确认。
 - 浏览器和前端手工验收继续按用户确认暂缓，不改变当前后端终端验收结论。
+
+## 9. Homebrew MinIO 故障记录与 Phase 2 启动
+
+- 2026-07-21 检查发现 Homebrew MinIO 未监听 `127.0.0.1:9000`，但 `$HOME/minio_data/shareo` 与 MySQL `post_images` 记录仍存在；图片失效原因为对象存储未启动，不是数据库图片记录被删除。
+- 本地启动固定使用 Homebrew 安装的 MinIO 二进制、`$HOME/minio_data`、API `9000`、Console `9001`；Compose named volume 不参与本机数据清理。
+- 旧数据按用户确认清理 MySQL `shareo`、Redis DB 0 和 MinIO `shareo` bucket；Phase 2 先实现后端语义搜图闭环，浏览器/前端暂缓。
+
+## 10. Phase 2 后端实现记录（当前工作区）
+
+- Go 新增受 `X-Internal-Token` 保护的索引载荷接口和 `GET /api/v1/search/images`；查询侧再次过滤 approved/未删除帖子。
+- Python 新增 Chinese-CLIP 懒加载、Qdrant `images` collection、幂等 `index_post` worker；worker 通过 Go 图片代理读 medium 图片，不持有 MinIO 凭证。
+- 审核通过/驳回、用户删除、管理员删除和编辑重审进入 Streams；`make backfill-index` 支持 approved 存量回填。
+- 新增 `scripts/test_image_search.sh`，采用注册、上传、审核、轮询搜索命中、删除后消失的 curl 验收；需要显式 seed 管理员后运行。
+- 当前自动证据：Go `go test ./...`、Python 17 项非集成测试、Ruff/format、Shell 语法和 Markdown 链接检查均通过；真实 Qdrant + Chinese-CLIP 端到端仍待依赖服务启动后验收，因此 Phase 2 不标记完成。

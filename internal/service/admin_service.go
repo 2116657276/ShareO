@@ -46,6 +46,7 @@ func (s *AdminService) DeletePost(postID int64, adminID int64) error {
 	if err := s.postRepo.AdminSoftDelete(postID); err != nil {
 		return err
 	}
+	publishIndexAction("delete", postID)
 	s.feedSvc.InvalidateCache()
 	// Notify the author about forced deletion
 	s.notifSvc.Send(post.UserID, adminID, model.NotifTypeReview, postID)
@@ -58,6 +59,11 @@ func (s *AdminService) ReviewPost(postID int64, status, comment string, reviewer
 	}
 	err := s.postRepo.UpdateStatus(postID, status, comment, reviewerID)
 	if err == nil {
+		if status == model.StatusApproved {
+			publishIndexAction("upsert", postID)
+		} else {
+			publishIndexAction("delete", postID)
+		}
 		s.feedSvc.InvalidateCache()
 		// Notify the post author about review result
 		if post, findErr := s.postRepo.FindByID(postID); findErr == nil && post != nil {

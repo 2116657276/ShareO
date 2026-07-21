@@ -1,6 +1,6 @@
 # ShareO 功能清单
 
-> 更新时间: 2026-07-21 | 版本: v2 Phase 1 加固中 | 路由以 `internal/router/router.go` 为准 · 14 张业务表
+> 更新时间: 2026-07-21 | 版本: v2 Phase 1 后端加固中、Phase 2 语义搜图后端进行中 | 路由以 `internal/router/router.go` 为准 · 14 张业务表
 
 ---
 
@@ -273,6 +273,7 @@
 | POST | `/api/v1/auth/login` | `authH.Login` | public | 10/min |
 | GET | `/api/v1/feed` | `feedH.GetFeed` | public | — |
 | GET | `/api/v1/search` | `feedH.Search` | public | — |
+| GET | `/api/v1/search/images?q=&limit=` | `imageSearchH.Search` | public | AI timeout 5s |
 | GET | `/api/v1/posts/:id` | `postH.GetByID` | public | — |
 | POST | `/api/v1/posts/:id/view` | `postH.RecordView` | public | — |
 | GET | `/api/v1/posts/:id/comments` | `socialH.GetComments` | public | — |
@@ -315,6 +316,8 @@
 | GET | `/api/v1/admin/users` | `adminH.GetUsers` | admin | — |
 | PUT | `/api/v1/admin/users/:id/status` | `adminH.UpdateUserStatus` | admin | — |
 | GET | `/api/v1/admin/logs` | `adminH.GetLogs` | admin | — |
+
+语义搜图的 Python 内部接口 `POST /v1/search/images` 和索引载荷 `GET /internal/posts/:id/index-payload` 均要求 `X-Internal-Token`，不属于公网 API。索引事件由审核通过、驳回、删除和 `make backfill-index` 发布到 Redis Streams。
 
 ### Web 页面路由
 | 方法 | 路径 | Handler | 权限 |

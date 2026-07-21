@@ -1,4 +1,4 @@
-.PHONY: run build migrate seed clean tidy start fmt check check-go check-python check-shell check-docs test-integration dev-config dev-up dev-ready dev-down dev-reset dev-clean-data
+.PHONY: run build migrate seed clean tidy start fmt check check-go check-python check-shell check-docs test-integration dev-config dev-up dev-ready dev-down dev-reset dev-clean-data brew-minio-ready brew-reset-data backfill-index
 
 COMPOSE ?= $(shell docker compose version >/dev/null 2>&1 && echo "docker compose" || echo "docker-compose")
 SHAREO_AI_PORT ?= 8000
@@ -110,6 +110,16 @@ dev-reset:
 dev-clean-data:
 	$(COMPOSE) -f deploy/docker-compose.yml down -v
 
+brew-minio-ready:
+	bash scripts/start_minio_homebrew.sh
+	curl --noproxy '*' --fail --silent --show-error http://127.0.0.1:9000/minio/health/live
+
+brew-reset-data:
+	CONFIRM=YES bash scripts/reset_homebrew_data.sh
+
+backfill-index: ## 将所有 approved 帖子重新投递到语义搜图索引队列
+	go run ./cmd/backfill-index
+
 # Show help
 help:
 	@echo "ShareO Makefile targets:"
@@ -128,6 +138,8 @@ help:
 	@echo "  make dev-down  - Stop development dependencies"
 	@echo "  make dev-reset - Recreate development dependencies and their data"
 	@echo "  make dev-clean-data - Stop services and remove development volumes"
+	@echo "  make brew-minio-ready - Start/check Homebrew MinIO on ports 9000/9001"
+	@echo "  make brew-reset-data - Destructively reset Homebrew ShareO data (CONFIRM=YES)"
 	@echo "  make fmt       - Check code formatting (gofmt)"
 	@echo "  make migrate   - Run database migration"
 	@echo "  make seed      - Generate test data"

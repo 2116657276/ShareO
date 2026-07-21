@@ -9,6 +9,10 @@ dependencies = [
     "redis>=5.2",
     "qdrant-client>=1.13",
     "httpx>=0.28",
+    "numpy>=1.26",
+    "Pillow>=10.4",
+    "torch>=2.2",
+    "transformers>=4.48",
 ]
 
 [dependency-groups]

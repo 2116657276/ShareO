@@ -15,6 +15,21 @@ type PostRepo struct{}
 
 func NewPostRepo() *PostRepo { return &PostRepo{} }
 
+type IndexImage struct {
+	ImageID   int64     `json:"image_id"`
+	ObjectKey string    `json:"object_key"`
+	ImageURL  string    `json:"image_url"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+type IndexPayload struct {
+	PostID    int64        `json:"post_id"`
+	Status    string       `json:"status"`
+	Content   string       `json:"content"`
+	CreatedAt time.Time    `json:"created_at"`
+	Images    []IndexImage `json:"images"`
+}
+
 // hasFulltext is set after DB init based on whether the FULLTEXT index is available.
 var hasFulltext bool
 
@@ -86,6 +101,37 @@ func (r *PostRepo) FindByIDLight(id int64) (*model.Post, error) {
 		return nil, nil
 	}
 	return &post, err
+}
+
+// GetIndexPayload returns only approved, non-deleted post data required by the
+// AI worker. Image bytes stay behind Go's authenticated storage proxy; the
+// worker never receives MinIO credentials.
+func (r *PostRepo) GetIndexPayload(id int64) (*IndexPayload, error) {
+	var post model.Post
+	err := DB.Where("id = ? AND status = ? AND is_deleted = 0", id, model.StatusApproved).
+		Preload("Images", func(db *gorm.DB) *gorm.DB { return db.Order("sort_order ASC") }).First(&post).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	payload := &IndexPayload{PostID: post.ID, Status: post.Status, Content: post.Content, CreatedAt: post.CreatedAt}
+	for _, image := range post.Images {
+		objectKey := image.ImageURL
+		if marker := strings.Index(objectKey, "/api/v1/images/"); marker >= 0 {
+			objectKey = objectKey[marker+len("/api/v1/images/"):]
+		}
+		objectKey = strings.TrimPrefix(objectKey, "/")
+		if objectKey == "" {
+			continue
+		}
+		payload.Images = append(payload.Images, IndexImage{
+			ImageID: image.ID, ObjectKey: objectKey,
+			ImageURL: "/api/v1/images/" + objectKey, CreatedAt: image.CreatedAt,
+		})
+	}
+	return payload, nil
 }
 
 func (r *PostRepo) Update(post *model.Post) error {
