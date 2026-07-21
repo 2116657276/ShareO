@@ -2,7 +2,7 @@ package repository
 
 import (
 	"errors"
-	"log"
+	"log/slog"
 
 	"github.com/zhoujianlin/ShareO/internal/model"
 	"gorm.io/gorm"
@@ -66,7 +66,7 @@ func (r *UserRepo) UpdateStatus(id int64, status int8) error {
 func (r *UserRepo) CountByRole(role string) int64 {
 	var count int64
 	if err := DB.Model(&model.User{}).Where("role = ?", role).Count(&count).Error; err != nil {
-		log.Printf("UserRepo.CountByRole(%s): %v", role, err)
+		slog.Warn("failed to count users by role", "role", role, "err", err)
 	}
 	return count
 }
@@ -74,7 +74,7 @@ func (r *UserRepo) CountByRole(role string) int64 {
 func (r *UserRepo) CountByStatus(status int8) int64 {
 	var count int64
 	if err := DB.Model(&model.User{}).Where("status = ?", status).Count(&count).Error; err != nil {
-		log.Printf("UserRepo.CountByStatus(%d): %v", status, err)
+		slog.Warn("failed to count users by status", "status", status, "err", err)
 	}
 	return count
 }
@@ -85,10 +85,10 @@ func (r *UserRepo) UpdateFields(id int64, updates map[string]interface{}) error 
 
 func (r *UserRepo) GetFollowCounts(userID int64) (following, followers int64) {
 	if err := DB.Model(&model.Follow{}).Where("follower_id = ?", userID).Count(&following).Error; err != nil {
-		log.Printf("UserRepo.GetFollowCounts(following, %d): %v", userID, err)
+		slog.Warn("failed to count following", "user_id", userID, "err", err)
 	}
 	if err := DB.Model(&model.Follow{}).Where("followee_id = ?", userID).Count(&followers).Error; err != nil {
-		log.Printf("UserRepo.GetFollowCounts(followers, %d): %v", userID, err)
+		slog.Warn("failed to count followers", "user_id", userID, "err", err)
 	}
 	return
 }

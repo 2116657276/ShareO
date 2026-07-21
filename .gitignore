@@ -39,6 +39,11 @@ config.yaml
 
 # Dependencies
 vendor/
+ai-service/.venv/
+ai-service/.pytest_cache/
+ai-service/.ruff_cache/
+__pycache__/
+*.py[cod]
 
 # Local test material (personal photos etc.) — not part of the repo
 resources/

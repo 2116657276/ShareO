@@ -2,7 +2,7 @@
 
 ### Issue tracker
 
-GitHub Issues — use the `gh` CLI. See `docs/agents/issue-tracker.md`.
+`TASK.md` + `docs/plan.md` 是任务事实来源。GitHub Issues 是可选协作工具；使用时通过 `gh` CLI。见 `docs/agents/issue-tracker.md`。
 
 ### Triage labels
 

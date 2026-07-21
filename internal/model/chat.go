@@ -19,7 +19,7 @@ type Conversation struct {
 	ID        int64     `gorm:"primaryKey;autoIncrement" json:"id"`
 	Type      string    `gorm:"type:varchar(10);not null;default:'dm'" json:"type"`
 	Title     string    `gorm:"type:varchar(100);default:''" json:"title"`
-	OwnerID   int64     `gorm:"default:0" json:"owner_id"`
+	OwnerID   *int64    `gorm:"default:null" json:"owner_id"`
 	DmKey     *string   `gorm:"type:varchar(50);uniqueIndex:idx_dm_key" json:"dm_key"` // nullable; NULLs don't conflict in unique index
 	CreatedAt time.Time `gorm:"autoCreateTime" json:"created_at"`
 	UpdatedAt time.Time `gorm:"autoUpdateTime" json:"updated_at"`

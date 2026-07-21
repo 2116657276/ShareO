@@ -1,238 +1,125 @@
-# 设计文档: IM 私聊 + 群组
+# 设计文档：IM 私聊与邀请制群组
 
-> 更新时间: 2026-07-20 | 状态: 草稿 | 上游: [architecture.md](../architecture.md) · [plan.md](../plan.md)
+> 更新时间: 2026-07-21 | 状态: **后端/接口已实现并通过终端验收；浏览器与前端验收暂缓** | 上游: [architecture.md](../architecture.md) · [plan.md](../plan.md)
 
-## 1. 背景与目标
+## 1. 目标与边界
 
-ShareO 当前是纯异步的摄影社区（发帖/评论/点赞），缺少用户间实时沟通能力。"私信作者"是摄影社区的高频需求——看到喜欢的作品想联系摄影师，现在除了公开评论没有别的途径。
+Phase 1 提供文本私聊、邀请制群组、实时下行、准确未读、在线状态和断线恢复。数据库是消息唯一真相源：发送走 REST，WebSocket 只负责下行通知。
 
-做完后用户能：和任意用户一对一私聊、创建/加入群组、实时收到消息推送、查看历史消息、看到对方在线状态。
+本阶段不实现公开加入、邀请码、申请审批、群主转让、踢人、禁言、消息撤回/编辑、图片消息、端到端加密和音视频。群主不能作为普通成员退出，只能解散群组。
 
-## 2. 非目标
+## 2. 核心协议
 
-- ❌ 消息已读回执（仅做会话级"已读到第 N 条"，不做每条消息的双勾）
-- ❌ 图片/文件消息（v1 仅文本，后续可扩展）
-- ❌ 消息撤回/编辑/删除
-- ❌ 群组管理功能（转让群主、踢人、禁言）—— Phase 1 只做建群+加群+退群
-- ❌ 端到端加密
-- ❌ 语音/视频通话
-
-## 3. 总体方案
-
-**核心设计：发消息走 REST POST，WebSocket 只做下行推送。**
-
-```
-发送消息:
-  用户A ──► POST /api/v1/conversations/:id/messages ──► Go 校验成员 → 落 MySQL → WS Hub 推给在线成员
-
-接收消息:
-  Go WS Hub ──► WebSocket ──► 用户B 浏览器实时展示
-
-重连恢复:
-  用户B 重连 WS → 前端按 last_read_message_id 调 REST GET /messages?before_id= 拉增量
+```text
+发送：浏览器 -> POST message -> 成员校验 -> MySQL 事务落库/更新会话/推进发送者读标记 -> Hub 下行
+接收：Hub -> WebSocket new_message -> 客户端按 message.id 去重 -> 当前会话推进读标记
+恢复：WebSocket 重连 -> GET messages?after_id=<最后渲染ID> -> ID 升序追加，直到不足 100 条
+历史：GET messages?before_id=<最早渲染ID> -> 向前分页
 ```
 
-时序：
-```
-发送侧（REST）          接收侧（WebSocket）
-  A ──POST──► Go              Go ──WS──► B（实时）
-               │               
-               └──MySQL（持久化）
-```
+`before_id` 与 `after_id` 不能同时出现。REST POST 响应和 WS 回推可能包含同一消息，客户端必须以全局消息 ID 去重。
 
-**为什么选这个模型？**
-- REST 先落库 → 消息不丢（WS 断线也能发）
-- 数据库是唯一真相源，WS 只是通知通道
-- 天然复用现有 AuthRequired 中间件和限流
-- 对比"消息走 WS 双向"：断了就丢了，需要在客户端做本地队列 + 重试，复杂度高
+## 3. 数据与事务边界
 
-## 4. 数据模型
+`009_chat.sql` 创建 `conversations`、`conversation_members`、`messages`。已应用迁移不改写；`010_chat_hardening.sql` 负责前向加固：
 
-### 4.1 新表（migrations/009_chat.sql）
+- 迁移前检查成员、消息、群主引用的孤儿记录；发现异常即 `SIGNAL`，错误文本就是定位孤儿的 SELECT 查询。
+- `conversation -> members/messages` 使用 `ON DELETE CASCADE`。
+- `member.user_id`、`message.sender_id`、`conversation.owner_id` 使用 `ON DELETE RESTRICT`。
+- DM 的 `owner_id` 从旧值 `0` 迁为 `NULL`。
 
-```sql
--- 会话表：私聊(dm) 或 群组(group)
-CREATE TABLE conversations (
-    id         BIGINT PRIMARY KEY AUTO_INCREMENT,
-    type       VARCHAR(10)  NOT NULL DEFAULT 'dm',       -- 'dm' | 'group'
-    title      VARCHAR(100) DEFAULT '',                   -- 群名（dm 为空，前端用对方用户名）
-    owner_id   BIGINT       DEFAULT 0,                    -- 群主 user_id（dm 为 0）
-    dm_key     VARCHAR(50)  DEFAULT '',                   -- 私聊唯一键: "小uid:大uid"
-    created_at DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    UNIQUE INDEX idx_dm_key (dm_key)                      -- dm_key 为 '' 时 MySQL 不检查唯一性
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+关键事务：
 
--- 会话成员表
-CREATE TABLE conversation_members (
-    id                  BIGINT PRIMARY KEY AUTO_INCREMENT,
-    conversation_id     BIGINT NOT NULL,
-    user_id             BIGINT NOT NULL,
-    role                VARCHAR(10) DEFAULT 'member',      -- 'owner' | 'member'
-    last_read_message_id BIGINT DEFAULT 0,                  -- 该用户在此会话中最后已读的消息 ID
-    joined_at           DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE INDEX idx_conv_user (conversation_id, user_id),
-    INDEX idx_user_conv (user_id, conversation_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+- `EnsureDM`：`dm_key=min(uid):max(uid)` 唯一；并发插入用冲突忽略后回查；同一事务幂等补齐两名成员。
+- 建群：先去重、验证正常用户和 50 人上限，再一次提交会话与成员。
+- 邀请：锁定 conversation 行，再重查现有成员和上限，避免并发邀请共同越过 50 人。
+- 发消息：同一事务插入消息、更新 `conversation.updated_at`，并以 `GREATEST` 推进发送者读标记；成员消失时整笔回滚。
+- 解散：仅群主；事务内删除消息、成员和会话。即使数据库有级联约束，显式顺序仍便于审计和兼容已迁移环境。
 
--- 消息表
-CREATE TABLE messages (
-    id              BIGINT PRIMARY KEY AUTO_INCREMENT,
-    conversation_id BIGINT       NOT NULL,
-    sender_id       BIGINT       NOT NULL,
-    content         TEXT         NOT NULL,
-    meta            JSON         DEFAULT NULL,              -- 扩展字段（Bot 引用等）
-    created_at      DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    INDEX idx_conv_msg (conversation_id, id),               -- 游标分页：WHERE conv_id=? AND id < before_id
-    INDEX idx_sender (sender_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-```
+准确未读定义：当前成员读标记之后、且发送者不是自己的消息数。会话列表逐会话返回准确 `unread_count`，不使用最后消息差值近似。
 
-### 4.2 关键设计决策
+`MarkRead` 只接受目标会话中真实存在的消息，并以 `GREATEST(last_read_message_id, message_id)` 保证不能倒退。
 
-**dm_key 唯一约束**：双方同时发第一条私信时，如果只用应用层去重会有竞态条件。
-`dm_key = CONCAT(LEAST(uid1, uid2), ':', GREATEST(uid1, uid2))` + UNIQUE INDEX 兜底：
-先插入的请求成功，后插入的拿 duplicate key error → 重试 `SELECT WHERE dm_key=?` 取到已有会话。
+## 4. 输入与权限
 
-**游标分页而非 offset**：消息列表需要实时追加。offset 分页在插入新消息后会导致重复/遗漏。
-`WHERE conversation_id=? AND id < before_id ORDER BY id DESC LIMIT N` 是游标分页，
-新消息插入不影响已有页的结果。
+| 项目 | 规则 |
+|------|------|
+| 消息 | trim 后 1–2000 Unicode 字符 |
+| 群名 | trim 后 1–100 Unicode 字符 |
+| 群成员 | 含群主最多 50 人 |
+| 用户搜索 | 非空关键词，最多 20 条；排除调用者和封禁用户 |
+| 邀请 | 仅群主；重复邀请幂等成功 |
+| 退出 | 仅普通群成员；群主返回 409 |
+| 解散 | 仅群主；DM 不可解散 |
 
-**meta JSON 列**：预留扩展点。Phase 3 Bot 的引用标记（`{citations: [{post_id, chunk_no}]}`）存这里，
-不污染核心消息表结构。
+错误映射固定为：参数 400、非成员/非群主 403、不存在 404、状态冲突 409、未知数据库故障 500。数据库错误原文不得返回客户端。
 
-### 4.3 与现有表的关系
+## 5. API
 
-- `messages.sender_id` → `users.id`：发消息的用户
-- `messages.sender_id = Bot 的 user_id`（Phase 3）：Bot 消息自然复用
-- `conversation_members.user_id` → `users.id`
+全部 REST 路由使用完整登录校验。
 
-## 5. 接口设计
+| 方法 | 路径 | 请求/查询 | 说明 |
+|------|------|-----------|------|
+| GET | `/api/v1/conversations` | — | 最近更新优先；返回准确未读、成员；DM 额外返回 `online` |
+| POST | `/api/v1/conversations` | `{"user_id":2}` | 幂等创建/获取 DM |
+| POST | `/api/v1/conversations` | `{"title":"组名","member_ids":[2,3]}` | 创建邀请制群组 |
+| GET | `/api/v1/conversations/:id/messages` | `before_id` 或 `after_id`，`limit<=100` | 历史或断线补偿；`after_id` 按 ID 升序 |
+| POST | `/api/v1/conversations/:id/messages` | `{"content":"..."}` | 事务发送文本消息 |
+| PUT | `/api/v1/conversations/:id/read` | `{"message_id":123}` | 单调推进读标记 |
+| GET | `/api/v1/conversations/unread-count` | — | 全部会话准确未读总数 |
+| POST | `/api/v1/conversations/:id/members` | `{"user_ids":[2,3]}` | 群主直接邀请，幂等 |
+| DELETE | `/api/v1/conversations/:id/members/me` | — | 普通成员退出 |
+| DELETE | `/api/v1/conversations/:id` | — | 群主解散 |
+| GET | `/api/v1/users/search` | `q`、`limit<=20` | 返回 `id/username/avatar_url` |
+| GET | `/ws` | Cookie 或 Bearer | WebSocket 握手 |
 
-### 5.1 WebSocket
+不存在 `POST .../:id/join` 和旧 `POST .../:id/leave` 兼容路由。
 
-| 项目 | 值 |
-|------|-----|
-| 端点 | `GET /ws` |
-| 认证 | Cookie `token` 或 query `?token=xxx`（WebSocket 不支持自定义 Header） |
-| Origin 校验 | 开发环境 `localhost:*`；生产白名单见配置 |
-| 心跳 | 30s ping/pong，超时 90s 断开 |
-| 下行格式 | `{"type":"new_message","data":{"message":{...}}}` |
-| 在线状态 | `{"type":"user_online","data":{"user_id":1,"online":true}}`（仅当前会话相关用户） |
+下行消息：
 
-### 5.2 REST API
-
-全部需要 AuthRequired，在 `authAPI` 组下。
-
-| 方法 | 路径 | 入参 | 出参 | 说明 |
-|------|------|------|------|------|
-| `GET` | `/api/v1/conversations` | — | `[{conv, last_message, unread_count, members}]` | 会话列表，按最近消息时间排序 |
-| `POST` | `/api/v1/conversations` | `{user_id}` (dm) 或 `{title, member_ids}` (group) | `{conversation}` | 创建 DM 或群组。DM 幂等：已存在则返回已有会话 |
-| `GET` | `/api/v1/conversations/:id/messages` | `?before_id=&limit=30` | `{messages, has_more}` | 游标分页查历史。before_id 为空则取最新 |
-| `POST` | `/api/v1/conversations/:id/messages` | `{content}` | `{message}` | 发送消息。校验 sender 是该会话成员 |
-| `PUT` | `/api/v1/conversations/:id/read` | `{message_id}` | — | 标记该会话已读到 message_id |
-| `GET` | `/api/v1/conversations/unread-count` | — | `{total}` | 所有会话未读总数（Header 徽章用） |
-| `POST` | `/api/v1/conversations/:id/join` | — | — | 加入群组（仅 group 类型） |
-| `POST` | `/api/v1/conversations/:id/leave` | — | — | 退出群组（群主不能退，需先转让或解散） |
-
-### 5.3 Internal API（ai-service → Go）
-
-| 方法 | 路径 | 说明 |
-|------|------|------|
-| `GET` | `/internal/conversations/:id/context` | 取近 20 条消息作为 LLM 上下文（Phase 3） |
-| `POST` | `/internal/bot/reply` | Bot 回调：`{conversation_id, content, meta}`（Phase 3） |
-
-## 6. 关键流程
-
-### 6.1 发送消息（正常路径）
-
-```
-1. 用户A POST /api/v1/conversations/:id/messages {content}
-2. AuthRequired 解析 JWT 得 user_id = A
-3. Service.SendMessage(A, convID, content):
-   a. 查 conversation_members WHERE conv_id=? AND user_id=? → 确认 A 是成员
-   b. INSERT INTO messages (conv_id, sender_id, content)
-   c. 查 conversation_members 得到所有成员 user_id 列表
-   d. Hub.SendToUsers(memberIDs, {type:"new_message", data:{message}})
-   e. 返回 message 对象
-4. Hub 遍历 memberIDs，对每个在线用户的每个连接 writeJSON(message)
-5. 用户B（在线）浏览器收到 WS 消息 → 追加到当前会话（如果正在看）或更新未读计数
+```json
+{"type":"new_message","data":{"message":{"id":123,"conversation_id":9,"sender_id":2,"content":"你好"}}}
 ```
 
-### 6.2 异常路径 1：接收方离线
+## 6. 身份、Origin、CSRF 与会话吊销
 
-```
-发送方 POST → 消息落库成功（REST 返回 200）
-Hub.SendToUsers 发现用户B不在线 → 跳过（无 WS 连接）
-用户B 下次上线：重连 WS 时前端调 GET /messages?before_id=last_read_message_id 拉增量
-  → 消息不丢
-```
+- WS 握手复用 HTTP 的 JWT 解析与 Redis 登录缓存比对，不接受只验证 JWT、已被替换/登出的旧会话。
+- 同源 Origin 必须同时匹配 scheme 和 host；跨源只接受 `server.trusted_origins` / `SHAREO_TRUSTED_ORIGINS` 的精确 `http(s)://host[:port]`，禁止 `*`、路径、查询和片段。
+- 全站浏览器 POST/PUT/PATCH/DELETE 由 Go 1.25 `http.CrossOriginProtection` 保护。CLI、Bearer 和内部客户端在没有浏览器跨站头时按标准库行为兼容，不引入 CSRF Token 库或 bypass pattern。
+- Web 登出改为带确认的 `POST /logout`。帖子浏览计数由 GET 查询移到 `POST /api/v1/posts/:id/view`。
+- 登出、修改密码、管理员封禁成功后，Hub 主动关闭该用户全部 WS 连接。
 
-### 6.3 异常路径 2：DM 并发创建
+## 7. 在线状态与连接管理
 
-```
-用户A 和 用户B 同时给对方发第一条私信
-两个 POST /api/v1/conversations {user_id: 对方}
-  → Service.EnsureDM(A, B):
-    1. dm_key = "min(A,B):max(A,B)"
-    2. SELECT WHERE dm_key=? → 都查到不存在
-    3. INSERT INTO conversations (type='dm', dm_key=...) → 一个成功，一个 duplicate key error
-    4. 失败的那个 catch 到 duplicate → 重试 SELECT WHERE dm_key=? → 拿到已有会话
-  → 双方拿到同一个 conversation_id，不会创建两个 DM 会话
-```
+- 每个用户可有多个连接；Hub 以 user ID -> connection set 管理。
+- 注册时写 `ws:online:<uid>`；每 30 秒 ping 时刷新 60 秒 TTL。
+- 关闭连接先从 Hub 注销；只有最后一个连接消失时才删除 Redis key。
+- 写缓冲满视为慢连接并主动关闭；ping 30 秒，pong 超时 90 秒。
+- DM 会话列表返回对端 `online`。页面每 30 秒刷新列表，收到消息和重连成功时立即刷新。
 
-### 6.4 异常路径 3：WS 断线重连
+## 8. 页面行为
 
-```
-用户B WS 断线
-  → 前端检测 onclose 事件
-  → 启动指数退避重连：1s → 2s → 4s → 8s → 16s（上限）
-  → 重连成功后：
-    1. 调 GET /conversations → 获取会话列表 + 最后一条消息
-    2. 对当前打开的会话：调 GET /messages?before_id=last_rendered_msg_id → 拉增量
-  → 消息不丢不重
-```
+- `/chat?conv=<id>` 在会话列表加载后自动打开该会话。
+- 发送响应和 WS 推送统一走 `appendMsg`，按 `message.id` 去重。
+- 重连采用 1/2/4/8/16 秒指数退避；成功后调用 `after_id` 增量接口。
+- 页面提供建群、搜索/选择成员、群主邀请和解散、普通成员退出入口。
 
-## 7. 风险与权衡
+## 9. 自动化与手工验收
 
-### CSRF 评估
+自动化覆盖：群权限、消息限制、错误映射、未读委托、MarkRead 归属、分页冲突、Hub 多连接/慢连接、CSRF 同源/跨源矩阵、Python 消费重试/重启。真实 MySQL 集成文件覆盖并发 DM、消息回滚、准确未读、读标记单调、消息顺序、邀请上限、解散和 010 外键；真实 Redis 集成覆盖 pending 重领和最终 ACK。2026-07-21 终端验收已通过：`scripts/test_chat.sh` 全部通过，通用 `scripts/test_api.sh` 为 34/34。
 
-WebSocket 握手：
-- 认证：复用 Cookie `token` 解析 JWT（与现有 Web 页面一致）
-- Origin 校验：`r.Header().Get("Origin")` 白名单（localhost + 生产域名）
-- **不引入新的 CSRF 攻击面**：WS 握手不改变服务端状态，浏览器同源策略阻止恶意站点发起 WS 连接
+当前策略：后端和接口成熟前，终端 curl/Shell、单元测试、真实 MySQL/Redis 与 Compose 是正式验收手段；浏览器交互、断网恢复和页面可用性清单暂不执行。暂缓不代表删除，发布前仍需按下列清单补验。
 
-REST 消息发送：
-- 受现有 `SameSite=Lax` Cookie 保护
-- 消息发送需要有效的 JWT token（Cookie 或 Authorization header）
-- **已知遗留问题**：全局 CSRF Token 中间件将在本 Phase 后续统一添加（覆盖所有 POST/PUT/DELETE 表单）
+双浏览器清单（全部勾选后才能把状态改为“已实现/已验收”）：
 
-### 性能预估
-- 每条消息：1 INSERT + 1 SELECT（查成员）+ Hub 扇出（O(成员数) 次 writeJSON）
-- 10 人在线群组发一条消息：~10ms（MySQL） + ~5ms（Redis 扇出）
-- WS 连接数上限：单机 ~1000（受 goroutine 和内存限制，对摄影社区足够）
+- [ ] 两用户实时互发；发送者页面每条消息只出现一次
+- [ ] B 离线，A 发送；B 重连后消息按序补齐且不重复
+- [ ] 未读徽章在接收、打开、MarkRead 后准确变化
+- [ ] DM 在线点随最后连接上线/离线正确变化
+- [ ] 密码修改、退出和管理员封禁后，旧 WS 立即断开且不能重连
+- [ ] 群外用户无法公开加入；群主可邀请；重复邀请不新增成员
+- [ ] 普通成员可退出；群主退出返回 409；群主解散后各成员不可访问
+- [ ] `/chat?conv=<id>` 能自动打开目标会话
+- [ ] 可信跨源按配置工作，未配置跨站浏览器写请求返回 403
 
-### 放弃了什么
-- 消息 ID 不是全局递增（按会话独立），跨会话排序需要 created_at
-- 不做消息同步到其他设备（多端登录各自拉历史即可）
-
-## 8. 评测与测试方案
-
-### 功能验收清单
-- [ ] 两个浏览器互发 DM，消息实时可见
-- [ ] 一个浏览器关闭，另一个发消息 → 重连后消息拉回
-- [ ] DM 并发创建：双方同时发第一条私信 → 只有一个会话
-- [ ] 群组：创建 → 邀请 → 群内发消息 → 退群
-- [ ] 未读徽章：收到消息时未读数正确
-- [ ] 在线状态：对方在线/离线状态正确
-- [ ] `make check` 全绿
-
-### 自动化测试
-- `chat_repo_test.go`：EnsureDM 并发测试、游标分页测试
-- `chat_service_test.go`：SendMessage 权限校验、消息落库
-- `ws/hub_test.go`：竞态检测 `go test -race`
-
-### 冒烟脚本 `scripts/test_chat.sh`
-```bash
-# 注册两个测试用户 → 登录 → 创建 DM → 互发消息 → 查历史 → 验证消息数
-```
+最终命令与证据矩阵见 [进度审计](../reviews/2026-07-21-progress-audit.md)。

@@ -138,7 +138,12 @@ function postDetail(postId, initialLiked, initialFavorited) {
         showRepost: false, repostText: '', repostImages: [], repostUrls: [], reposting: false, repostDone: false, repostId: 0,
         comments: [], commentsLoading: false, commentTotal: {{ $post.CommentCount }},
 
-        async init() { await this.loadComments(); },
+        async init() {
+            await Promise.all([
+                this.loadComments(),
+                fetch('/api/v1/posts/' + postId + '/view', {method: 'POST'})
+            ]);
+        },
         async loadComments() {
             this.commentsLoading = true;
             const r = await fetch('/api/v1/posts/' + postId + '/comments?page_size=50');

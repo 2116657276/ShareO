@@ -1,7 +1,7 @@
 package middleware
 
 import (
-	"context"
+	"errors"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -13,6 +13,51 @@ import (
 	"github.com/zhoujianlin/ShareO/internal/repository"
 )
 
+var (
+	ErrMissingToken   = errors.New("missing token")
+	ErrInvalidToken   = errors.New("invalid token")
+	ErrExpiredSession = errors.New("expired session")
+	ErrReplacedToken  = errors.New("replaced token")
+)
+
+// AuthenticateRequest performs the same JWT and Redis-backed session checks
+// for HTTP handlers and WebSocket handshakes.
+func AuthenticateRequest(r *http.Request, refresh bool) (*jwt.Claims, string, error) {
+	token := ""
+	if authHeader := r.Header.Get("Authorization"); strings.HasPrefix(authHeader, "Bearer ") {
+		token = strings.TrimSpace(strings.TrimPrefix(authHeader, "Bearer "))
+	}
+	if token == "" {
+		if cookie, err := r.Cookie("token"); err == nil {
+			token = cookie.Value
+		}
+	}
+	if token == "" {
+		return nil, "", ErrMissingToken
+	}
+	claims, err := jwt.ParseToken(token)
+	if err != nil {
+		return nil, "", ErrInvalidToken
+	}
+	cachedToken, err := repository.GetLoginToken(r.Context(), claims.UserID)
+	if err != nil {
+		if errors.Is(err, redis.Nil) {
+			return nil, "", ErrExpiredSession
+		}
+		slog.Warn("Redis error checking login cache", "user_id", claims.UserID, "err", err)
+		return claims, token, nil // Preserve the project's fail-open Redis policy.
+	}
+	if cachedToken != token {
+		return nil, "", ErrReplacedToken
+	}
+	if refresh {
+		if err := repository.RefreshLoginToken(r.Context(), claims.UserID, repository.LoginCacheTTL); err != nil {
+			slog.Warn("failed to refresh login TTL", "user_id", claims.UserID, "err", err)
+		}
+	}
+	return claims, token, nil
+}
+
 // isWebRequest returns true if the request is a browser page visit (not an API call).
 func isWebRequest(c *gin.Context) bool {
 	return !strings.HasPrefix(c.Request.URL.Path, "/api/")
@@ -20,33 +65,23 @@ func isWebRequest(c *gin.Context) bool {
 
 func AuthRequired() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		authHeader := c.GetHeader("Authorization")
-		if authHeader == "" {
-			// Check cookie for web pages
-			token, err := c.Cookie("token")
-			if err != nil || token == "" {
-				if isWebRequest(c) {
-					c.Redirect(http.StatusFound, "/login")
-				} else {
-					response.Unauthorized(c, "请先登录")
-				}
-				c.Abort()
-				return
-			}
-			authHeader = "Bearer " + token
-		}
-
-		token := strings.TrimPrefix(authHeader, "Bearer ")
-		claims, err := jwt.ParseToken(token)
+		claims, _, err := AuthenticateRequest(c.Request, true)
 		if err != nil {
 			if isWebRequest(c) {
-				// Clear invalid cookie and redirect to login
 				http.SetCookie(c.Writer, &http.Cookie{
 					Name: "token", Value: "", Path: "/", MaxAge: -1, HttpOnly: true,
 				})
 				c.Redirect(http.StatusFound, "/login")
 			} else {
-				response.Unauthorized(c, "token无效或已过期")
+				message := "token无效或已过期"
+				if errors.Is(err, ErrMissingToken) {
+					message = "请先登录"
+				} else if errors.Is(err, ErrReplacedToken) {
+					message = "账号已在其他设备登录，请重新登录"
+				} else if errors.Is(err, ErrExpiredSession) {
+					message = "登录已过期，请重新登录"
+				}
+				response.Unauthorized(c, message)
 			}
 			c.Abort()
 			return
@@ -55,44 +90,6 @@ func AuthRequired() gin.HandlerFunc {
 		c.Set("user_id", claims.UserID)
 		c.Set("username", claims.Username)
 		c.Set("role", claims.Role)
-
-		// Redis login state check: verify token is still cached, refresh TTL
-		cachedToken, err := repository.GetLoginToken(context.Background(), claims.UserID)
-		if err != nil {
-			if err == redis.Nil {
-				// Cache expired — redirect web pages to login, return JSON for API
-				if isWebRequest(c) {
-					http.SetCookie(c.Writer, &http.Cookie{
-						Name: "token", Value: "", Path: "/", MaxAge: -1, HttpOnly: true,
-					})
-					c.Redirect(http.StatusFound, "/login")
-				} else {
-					response.Unauthorized(c, "登录已过期，请重新登录")
-				}
-				c.Abort()
-				return
-			}
-			// Redis error — fail-open (consistent with rate limiter behavior)
-			slog.Warn("Redis error checking login cache", "user_id", claims.UserID, "err", err)
-		} else {
-			if cachedToken != token {
-				// Token mismatch — logged in from another device/session
-				if isWebRequest(c) {
-					http.SetCookie(c.Writer, &http.Cookie{
-						Name: "token", Value: "", Path: "/", MaxAge: -1, HttpOnly: true,
-					})
-					c.Redirect(http.StatusFound, "/login")
-				} else {
-					response.Unauthorized(c, "账号已在其他设备登录，请重新登录")
-				}
-				c.Abort()
-				return
-			}
-			// Token matches — refresh TTL (sliding window)
-			if err := repository.RefreshLoginToken(context.Background(), claims.UserID, repository.LoginCacheTTL); err != nil {
-				slog.Warn("failed to refresh login TTL", "user_id", claims.UserID, "err", err)
-			}
-		}
 
 		c.Next()
 	}

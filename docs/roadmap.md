@@ -1,6 +1,6 @@
 # ShareO v2 路线图
 
-> 更新时间: 2026-07-19 | 状态: 生效 | 目标: 2027 春季毕业答辩
+> 更新时间: 2026-07-21 | 状态: Phase 0 本地门禁完成、远端 CI 待确认 / Phase 1 后端加固中 | 目标: 2027 春季毕业答辩
 
 节奏假设：串行推进，一次只做一个 Phase；学期内投入有限、寒暑假加速。学校的开题/中期/答辩节点确定后回来修订本文档。
 
@@ -10,8 +10,8 @@
 
 | Phase | 时间 | 主题 | 交付物 | 验收标准（可演示） |
 |-------|------|------|--------|--------------------|
-| **0 基建+还债** | 2026-07 下旬 ~ 08 中旬 (~3 周) | 修复清单 + 开发底座 | **[2026-07-19 评审](reviews/2026-07-19-code-review.md) 全部 20 个易修项**；gofmt/`make check` 工具链；slog 结构化日志；密码修改功能；`deploy/docker-compose.yml`（MySQL/Redis/MinIO/Qdrant）；ai-service 脚手架（FastAPI + uv + ruff + pytest + /healthz）；Go queue 生产者 + Python 消费者骨架；CI 工作流 | 评审易修项全关闭且 `make check` 绿；一条命令起全部依赖；发一条测试事件，Python worker 消费、ACK、崩溃重启可重领 |
-| **1 IM** | 2026-08 中旬 ~ 09 底 (~6 周) | 私聊 + 群组 | 设计文档 `design/im.md`；migrations（conversations / conversation_members / messages）；WS Hub；私聊、建群/邀请/退群、历史分页、未读数、在线状态；聊天页 UI | 两个浏览器互发消息实时可见；刷新后历史与未读数正确 |
+| **0 基建+还债** | 本地门禁完成 / 远端 CI 待确认 | 修复清单 + 可信开发底座 | `make check` 分层门禁；Python 3.12/uv lock；可靠 Streams 重试；可复现 Compose；AI liveness/readiness；全仓业务日志结构化 | 终端门禁、真实 Redis、Compose config/up/ready/reset、API/IM 脚本、文档与工作区复核均有证据；远端 CI 待本次推送确认 |
+| **1 IM** | 后端加固中 | 私聊 + 邀请制群组 | 009/010 migrations；事务聊天；精确未读；WS Hub/在线/吊销；断线补偿；Origin/CSRF；群组 UI | 真实 MySQL/Redis、race、API/IM 终端证据已有；浏览器/前端验收按当前决策暂缓 |
 | **2 语义搜图** | 2026-10 ~ 11 中旬 (~6 周) | 向量化管线 + 搜索 | 设计文档 `design/image-search.md`；索引管线（审核通过触发 + 删除清理 + 存量回填）；搜图 API 与页面；**评测集 v1（30~50 条标注 query）+ Recall@K/MRR 报告**；4060 部署 + M1/4060 吞吐对比实验 | 中文自然语言搜图返回相关结果；删帖后搜不到；评测报告成文 |
 | **3 Bot + RAG** | 2026-11 中旬 ~ 2027-01 上旬 (~7 周, 含期末缓冲) | Bot 接入 IM | 设计文档 `design/rag-bot.md`；Bot 账号机制；@Bot/私聊触发；自研 RAG（分块/检索/拼 prompt/引用溯源）；RAG 评测（含 云 API vs 本地 7B 对比实验） | 群里 @Bot 提问站内内容，收到带帖子引用的回答；Bot 挂掉不影响聊天 |
 | **4 Agent + 收尾** | 2027-01 ~ 03 中旬 | Agent 化 | Bot 升级工具调用（search_images / search_posts / summarize_thread / draft_post）；Agent 循环与工具白名单等安全边界；补全全部实验 | Bot 能自主决定"先搜图再回答"类多步任务；实验数据齐 |

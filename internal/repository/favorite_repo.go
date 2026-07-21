@@ -2,7 +2,7 @@ package repository
 
 import (
 	"errors"
-	"log"
+	"log/slog"
 
 	"github.com/zhoujianlin/ShareO/internal/model"
 	"gorm.io/gorm"
@@ -26,7 +26,7 @@ func (r *FavoriteRepo) Toggle(userID, postID int64) (bool, error) {
 			// Sync post favorite_count via COUNT (idempotent, safe with triggers)
 			if syncErr := tx.Model(&model.Post{}).Where("id = ?", postID).UpdateColumn("favorite_count",
 				gorm.Expr("(SELECT COUNT(*) FROM favorites WHERE post_id = ?)", postID)).Error; syncErr != nil {
-				log.Printf("FavoriteRepo.Toggle(unfavorite): failed to sync favorite_count for post %d: %v", postID, syncErr)
+				slog.Warn("failed to sync post favorite count", "action", "unfavorite", "post_id", postID, "err", syncErr)
 			}
 			favorited = false
 			return nil
@@ -39,7 +39,7 @@ func (r *FavoriteRepo) Toggle(userID, postID int64) (bool, error) {
 			// Sync post favorite_count via COUNT (idempotent, safe with triggers)
 			if syncErr := tx.Model(&model.Post{}).Where("id = ?", postID).UpdateColumn("favorite_count",
 				gorm.Expr("(SELECT COUNT(*) FROM favorites WHERE post_id = ?)", postID)).Error; syncErr != nil {
-				log.Printf("FavoriteRepo.Toggle(favorite): failed to sync favorite_count for post %d: %v", postID, syncErr)
+				slog.Warn("failed to sync post favorite count", "action", "favorite", "post_id", postID, "err", syncErr)
 			}
 			favorited = true
 			return nil
@@ -65,7 +65,7 @@ func (r *FavoriteRepo) GetUserFavoritedPostIDs(userID int64, postIDs []int64) ma
 func (r *FavoriteRepo) IsFavorited(userID, postID int64) bool {
 	var count int64
 	if err := DB.Model(&model.Favorite{}).Where("user_id = ? AND post_id = ?", userID, postID).Count(&count).Error; err != nil {
-		log.Printf("FavoriteRepo.IsFavorited(%d, %d): %v", userID, postID, err)
+		slog.Warn("failed to query favorite state", "user_id", userID, "post_id", postID, "err", err)
 	}
 	return count > 0
 }

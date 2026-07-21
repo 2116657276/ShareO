@@ -3,7 +3,7 @@ package repository
 import (
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"strings"
 
 	"github.com/zhoujianlin/ShareO/internal/model"
@@ -39,7 +39,7 @@ func (r *FollowRepo) Toggle(followerID, followeeID int64) (bool, error) {
 func (r *FollowRepo) IsFollowing(followerID, followeeID int64) bool {
 	var count int64
 	if err := DB.Model(&model.Follow{}).Where("follower_id = ? AND followee_id = ?", followerID, followeeID).Count(&count).Error; err != nil {
-		log.Printf("FollowRepo.IsFollowing(%d, %d): %v", followerID, followeeID, err)
+		slog.Warn("failed to query follow state", "follower_id", followerID, "followee_id", followeeID, "err", err)
 	}
 	return count > 0
 }

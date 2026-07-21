@@ -1,7 +1,10 @@
 import pytest
 from httpx import ASGITransport, AsyncClient
+from unittest.mock import AsyncMock
 
-from app.main import app
+from app import main
+
+app = main.app
 
 
 @pytest.mark.asyncio
@@ -13,6 +16,25 @@ async def test_healthz():
         data = resp.json()
         assert data["status"] == "ok"
         assert data["service"] == "shareo-ai"
-        # Redis and Qdrant may be unavailable in test — that's fine
-        assert "redis" in data
-        assert "qdrant" in data
+
+
+@pytest.mark.asyncio
+async def test_readyz_ready(monkeypatch):
+    monkeypatch.setattr(main, "check_redis", AsyncMock())
+    monkeypatch.setattr(main, "check_qdrant", AsyncMock())
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        resp = await client.get("/readyz")
+    assert resp.status_code == 200
+    assert resp.json()["status"] == "ready"
+
+
+@pytest.mark.asyncio
+async def test_readyz_degraded(monkeypatch):
+    monkeypatch.setattr(main, "check_redis", AsyncMock(side_effect=RuntimeError("offline")))
+    monkeypatch.setattr(main, "check_qdrant", AsyncMock())
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        resp = await client.get("/readyz")
+    assert resp.status_code == 503
+    assert resp.json()["dependencies"]["redis"] == "unavailable"

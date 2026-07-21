@@ -2,7 +2,7 @@ package ws
 
 import (
 	"encoding/json"
-	"log"
+	"log/slog"
 	"sync"
 )
 
@@ -14,7 +14,8 @@ type Hub struct {
 	register chan *Client
 
 	// stop signals the Hub to shut down.
-	stop chan struct{}
+	stop     chan struct{}
+	stopOnce sync.Once
 }
 
 // NewHub creates and starts a Hub. The Hub runs until Stop is called.
@@ -45,7 +46,9 @@ func (h *Hub) run() {
 			h.mu.Lock()
 			for _, clients := range h.conns {
 				for c := range clients {
-					c.conn.Close()
+					if c.conn != nil {
+						_ = c.conn.Close()
+					}
 				}
 			}
 			h.mu.Unlock()
@@ -77,7 +80,7 @@ func (h *Hub) Unregister(c *Client) {
 func (h *Hub) SendToUsers(userIDs []int64, msg any) {
 	data, err := json.Marshal(msg)
 	if err != nil {
-		log.Printf("ws.Hub: failed to marshal message: %v", err)
+		slog.Error("failed to marshal websocket message", "err", err)
 		return
 	}
 
@@ -108,5 +111,19 @@ func (h *Hub) IsOnline(userID int64) bool {
 
 // Stop shuts down the Hub and closes all connections.
 func (h *Hub) Stop() {
-	close(h.stop)
+	h.stopOnce.Do(func() { close(h.stop) })
+}
+
+// DisconnectUser closes every active connection for a user. It is used when a
+// login is revoked by logout, password change, or an administrator.
+func (h *Hub) DisconnectUser(userID int64) {
+	h.mu.RLock()
+	clients := make([]*Client, 0, len(h.conns[userID]))
+	for client := range h.conns[userID] {
+		clients = append(clients, client)
+	}
+	h.mu.RUnlock()
+	for _, client := range clients {
+		client.Close()
+	}
 }

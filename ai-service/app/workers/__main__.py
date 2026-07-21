@@ -16,7 +16,7 @@ CONSUMER_GROUP = "ai-workers"
 async def main():
     logging.basicConfig(level=settings.log_level)
     logger = logging.getLogger(__name__)
-    redis = Redis.from_url(settings.redis_url)
+    redis = Redis.from_url(settings.redis_url, decode_responses=True)
 
     async def handle_index_post(msg_id: str, fields: dict):
         logger.info("index_post: id=%s fields=%s", msg_id, fields)
@@ -36,10 +36,10 @@ async def main():
         STREAM_BOT_TASKS: handle_bot_task,
     }
 
-    await asyncio.gather(
-        *(c.run(handlers[c.stream]) for c in consumers)
-    )
-    await redis.close()
+    try:
+        await asyncio.gather(*(c.run(handlers[c.stream]) for c in consumers))
+    finally:
+        await redis.aclose()
 
 
 if __name__ == "__main__":

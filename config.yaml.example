@@ -1,12 +1,14 @@
+# Copy to config.yaml, or point SHAREO_CONFIG at another YAML file.
 server:
   port: 8080
   mode: debug  # debug | release | test
+  trusted_origins: []  # Exact extra origins, e.g. ["https://shareo.example.com"]
 
 database:
   host: 127.0.0.1
   port: 3306
   user: root
-  password: "your_db_password_here"  # Or use env: SHAREO_DB_PASSWORD
+  password: "shareo_pass"  # Development default; override with SHAREO_DB_PASSWORD in production
   dbname: shareo
   charset: utf8mb4
   max_idle_conns: 10
@@ -22,8 +24,8 @@ redis:
 
 minio:
   endpoint: 127.0.0.1:9000
-  access_key: your_minio_access_key  # Or use env: SHAREO_MINIO_ACCESS_KEY
-  secret_key: your_minio_secret_key  # Or use env: SHAREO_MINIO_SECRET_KEY
+  access_key: minioadmin  # Development default; override with SHAREO_MINIO_ACCESS_KEY
+  secret_key: minioadmin  # Development default; override with SHAREO_MINIO_SECRET_KEY
   bucket: shareo
   use_ssl: false
 

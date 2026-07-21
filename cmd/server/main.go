@@ -17,6 +17,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/zhoujianlin/ShareO/internal/config"
+	"github.com/zhoujianlin/ShareO/internal/middleware"
 	"github.com/zhoujianlin/ShareO/internal/pkg/jwt"
 	"github.com/zhoujianlin/ShareO/internal/pkg/upload"
 	"github.com/zhoujianlin/ShareO/internal/repository"
@@ -31,7 +32,11 @@ var (
 
 func main() {
 	// Load config
-	cfg, err := config.Load("config.yaml")
+	configPath := os.Getenv("SHAREO_CONFIG")
+	if configPath == "" {
+		configPath = "config.yaml"
+	}
+	cfg, err := config.Load(configPath)
 	if err != nil {
 		log.Fatalf("Failed to load config: %v", err)
 	}
@@ -70,7 +75,7 @@ func main() {
 	repository.InitLoginCache(cfg.JWT.LoginCacheTTLMin)
 
 	// Setup router with custom functions
-	r := router.SetupRouter()
+	r := router.SetupRouter(cfg.Server.TrustedOrigins...)
 	r.SetFuncMap(template.FuncMap{
 		"sub": func(a, b int) int { return a - b },
 		"add": func(a, b int) int { return a + b },
@@ -133,6 +138,10 @@ func main() {
 
 	// Reload templates after setting func map
 	r.LoadHTMLFiles(allTemplates...)
+	protectedHandler, err := middleware.CrossOriginProtection(r, cfg.Server.TrustedOrigins)
+	if err != nil {
+		log.Fatalf("Failed to configure cross-origin protection: %v", err)
+	}
 
 	// Health check
 	r.GET("/healthz", func(c *gin.Context) {
@@ -149,14 +158,14 @@ func main() {
 	fmt.Println("  ShareO - 拍摄与作品管理系统")
 	fmt.Println("========================================")
 	fmt.Printf("  Web:     http://localhost%s\n", addr)
-	fmt.Printf("  管理员账号已创建，密码见 migrations/001_init.sql\n")
+	fmt.Println("  可选开发管理员：先执行 make seed（启动后请立即改密）")
 	fmt.Printf("  用户:    注册后登录\n")
 	fmt.Println("========================================")
 
 	// Graceful shutdown with signal handling
 	srv := &http.Server{
 		Addr:    addr,
-		Handler: r,
+		Handler: protectedHandler,
 	}
 
 	go func() {

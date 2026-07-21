@@ -1,6 +1,6 @@
 # ShareO v2 架构文档
 
-> 更新时间: 2026-07-19 | 状态: 设计定稿，随实现滚动更新
+> 更新时间: 2026-07-21 | 状态: Phase 0 本地门禁完成、远端 CI 待确认 / Phase 1 后端加固中，随实现滚动更新
 
 ## 1. 演进目标
 
@@ -91,7 +91,8 @@ Worker 消费 (consumer group: ai-workers):
 | 向量数据库 | Qdrant（单容器） | [ADR-003](adr/ADR-003-vector-db.md) |
 | 模型推理 | 本地 embedding + 云 LLM，4060 为部署/对比实验平台 | [ADR-004](adr/ADR-004-inference-strategy.md) |
 | RAG 实现 | 自研 pipeline，不用 LangChain | [ADR-005](adr/ADR-005-rag-no-framework.md) |
-| IM | gorilla/websocket + Hub goroutine，消息落 MySQL | Phase 1 设计文档细化 |
+| IM | REST 写消息 + gorilla/websocket 下行 + MySQL 事务 + Redis presence | [Phase 1 设计文档](design/im.md) |
+| 浏览器写安全 | Go 1.25 `http.CrossOriginProtection` + 精确 trusted origins | 标准库优先，不维护 Token 库 |
 | 前端 | 维持 Go Templates + Alpine.js | 范围控制，不引 SPA |
 
 ## 6. 目标项目结构
@@ -102,25 +103,27 @@ ShareO/
 ├── internal/                      # 沿用现有按层组织，新功能按层追加
 │   ├── handler/                   # + chat_handler.go, search_handler.go, internal_handler.go
 │   ├── service/                   # + chat_service.go, bot_service.go, search_service.go
-│   ├── repository/                # + conversation_repo.go, message_repo.go
-│   ├── model/                     # + conversation.go, message.go
-│   ├── ws/                        # 新: WebSocket Hub（连接注册/会话订阅/扇出）
+│   ├── repository/                # chat_repo.go + presence.go
+│   ├── model/                     # chat.go（Conversation/Member/Message）
+│   ├── ws/                        # WebSocket Hub（按用户管理多连接、扇出、吊销）
 │   └── pkg/
 │       ├── queue/                 # 新: Redis Streams 生产者
 │       └── aiclient/              # 新: 调 ai-service 的 HTTP 客户端
 ├── ai-service/                    # 新: Python AI 服务（uv 管理）
 │   ├── pyproject.toml
 │   ├── app/
-│   │   ├── main.py                # FastAPI 入口（API 进程）
 │   │   ├── config.py
-│   │   ├── api/                   # /v1/search/images, /v1/rag/answer, /healthz
+│   │   ├── main.py                # /healthz 存活；/readyz 依赖就绪
+│   │   ├── api/                   # Phase 2+ 的 /v1/search/images, /v1/rag/answer
 │   │   ├── core/                  # embedding 模型封装、LLM provider、Qdrant 客户端
 │   │   ├── rag/                   # chunk / retrieve / rerank / prompt
 │   │   └── workers/               # Streams 消费者入口（Worker 进程）
-│   └── tests/
+│   ├── tests/
+│   ├── Dockerfile
+│   └── uv.lock
 ├── deploy/
-│   └── docker-compose.yml         # MySQL + Redis + MinIO + Qdrant 一键起
-├── migrations/                    # 继续现有编号（009 起为 v2 迁移）
+│   └── docker-compose.yml         # MySQL + Redis + MinIO + Qdrant + AI API/Worker
+├── migrations/                    # 009 chat；010 chat 前向约束加固
 ├── docs/                          # 见 docs/README.md
 └── web/                           # + templates/chat/, templates/search/
 ```
@@ -129,8 +132,9 @@ ShareO/
 
 - **内部认证**：Go ↔ ai-service 互调带 `X-Internal-Token`（环境变量 `SHAREO_INTERNAL_TOKEN`，双侧共享）；ai-service 监听内网地址。
 - **Streams 命名**：`shareo:stream:index_post`、`shareo:stream:bot_tasks`；消费组统一 `ai-workers`。
-- **可靠性约定**：消费成功才 XACK；崩溃遗留的 pending 消息由 worker 启动时 XAUTOCLAIM 重领；所有消费逻辑必须幂等（at-least-once 语义）。
+- **可靠性约定**：消费成功才 XACK；每 10 秒扫描并重领 idle 30 秒的 pending；首次处理后最多重试 3 次（共 4 次），最终记录 stream/message/fields/exception/attempts 后 XACK。遵守 ADR-002，不设死信队列。
 - **配置**：沿用 `SHAREO_*` 环境变量注入敏感值的现有惯例，ai-service 侧用 `SHAREO_AI_*` 前缀。
+- **IM 安全**：WS 与 HTTP 共用 JWT+Redis 登录缓存；Origin 仅同源或精确 trusted origin；浏览器写请求受标准库 CrossOriginProtection 保护。
 
 ## 8. 设计原则
 

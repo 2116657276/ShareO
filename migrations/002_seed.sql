@@ -1,6 +1,11 @@
 -- ShareO Seed Data
 -- ============================================================
 
+-- Optional development administrator (password: admin123).
+-- This file is never executed automatically by Docker Compose.
+INSERT IGNORE INTO users (username, password_hash, email, role, status)
+VALUES ('admin', '$2a$10$vbn5lSmj3e6arCkbXzKNqutbx5B/iqtnk6tHoYvETGh1qdnG/5Rd2', 'admin@shareo.com', 'admin', 1);
+
 -- Seed topics
 INSERT INTO topics (name, description) VALUES
 ('街头摄影挑战', '捕捉城市街头的精彩瞬间'),

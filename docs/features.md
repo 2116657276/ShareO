@@ -1,18 +1,18 @@
 # ShareO 功能清单
 
-> 更新时间: 2026-06-19 | 版本: v5 | 58 路由 · 11 表 · 85 测试用例
+> 更新时间: 2026-07-21 | 版本: v2 Phase 1 加固中 | 路由以 `internal/router/router.go` 为准 · 14 张业务表
 
 ---
 
 ## 1. 认证系统
 
-**功能**: 注册、登录、登出、JWT 72h、个人信息、资料更新、XSS 防护、封禁拦截、Redis 登录缓存(30 分钟免登录)
+**功能**: 注册、登录、POST 登出、修改密码、JWT 72h、个人信息、资料更新、封禁拦截、Redis 登录缓存；登出/改密/封禁会主动断开 WS
 
 | 层 | 文件 | 关键函数 |
 |----|------|---------|
 | Router | `internal/router/router.go` | 13 条认证路由 |
-| Handler | `internal/handler/auth_handler.go` | `Register`, `Login`, `Logout`, `Me`, `UpdateProfile`, `WebLogin`, `WebRegister`, `WebLogout`, `SettingsPage`, `WebSettings` |
-| Service | `internal/service/auth_service.go` | `Register`, `Login`, `GetProfile`, `UpdateProfile` |
+| Handler | `internal/handler/auth_handler.go` | `Register`, `Login`, `Logout`, `ChangePassword`, `Me`, `UpdateProfile`, Web handlers |
+| Service | `internal/service/auth_service.go` | `Register`, `Login`, `ChangePassword`, `GetProfile`, `UpdateProfile` |
 | Repository | `internal/repository/user_repo.go` | `Create`, `FindByID`, `FindByUsername`, `UpdateFields` |
 | JWT | `internal/pkg/jwt/jwt.go` | `Init`, `GenerateToken`, `ParseToken`, `ExpireDuration` |
 | Login Cache | `internal/repository/auth_cache.go` | `CacheLoginToken`, `GetLoginToken`, `DeleteLoginToken`, `RefreshLoginToken` |
@@ -45,8 +45,8 @@
 | 层 | 文件 | 关键函数 |
 |----|------|---------|
 | Router | `internal/router/router.go` | 8 条帖子路由 |
-| Handler | `internal/handler/post_handler.go` | `Create`, `Update`, `Delete`, `GetByID`, `Repost`, `WebCreate`, `WebUpdate` |
-| Service | `internal/service/post_service.go` | `Create`, `Update`, `Delete`, `GetByID`, `Repost`, `resolveTopicIDsInTx` |
+| Handler | `internal/handler/post_handler.go` | `Create`, `Update`, `Delete`, `GetByID`, `RecordView`, `Repost`, Web handlers |
+| Service | `internal/service/post_service.go` | `Create`, `Update`, `Delete`, `GetByID`, `RecordView`, `Repost`, `resolveTopicIDsInTx` |
 | Repository | `internal/repository/post_repo.go` | `Create`, `FindByID`, `FindByIDLight`, `Update`, `SoftDelete`, `IncrementView`, `IncrementShare` |
 | Model | `internal/model/post.go`, `internal/model/post_image.go` | `Post`, `PostImage` |
 | Templates | `web/templates/post/create_post.html`, `edit_post.html`, `post_detail.html` | |
@@ -186,21 +186,22 @@
 
 ## 12. 安全与中间件
 
-**功能**: 4 层认证、Redis 滑动窗口限流、NoCache、魔数校验、JWT nil 保护、SameSite Cookie、错误脱敏、业务错误码
+**功能**: 完整登录缓存校验、Go 标准库跨源写保护、精确 Origin、Redis 限流、NoCache、魔数校验、SameSite Cookie、错误脱敏、业务错误码
 
 | 层 | 文件 | 关键函数 |
 |----|------|---------|
 | Auth 中间件 | `internal/middleware/auth.go` | `AuthRequired` , `OptionalAuth`, `AdminRequired`, `RedirectIfAuth` |
+| CSRF | `internal/middleware/cross_origin.go` | `http.CrossOriginProtection` 全局保护浏览器写操作 |
 | RateLimit | `internal/middleware/ratelimit.go` | `RateLimit` |
 | NoCache | `internal/middleware/nocache.go` | `NoCache` |
-| 响应格式 | `internal/pkg/response/response.go` | `Success`, `BadRequest`(1001), `Unauthorized`(1002), `Forbidden`(1003), `NotFound`(1004), `InternalError`(1005), `RateLimit`(1006) |
+| 响应格式 | `internal/pkg/response/response.go` | 1001–1007，含 409 Conflict |
 | 限流配置 | `internal/router/router.go` | 登录 10/min, 发帖 30/min, 上传 20/min |
 
 ---
 
 ## 13. 配置与启动
 
-**功能**: YAML 配置加载、环境变量覆盖(5 项)、启动校验、Graceful Shutdown(10s 超时)
+**功能**: YAML 配置加载、环境变量覆盖、精确 trusted origins 校验、Graceful Shutdown(10s 超时)、Compose 生命周期命令
 
 | 层 | 文件 | 关键函数 |
 |----|------|---------|
@@ -210,6 +211,7 @@
 | Redis | `internal/repository/redis.go` | `InitRedis` |
 | 工具函数 | `internal/handler/helpers.go` | `userData` (头像缓存), `getPageSizePair`, `calcPages`, `respondPage` |
 | 配置模板 | `config.yaml.example` | |
+| Compose | `deploy/docker-compose.yml` | MySQL/Redis/MinIO/Qdrant/AI API/Worker；仅自动结构迁移 |
 
 ---
 
@@ -223,6 +225,21 @@
 | CSS | `web/static/css/style.css` |
 | CDN 依赖 | Bootstrap 5.3.3 + Bootstrap Icons 1.11.3 + Alpine.js 3.14.1 |
 | 静态资源 | `web/static/img/default-avatar.svg`, `placeholder.svg` |
+
+---
+
+## 15. IM 私聊与邀请制群组
+
+**功能**: 并发安全 DM、事务发消息、准确未读、邀请制群组、群主解散、普通成员退出、用户搜索、WebSocket 下行、在线状态、断线补偿和消息 ID 去重
+
+| 层 | 文件 | 关键能力 |
+|----|------|----------|
+| Router/Handler | `internal/router/router.go`, `internal/handler/chat_handler.go` | 完整 Chat API、错误映射、WS 认证/Origin |
+| Service | `internal/service/chat_service.go` | 权限、限制、精确未读、presence、Hub 扇出 |
+| Repository | `internal/repository/chat_repo.go`, `presence.go` | 事务、行锁、游标 SQL、Redis TTL |
+| WS | `internal/ws/hub.go`, `client.go` | 多连接、ping/pong、慢连接断开、会话吊销 |
+| Model/Migration | `internal/model/chat.go`, `009_chat.sql`, `010_chat_hardening.sql` | 3 表、级联/限制外键、孤儿预检 |
+| UI/Test | `web/templates/chat/chat.html`, `scripts/test_chat.sh` | 去重、恢复、群组操作、API 冒烟 |
 
 ---
 
@@ -241,12 +258,15 @@
 | `topic_posts` | `model/topic_post.go` | — (随 Topic) | `001_init.sql` |
 | `notifications` | `model/notification.go` | `notification_repo.go` | `007_notifications.sql` |
 | `system_logs` | `model/system_log.go` | `log_repo.go` | `001_init.sql` |
+| `conversations` | `model/chat.go` | `chat_repo.go` | `009_chat.sql`, `010_chat_hardening.sql` |
+| `conversation_members` | `model/chat.go` | `chat_repo.go` | `009_chat.sql`, `010_chat_hardening.sql` |
+| `messages` | `model/chat.go` | `chat_repo.go` | `009_chat.sql`, `010_chat_hardening.sql` |
 
 ---
 
-## 完整路由总览 (58 条)
+## 路由总览
 
-### API 路由 (38 条)
+### API 路由
 | 方法 | 路径 | Handler | 权限 | 限流 |
 |------|------|---------|------|------|
 | POST | `/api/v1/auth/register` | `authH.Register` | public | 10/min |
@@ -254,12 +274,14 @@
 | GET | `/api/v1/feed` | `feedH.GetFeed` | public | — |
 | GET | `/api/v1/search` | `feedH.Search` | public | — |
 | GET | `/api/v1/posts/:id` | `postH.GetByID` | public | — |
+| POST | `/api/v1/posts/:id/view` | `postH.RecordView` | public | — |
 | GET | `/api/v1/posts/:id/comments` | `socialH.GetComments` | public | — |
 | GET | `/api/v1/users/:id/following` | `socialH.GetFollowing` | public | — |
 | GET | `/api/v1/users/:id/followers` | `socialH.GetFollowers` | public | — |
 | POST | `/api/v1/auth/logout` | `authH.Logout` | user | — |
 | GET | `/api/v1/auth/me` | `authH.Me` | user | — |
 | PUT | `/api/v1/auth/profile` | `authH.UpdateProfile` | user | — |
+| PUT | `/api/v1/auth/password` | `authH.ChangePassword` | user | — |
 | POST | `/api/v1/posts` | `postH.Create` | user | 30/min |
 | PUT | `/api/v1/posts/:id` | `postH.Update` | user | — |
 | DELETE | `/api/v1/posts/:id` | `postH.Delete` | user | — |
@@ -271,12 +293,20 @@
 | POST | `/api/v1/posts/:id/comments` | `socialH.CreateComment` | user | — |
 | DELETE | `/api/v1/comments/:cid` | `socialH.DeleteComment` | user | — |
 | POST | `/api/v1/users/:id/follow` | `socialH.ToggleFollow` | user | — |
+| GET | `/api/v1/users/search` | `chatH.SearchUsers` | user | — |
 | POST | `/api/v1/upload` | `uploadH.UploadImage` | user | 20/min |
 | GET | `/api/v1/notifications` | `notifH.List` | user | — |
 | PUT | `/api/v1/notifications/:id/read` | `notifH.MarkRead` | user | — |
 | PUT | `/api/v1/notifications/read-all` | `notifH.MarkAllRead` | user | — |
 | GET | `/api/v1/notifications/unread-count` | `notifH.UnreadCount` | user | — |
-| ANY | `/api/v1/images/*objectName` | `uploadH.ServeImage` | public | — |
+| GET/HEAD | `/api/v1/images/*objectName` | `uploadH.ServeImage` | public | — |
+| GET/POST | `/api/v1/conversations`, `/api/v1/conversations` | `chatH.ListConversations/CreateConversation` | user | — |
+| GET/POST | `/api/v1/conversations/:id/messages` | `chatH.GetMessages/SendMessage` | user | — |
+| PUT | `/api/v1/conversations/:id/read` | `chatH.MarkRead` | user | — |
+| GET | `/api/v1/conversations/unread-count` | `chatH.UnreadCount` | user | — |
+| POST | `/api/v1/conversations/:id/members` | `chatH.InviteMembers` | owner | — |
+| DELETE | `/api/v1/conversations/:id/members/me` | `chatH.LeaveConversation` | member | — |
+| DELETE | `/api/v1/conversations/:id` | `chatH.DissolveConversation` | owner | — |
 | GET | `/api/v1/admin/stats` | `adminH.GetStats` | admin | — |
 | GET | `/api/v1/admin/pending-posts` | `adminH.GetPendingPosts` | admin | — |
 | DELETE | `/api/v1/admin/posts/:id` | `adminH.DeletePost` | admin | — |
@@ -286,7 +316,7 @@
 | PUT | `/api/v1/admin/users/:id/status` | `adminH.UpdateUserStatus` | admin | — |
 | GET | `/api/v1/admin/logs` | `adminH.GetLogs` | admin | — |
 
-### Web 页面路由 (16 条)
+### Web 页面路由
 | 方法 | 路径 | Handler | 权限 |
 |------|------|---------|------|
 | GET | `/` | `rootRedirect` | public (已登录分流) |
@@ -304,31 +334,35 @@
 | GET | `/user/:id` | `userH.ProfilePage` | user |
 | GET | `/settings` | `authH.SettingsPage` | user |
 | POST | `/settings` | `authH.WebSettings` | user |
-| GET | `/logout` | `authH.WebLogout` | user |
+| POST | `/logout` | `authH.WebLogout` | user |
 | GET | `/notifications` | `notifH.NotificationsPage` | user |
 | GET | `/topic/:id` | `topicH.TopicPage` | user |
+| GET | `/chat` | `chatH.ChatPage` | user |
 | GET | `/admin/` | `adminH.Dashboard` | admin |
 | GET | `/admin/review` | `adminH.Review` | admin |
 | GET | `/admin/users` | `adminH.UsersPage` | admin |
 | GET | `/admin/logs` | `adminH.LogsPage` | admin |
 
-### 其他 (2 条)
+### 其他
 | 方法 | 路径 | 说明 |
 |------|------|------|
 | GET | `/healthz` | 健康检查 |
+| GET | `/ws` | WebSocket，完整登录缓存与 Origin 校验 |
 | Static | `/static/*` | 静态文件服务 |
 
 ---
 
-## 迁移文件清单 (8 个)
+## 迁移文件清单（10 个）
 
 | 文件 | 内容 |
 |------|------|
 | `migrations/001_init.sql` | 10 张表 + 触发器 + 视图 + 存储过程 + 默认 admin 账号 |
-| `migrations/002_seed.sql` | 50 用户 + ~130 帖子测试数据 |
+| `migrations/002_seed.sql` | 可选开发管理员 + 50 用户 + 演示帖子；Compose 不自动执行 |
 | `migrations/003_triggers.sql` | 系统日志触发器 (like/unlike/comment/post) |
 | `migrations/004_clean_demo_posts.sql` | 清理演示占位数据 |
 | `migrations/005_repost.sql` | 转帖系统 (is_repost, repost_of_id, repost_text) |
 | `migrations/006_fulltext.sql` | `posts.content` FULLTEXT ngram 索引 |
 | `migrations/007_notifications.sql` | `notifications` 通知表 |
 | `migrations/008_reply_to_uid_index.sql` | `comments.reply_to_uid` 索引 |
+| `migrations/009_chat.sql` | conversations / conversation_members / messages |
+| `migrations/010_chat_hardening.sql` | 孤儿预检、owner NULL 化、级联/限制外键 |

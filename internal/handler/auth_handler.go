@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"context"
 	"log/slog"
 	"net/http"
 	"net/url"
@@ -14,10 +13,23 @@ import (
 )
 
 type AuthHandler struct {
-	svc *service.AuthService
+	svc          *service.AuthService
+	disconnector interface{ DisconnectUser(int64) }
 }
 
-func NewAuthHandler() *AuthHandler { return &AuthHandler{svc: service.NewAuthService()} }
+func NewAuthHandler(disconnector ...interface{ DisconnectUser(int64) }) *AuthHandler {
+	h := &AuthHandler{svc: service.NewAuthService()}
+	if len(disconnector) > 0 {
+		h.disconnector = disconnector[0]
+	}
+	return h
+}
+
+func (h *AuthHandler) disconnectUser(userID int64) {
+	if h.disconnector != nil && userID > 0 {
+		h.disconnector.DisconnectUser(userID)
+	}
+}
 
 func (h *AuthHandler) Register(c *gin.Context) {
 	var req service.RegisterReq
@@ -70,9 +82,10 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 	// Delete login cache to immediately invalidate the session
 	userID := c.GetInt64("user_id")
 	if userID > 0 {
-		if err := repository.DeleteLoginToken(context.Background(), userID); err != nil {
+		if err := repository.DeleteLoginToken(c.Request.Context(), userID); err != nil {
 			slog.Warn("failed to delete login cache", "user_id", userID, "err", err)
 		}
+		h.disconnectUser(userID)
 	}
 	http.SetCookie(c.Writer, &http.Cookie{
 		Name:     "token",
@@ -216,9 +229,10 @@ func (h *AuthHandler) WebLogout(c *gin.Context) {
 	// Delete login cache to immediately invalidate the session
 	userID := c.GetInt64("user_id")
 	if userID > 0 {
-		if err := repository.DeleteLoginToken(context.Background(), userID); err != nil {
+		if err := repository.DeleteLoginToken(c.Request.Context(), userID); err != nil {
 			slog.Warn("failed to delete login cache on web logout", "user_id", userID, "err", err)
 		}
+		h.disconnectUser(userID)
 	}
 	http.SetCookie(c.Writer, &http.Cookie{
 		Name:     "token",
@@ -247,6 +261,7 @@ func (h *AuthHandler) ChangePassword(c *gin.Context) {
 		response.BadRequest(c, err.Error())
 		return
 	}
+	h.disconnectUser(userID)
 	response.Success(c, nil)
 }
 
@@ -262,6 +277,7 @@ func (h *AuthHandler) WebChangePassword(c *gin.Context) {
 		}))
 		return
 	}
+	h.disconnectUser(userID)
 	// Force re-login: clear cookie and redirect
 	http.SetCookie(c.Writer, &http.Cookie{
 		Name: "token", Value: "", Path: "/", MaxAge: -1,

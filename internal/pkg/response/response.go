@@ -22,6 +22,7 @@ const (
 	ErrCodeNotFound     = 1004
 	ErrCodeInternal     = 1005
 	ErrCodeRateLimit    = 1006
+	ErrCodeConflict     = 1007
 )
 
 func Success(c *gin.Context, data interface{}) {
@@ -61,6 +62,10 @@ func Forbidden(c *gin.Context, message string) {
 
 func NotFound(c *gin.Context, message string) {
 	Error(c, http.StatusNotFound, ErrCodeNotFound, message)
+}
+
+func Conflict(c *gin.Context, message string) {
+	Error(c, http.StatusConflict, ErrCodeConflict, message)
 }
 
 func InternalError(c *gin.Context, message string) {

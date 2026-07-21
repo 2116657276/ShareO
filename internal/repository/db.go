@@ -2,7 +2,7 @@ package repository
 
 import (
 	"fmt"
-	"log"
+	"log/slog"
 	"time"
 
 	"github.com/zhoujianlin/ShareO/internal/config"
@@ -34,7 +34,7 @@ func InitDB(cfg config.DatabaseConfig, mode string) error {
 	sqlDB.SetMaxOpenConns(cfg.MaxOpenConns)
 	sqlDB.SetConnMaxLifetime(time.Duration(cfg.ConnMaxLifetime) * time.Second)
 
-	log.Println("MySQL connected successfully")
+	slog.Info("MySQL connected successfully")
 
 	// Detect FULLTEXT index availability
 	DetectFulltext()

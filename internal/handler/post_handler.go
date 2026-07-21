@@ -86,6 +86,19 @@ func (h *PostHandler) GetByID(c *gin.Context) {
 	response.Success(c, post)
 }
 
+func (h *PostHandler) RecordView(c *gin.Context) {
+	postID := getInt64Param(c, "id")
+	if postID <= 0 {
+		response.BadRequest(c, "无效的帖子 ID")
+		return
+	}
+	if err := h.svc.RecordView(postID, c.GetInt64("user_id")); err != nil {
+		response.NotFound(c, "帖子不存在")
+		return
+	}
+	response.Success(c, nil)
+}
+
 // --- Web page handlers ---
 
 func (h *PostHandler) CreatePage(c *gin.Context) {

@@ -2,7 +2,7 @@ package repository
 
 import (
 	"errors"
-	"log"
+	"log/slog"
 
 	"github.com/zhoujianlin/ShareO/internal/model"
 	"gorm.io/gorm"
@@ -27,7 +27,7 @@ func (r *LikeRepo) Toggle(userID, postID int64) (bool, error) {
 			// Sync post like_count via COUNT (idempotent, safe with triggers)
 			if syncErr := tx.Model(&model.Post{}).Where("id = ?", postID).UpdateColumn("like_count",
 				gorm.Expr("(SELECT COUNT(*) FROM likes WHERE post_id = ?)", postID)).Error; syncErr != nil {
-				log.Printf("LikeRepo.Toggle(unlike): failed to sync like_count for post %d: %v", postID, syncErr)
+				slog.Warn("failed to sync post like count", "action", "unlike", "post_id", postID, "err", syncErr)
 			}
 			liked = false
 			return nil
@@ -41,7 +41,7 @@ func (r *LikeRepo) Toggle(userID, postID int64) (bool, error) {
 			// Sync post like_count via COUNT (idempotent, safe with triggers)
 			if syncErr := tx.Model(&model.Post{}).Where("id = ?", postID).UpdateColumn("like_count",
 				gorm.Expr("(SELECT COUNT(*) FROM likes WHERE post_id = ?)", postID)).Error; syncErr != nil {
-				log.Printf("LikeRepo.Toggle(like): failed to sync like_count for post %d: %v", postID, syncErr)
+				slog.Warn("failed to sync post like count", "action", "like", "post_id", postID, "err", syncErr)
 			}
 			liked = true
 			return nil
@@ -54,7 +54,7 @@ func (r *LikeRepo) Toggle(userID, postID int64) (bool, error) {
 func (r *LikeRepo) CountTotal() int64 {
 	var count int64
 	if err := DB.Model(&model.Like{}).Count(&count).Error; err != nil {
-		log.Printf("LikeRepo.CountTotal: %v", err)
+		slog.Warn("failed to count likes", "err", err)
 	}
 	return count
 }
@@ -62,7 +62,7 @@ func (r *LikeRepo) CountTotal() int64 {
 func (r *LikeRepo) IsLiked(userID, postID int64) bool {
 	var count int64
 	if err := DB.Model(&model.Like{}).Where("user_id = ? AND post_id = ?", userID, postID).Count(&count).Error; err != nil {
-		log.Printf("LikeRepo.IsLiked(%d, %d): %v", userID, postID, err)
+		slog.Warn("failed to query like state", "user_id", userID, "post_id", postID, "err", err)
 	}
 	return count > 0
 }

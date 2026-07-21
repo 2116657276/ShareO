@@ -3,7 +3,7 @@ package service
 import (
 	"context"
 	"encoding/json"
-	"log"
+	"log/slog"
 	"time"
 
 	"github.com/zhoujianlin/ShareO/internal/model"
@@ -150,9 +150,9 @@ func (s *FeedService) getCachedFeed() ([]model.Post, int64, bool) {
 	// Re-query from DB to get fresh data (avatars, usernames, etc.)
 	posts, err := s.postRepo.FindByIDs(data.PostIDs)
 	if err != nil {
-		log.Printf("FeedService.getCachedFeed: failed to re-query posts from cache IDs: %v", err)
+		slog.Warn("failed to re-query cached feed posts", "err", err)
 		return nil, 0, false
 	}
-	log.Println("feed served from Redis cache (IDs only, re-queried)")
+	slog.Debug("feed served from Redis cache", "cache_format", "ids")
 	return posts, data.Total, true
 }

@@ -3,79 +3,222 @@ package service
 import (
 	"context"
 	"errors"
-	"log"
-	"strconv"
+	"fmt"
+	"log/slog"
+	"strings"
 	"time"
 
 	"github.com/zhoujianlin/ShareO/internal/model"
-	"github.com/zhoujianlin/ShareO/internal/repository"
-	"github.com/zhoujianlin/ShareO/internal/ws"
+	"gorm.io/gorm"
 )
 
-// ChatService handles IM business logic: conversations, messages, read tracking.
+const (
+	MaxMessageLength = 2000
+	MaxGroupTitle    = 100
+	MaxGroupMembers  = 50
+	presenceTTL      = 60 * time.Second
+)
+
+var (
+	ErrChatInvalid   = errors.New("chat invalid input")
+	ErrChatForbidden = errors.New("chat forbidden")
+	ErrChatNotFound  = errors.New("chat not found")
+	ErrChatConflict  = errors.New("chat conflict")
+)
+
+type ChatRepository interface {
+	ValidateActiveUsers(context.Context, []int64) error
+	EnsureDM(context.Context, int64, int64) (*model.Conversation, error)
+	CreateGroup(context.Context, int64, string, []int64) (*model.Conversation, error)
+	GetConversation(context.Context, int64) (*model.Conversation, error)
+	ListConversations(context.Context, int64) ([]model.Conversation, error)
+	IsMember(context.Context, int64, int64) (bool, error)
+	GetMembers(context.Context, int64) ([]model.ConversationMember, error)
+	AddMembers(context.Context, int64, []int64, int) (bool, error)
+	RemoveMember(context.Context, int64, int64) error
+	DissolveGroup(context.Context, int64) error
+	CreateMessage(context.Context, *model.Message) error
+	GetMessages(context.Context, int64, int64, int64, int) ([]model.Message, error)
+	GetLastMessage(context.Context, int64) (*model.Message, error)
+	GetRecentMessages(context.Context, int64, int) ([]model.Message, error)
+	UpdateReadMarker(context.Context, int64, int64, int64) error
+	GetUnreadCount(context.Context, int64) (int64, error)
+	GetConversationUnreadCount(context.Context, int64, int64) (int64, error)
+	SearchActiveUsers(context.Context, string, int64, int) ([]model.User, error)
+}
+
+type PresenceStore interface {
+	SetOnline(context.Context, int64, time.Duration) error
+	SetOffline(context.Context, int64) error
+	IsOnline(context.Context, int64) (bool, error)
+}
+
+type MessageHub interface {
+	SendToUsers([]int64, any)
+	IsOnline(int64) bool
+	DisconnectUser(int64)
+}
+
 type ChatService struct {
-	chatRepo *repository.ChatRepo
-	userRepo *repository.UserRepo
-	hub      *ws.Hub
+	repo     ChatRepository
+	presence PresenceStore
+	hub      MessageHub
 }
 
-// NewChatService creates a ChatService with injected dependencies.
-func NewChatService(chatRepo *repository.ChatRepo, userRepo *repository.UserRepo, hub *ws.Hub) *ChatService {
-	return &ChatService{chatRepo: chatRepo, userRepo: userRepo, hub: hub}
+func NewChatService(repo ChatRepository, presence PresenceStore, hub MessageHub) *ChatService {
+	return &ChatService{repo: repo, presence: presence, hub: hub}
 }
 
-// --- Conversations ---
+func chatError(kind error, message string) error { return fmt.Errorf("%w: %s", kind, message) }
 
-// EnsureDM returns the DM conversation between two users, creating it if necessary.
+func normalizeIDs(ids []int64, excluded int64) ([]int64, error) {
+	seen := make(map[int64]struct{}, len(ids))
+	result := make([]int64, 0, len(ids))
+	for _, id := range ids {
+		if id <= 0 {
+			return nil, chatError(ErrChatInvalid, "用户 ID 无效")
+		}
+		if id == excluded {
+			continue
+		}
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		seen[id] = struct{}{}
+		result = append(result, id)
+	}
+	return result, nil
+}
+
 func (s *ChatService) EnsureDM(ctx context.Context, user1ID, user2ID int64) (*model.Conversation, error) {
-	if user1ID == user2ID {
-		return nil, errors.New("不能和自己创建私聊")
+	if user2ID <= 0 || user1ID == user2ID {
+		return nil, chatError(ErrChatInvalid, "不能和自己或无效用户创建私聊")
 	}
-	return s.chatRepo.EnsureDM(ctx, user1ID, user2ID)
+	if err := s.repo.ValidateActiveUsers(ctx, []int64{user1ID, user2ID}); err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, chatError(ErrChatNotFound, "用户不存在或不可用")
+		}
+		return nil, err
+	}
+	return s.repo.EnsureDM(ctx, user1ID, user2ID)
 }
 
-// CreateGroup creates a new group conversation.
 func (s *ChatService) CreateGroup(ctx context.Context, ownerID int64, title string, memberIDs []int64) (*model.Conversation, error) {
-	if title == "" {
-		return nil, errors.New("群组名称不能为空")
+	title = strings.TrimSpace(title)
+	if title == "" || len([]rune(title)) > MaxGroupTitle {
+		return nil, chatError(ErrChatInvalid, "群组名称长度必须为 1-100 个字符")
 	}
-	if len(memberIDs) == 0 {
-		return nil, errors.New("至少需要邀请一位成员")
+	members, err := normalizeIDs(memberIDs, ownerID)
+	if err != nil {
+		return nil, err
 	}
-	return s.chatRepo.CreateGroup(ctx, ownerID, title, memberIDs)
+	if len(members) == 0 {
+		return nil, chatError(ErrChatInvalid, "至少需要邀请一位成员")
+	}
+	if len(members)+1 > MaxGroupMembers {
+		return nil, chatError(ErrChatInvalid, "群组成员不能超过 50 人")
+	}
+	if err := s.repo.ValidateActiveUsers(ctx, append(members, ownerID)); err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, chatError(ErrChatNotFound, "邀请的用户不存在或不可用")
+		}
+		return nil, err
+	}
+	return s.repo.CreateGroup(ctx, ownerID, title, members)
 }
 
-// JoinGroup adds a user to a group conversation.
-func (s *ChatService) JoinGroup(ctx context.Context, convID, userID int64) error {
-	conv, err := s.chatRepo.GetConversation(ctx, convID)
+func (s *ChatService) InviteMembers(ctx context.Context, convID, ownerID int64, userIDs []int64) error {
+	conv, err := s.conversation(ctx, convID)
 	if err != nil {
 		return err
 	}
-	if conv.Type != model.ConvTypeGroup {
-		return errors.New("只能加入群组")
+	if conv.Type != model.ConvTypeGroup || !isOwner(conv, ownerID) {
+		return chatError(ErrChatForbidden, "仅群主可以邀请成员")
 	}
-	return s.chatRepo.AddMember(ctx, convID, userID)
+	ids, err := normalizeIDs(userIDs, ownerID)
+	if err != nil {
+		return err
+	}
+	if len(ids) == 0 {
+		return chatError(ErrChatInvalid, "至少选择一位成员")
+	}
+	current, err := s.repo.GetMembers(ctx, convID)
+	if err != nil {
+		return err
+	}
+	existing := make(map[int64]struct{}, len(current))
+	for _, member := range current {
+		existing[member.UserID] = struct{}{}
+	}
+	filtered := ids[:0]
+	for _, id := range ids {
+		if _, ok := existing[id]; !ok {
+			filtered = append(filtered, id)
+		}
+	}
+	if len(current)+len(filtered) > MaxGroupMembers {
+		return chatError(ErrChatConflict, "群组成员不能超过 50 人")
+	}
+	if len(filtered) == 0 {
+		return nil
+	}
+	if err := s.repo.ValidateActiveUsers(ctx, filtered); err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return chatError(ErrChatNotFound, "邀请的用户不存在或不可用")
+		}
+		return err
+	}
+	withinLimit, err := s.repo.AddMembers(ctx, convID, filtered, MaxGroupMembers)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return chatError(ErrChatNotFound, "会话不存在")
+		}
+		return err
+	}
+	if !withinLimit {
+		return chatError(ErrChatConflict, "群组成员不能超过 50 人")
+	}
+	return nil
 }
 
-// LeaveGroup removes a user from a group conversation.
-// The owner cannot leave — they must transfer ownership or dissolve the group first.
 func (s *ChatService) LeaveGroup(ctx context.Context, convID, userID int64) error {
-	conv, err := s.chatRepo.GetConversation(ctx, convID)
+	conv, err := s.conversation(ctx, convID)
 	if err != nil {
 		return err
 	}
 	if conv.Type != model.ConvTypeGroup {
-		return errors.New("私聊不能退出")
+		return chatError(ErrChatInvalid, "私聊不能退出")
 	}
-	if conv.OwnerID == userID {
-		return errors.New("群主不能退出，请先转让群主或解散群组")
+	if isOwner(conv, userID) {
+		return chatError(ErrChatConflict, "群主不能退出，只能解散群组")
 	}
-	return s.chatRepo.RemoveMember(ctx, convID, userID)
+	member, err := s.repo.IsMember(ctx, convID, userID)
+	if err != nil {
+		return err
+	}
+	if !member {
+		return chatError(ErrChatForbidden, "不是该群组的成员")
+	}
+	return s.repo.RemoveMember(ctx, convID, userID)
 }
 
-// --- Messages ---
+func (s *ChatService) DissolveGroup(ctx context.Context, convID, userID int64) error {
+	conv, err := s.conversation(ctx, convID)
+	if err != nil {
+		return err
+	}
+	if conv.Type != model.ConvTypeGroup || !isOwner(conv, userID) {
+		return chatError(ErrChatForbidden, "仅群主可以解散群组")
+	}
+	if err := s.repo.DissolveGroup(ctx, convID); err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return chatError(ErrChatNotFound, "会话不存在")
+		}
+		return err
+	}
+	return nil
+}
 
-// WsMessage is the JSON payload sent over WebSocket for a new message.
 type WsMessage struct {
 	Type string        `json:"type"`
 	Data WsMessageData `json:"data"`
@@ -85,147 +228,179 @@ type WsMessageData struct {
 	Message *model.Message `json:"message"`
 }
 
-// SendMessage validates membership, saves the message, and pushes to online members.
 func (s *ChatService) SendMessage(ctx context.Context, senderID, convID int64, content string) (*model.Message, error) {
-	if content == "" {
-		return nil, errors.New("消息内容不能为空")
+	content = strings.TrimSpace(content)
+	if content == "" || len([]rune(content)) > MaxMessageLength {
+		return nil, chatError(ErrChatInvalid, "消息长度必须为 1-2000 个字符")
 	}
-	if !s.chatRepo.IsMember(ctx, convID, senderID) {
-		return nil, errors.New("不是该会话的成员")
-	}
-
-	msg := &model.Message{
-		ConversationID: convID,
-		SenderID:       senderID,
-		Content:        content,
-	}
-	if err := s.chatRepo.CreateMessage(ctx, msg); err != nil {
+	if err := s.requireMember(ctx, convID, senderID); err != nil {
 		return nil, err
 	}
-
-	// Push to online members of the conversation
-	members, err := s.chatRepo.GetMembers(ctx, convID)
+	message := &model.Message{ConversationID: convID, SenderID: senderID, Content: content}
+	if err := s.repo.CreateMessage(ctx, message); err != nil {
+		return nil, err
+	}
+	members, err := s.repo.GetMembers(ctx, convID)
 	if err != nil {
-		log.Printf("ChatService.SendMessage: failed to get members for push: %v", err)
-		return msg, nil // message is saved, push failure is non-fatal
+		// The message is already committed. Clients recover it through after_id,
+		// so report success while retaining an operational signal.
+		slog.Warn("message committed but websocket fanout members could not be loaded",
+			"conv_id", convID, "message_id", message.ID, "err", err)
+		return message, nil
 	}
-
-	memberIDs := make([]int64, len(members))
-	for i, m := range members {
-		memberIDs[i] = m.UserID
+	memberIDs := make([]int64, 0, len(members))
+	for _, member := range members {
+		memberIDs = append(memberIDs, member.UserID)
 	}
-
-	// Update the conversation's updated_at via a simple touch
-	// (We don't need explicit update — the message creation itself signals activity)
-
-	s.hub.SendToUsers(memberIDs, WsMessage{
-		Type: "new_message",
-		Data: WsMessageData{Message: msg},
-	})
-
-	return msg, nil
+	s.hub.SendToUsers(memberIDs, WsMessage{Type: "new_message", Data: WsMessageData{Message: message}})
+	return message, nil
 }
 
-// GetMessages returns message history using cursor-based pagination.
-func (s *ChatService) GetMessages(ctx context.Context, convID, userID int64, beforeID int64, limit int) ([]model.Message, error) {
-	if !s.chatRepo.IsMember(ctx, convID, userID) {
-		return nil, errors.New("不是该会话的成员")
+func (s *ChatService) GetMessages(ctx context.Context, convID, userID, beforeID, afterID int64, limit int) ([]model.Message, error) {
+	if beforeID > 0 && afterID > 0 {
+		return nil, chatError(ErrChatInvalid, "before_id 与 after_id 不能同时使用")
 	}
-	return s.chatRepo.GetMessages(ctx, convID, beforeID, limit)
+	if err := s.requireMember(ctx, convID, userID); err != nil {
+		return nil, err
+	}
+	return s.repo.GetMessages(ctx, convID, beforeID, afterID, limit)
 }
 
-// --- Read tracking ---
-
-// MarkRead marks messages up to messageID as read for the user in this conversation.
 func (s *ChatService) MarkRead(ctx context.Context, convID, userID, messageID int64) error {
-	if !s.chatRepo.IsMember(ctx, convID, userID) {
-		return errors.New("不是该会话的成员")
+	if messageID <= 0 {
+		return chatError(ErrChatInvalid, "消息 ID 无效")
 	}
-	return s.chatRepo.UpdateReadMarker(ctx, convID, userID, messageID)
+	if err := s.requireMember(ctx, convID, userID); err != nil {
+		return err
+	}
+	if err := s.repo.UpdateReadMarker(ctx, convID, userID, messageID); err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return chatError(ErrChatNotFound, "消息不存在")
+		}
+		return err
+	}
+	return nil
 }
 
-// UnreadCount returns the total unread message count across all conversations.
 func (s *ChatService) UnreadCount(ctx context.Context, userID int64) (int64, error) {
-	return s.chatRepo.GetUnreadCount(ctx, userID)
+	return s.repo.GetUnreadCount(ctx, userID)
 }
 
-// --- List ---
-
-// ConversationWithMeta enriches a conversation with last message, members, and unread count.
 type ConversationWithMeta struct {
 	model.Conversation
 	LastMessage *model.Message             `json:"last_message,omitempty"`
 	Members     []model.ConversationMember `json:"members,omitempty"`
 	UnreadCount int64                      `json:"unread_count"`
+	Online      bool                       `json:"online"`
 }
 
-// ListConversations returns all conversations for a user with metadata.
 func (s *ChatService) ListConversations(ctx context.Context, userID int64) ([]ConversationWithMeta, error) {
-	convs, err := s.chatRepo.ListConversations(ctx, userID)
+	conversations, err := s.repo.ListConversations(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
-
-	result := make([]ConversationWithMeta, 0, len(convs))
-	for _, conv := range convs {
-		// Get last message
-		lastMsg, _ := s.chatRepo.GetLastMessage(ctx, conv.ID)
-
-		// Get members
-		members, _ := s.chatRepo.GetMembers(ctx, conv.ID)
-
-		// Get unread count for this user
-		lastReadID, _ := s.chatRepo.GetLastReadMessageID(ctx, conv.ID, userID)
-		var unread int64
-		if lastMsg != nil && lastMsg.ID > lastReadID {
-			// Count messages > last_read up to last message
-			msgs, _ := s.chatRepo.GetMessages(ctx, conv.ID, 0, 1)
-			if len(msgs) > 0 && msgs[0].ID > lastReadID {
-				// Approximate: count all messages since last_read (simplified for v1)
-				unread = 1 // at least one unread if latest > lastRead
-			}
+	result := make([]ConversationWithMeta, 0, len(conversations))
+	for _, conv := range conversations {
+		lastMessage, err := s.repo.GetLastMessage(ctx, conv.ID)
+		if err != nil {
+			return nil, err
 		}
-
-		// For DM, use the other user's info for display
-		if conv.Type == model.ConvTypeDM && conv.Title == "" {
-			for _, m := range members {
-				if m.UserID != userID && m.User != nil {
-					conv.Title = m.User.Username
+		members, err := s.repo.GetMembers(ctx, conv.ID)
+		if err != nil {
+			return nil, err
+		}
+		unread, err := s.repo.GetConversationUnreadCount(ctx, conv.ID, userID)
+		if err != nil {
+			return nil, err
+		}
+		online := false
+		if conv.Type == model.ConvTypeDM {
+			for _, member := range members {
+				if member.UserID != userID && member.User != nil {
+					conv.Title = member.User.Username
+					online = s.IsUserOnline(ctx, member.UserID)
 					break
 				}
 			}
 		}
-
 		result = append(result, ConversationWithMeta{
-			Conversation: conv,
-			LastMessage:  lastMsg,
-			Members:      members,
-			UnreadCount:  unread,
+			Conversation: conv, LastMessage: lastMessage, Members: members,
+			UnreadCount: unread, Online: online,
 		})
 	}
-
 	return result, nil
 }
 
-// --- Online status ---
-
-// SetUserOnline records a user as online in Redis with a 60s TTL.
-// Called from the WS upgrade handler; heartbeat is refreshed via WS pings.
-func (s *ChatService) SetUserOnline(ctx context.Context, userID int64) error {
-	return repository.RDB.Set(ctx, onlineKey(userID), time.Now().Unix(), 60*time.Second).Err()
+func (s *ChatService) SearchUsers(ctx context.Context, query string, callerID int64, limit int) ([]model.User, error) {
+	query = strings.TrimSpace(query)
+	if query == "" {
+		return nil, chatError(ErrChatInvalid, "搜索关键词不能为空")
+	}
+	if limit <= 0 || limit > 20 {
+		limit = 20
+	}
+	return s.repo.SearchActiveUsers(ctx, query, callerID, limit)
 }
 
-// IsUserOnline checks if a user has an active WebSocket connection.
+func (s *ChatService) SetUserOnline(ctx context.Context, userID int64) error {
+	return s.presence.SetOnline(ctx, userID, presenceTTL)
+}
+
+func (s *ChatService) SetUserOffline(ctx context.Context, userID int64) error {
+	if s.hub.IsOnline(userID) {
+		return nil
+	}
+	return s.presence.SetOffline(ctx, userID)
+}
+
 func (s *ChatService) IsUserOnline(ctx context.Context, userID int64) bool {
-	// First check the in-memory Hub (fast path)
 	if s.hub.IsOnline(userID) {
 		return true
 	}
-	// Fallback to Redis (catches edge cases where hub state is stale)
-	val, err := repository.RDB.Get(ctx, onlineKey(userID)).Result()
-	return err == nil && val != ""
+	online, err := s.presence.IsOnline(ctx, userID)
+	return err == nil && online
 }
 
-func onlineKey(userID int64) string {
-	return "ws:online:" + strconv.FormatInt(userID, 10)
+func (s *ChatService) DisconnectUser(userID int64) { s.hub.DisconnectUser(userID) }
+
+func (s *ChatService) ValidateUser(ctx context.Context, userID int64) error {
+	if userID <= 0 {
+		return chatError(ErrChatForbidden, "账号不可用")
+	}
+	if err := s.repo.ValidateActiveUsers(ctx, []int64{userID}); err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return chatError(ErrChatForbidden, "账号不可用")
+		}
+		return err
+	}
+	return nil
+}
+
+func isOwner(conv *model.Conversation, userID int64) bool {
+	return conv.OwnerID != nil && *conv.OwnerID == userID
+}
+
+func (s *ChatService) conversation(ctx context.Context, convID int64) (*model.Conversation, error) {
+	if convID <= 0 {
+		return nil, chatError(ErrChatInvalid, "会话 ID 无效")
+	}
+	conv, err := s.repo.GetConversation(ctx, convID)
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, chatError(ErrChatNotFound, "会话不存在")
+	}
+	return conv, err
+}
+
+func (s *ChatService) requireMember(ctx context.Context, convID, userID int64) error {
+	if _, err := s.conversation(ctx, convID); err != nil {
+		return err
+	}
+	member, err := s.repo.IsMember(ctx, convID, userID)
+	if err != nil {
+		return err
+	}
+	if !member {
+		return chatError(ErrChatForbidden, "不是该会话的成员")
+	}
+	return nil
 }

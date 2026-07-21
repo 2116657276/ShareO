@@ -2,7 +2,7 @@ package service
 
 import (
 	"errors"
-	"log"
+	"log/slog"
 
 	"github.com/zhoujianlin/ShareO/internal/model"
 	"github.com/zhoujianlin/ShareO/internal/repository"
@@ -92,7 +92,7 @@ func (s *PostService) Update(userID, postID int64, content string) (*model.Post,
 		topicIDs := s.resolveTopicIDsInTx(tx, content, nil)
 		return s.topicRepo.ReplacePostTopics(tx, postID, topicIDs)
 	}); err != nil {
-		log.Printf("PostService.Update: failed to re-associate topics for post %d: %v", postID, err)
+		slog.Warn("failed to re-associate post topics", "post_id", postID, "err", err)
 	}
 
 	// Re-fetch to get fresh data (updated_at, etc.)
@@ -107,7 +107,7 @@ func (s *PostService) resolveTopicIDsInTx(tx *gorm.DB, content string, explicit 
 	for _, tag := range ParseHashtags(content) {
 		topic, _, err := s.topicRepo.FindOrCreateWithTx(tx, tag)
 		if err != nil {
-			log.Printf("PostService.resolveTopicIDsInTx: failed to resolve topic %q: %v", tag, err)
+			slog.Warn("failed to resolve post topic", "topic", tag, "err", err)
 			continue
 		}
 		if topic != nil && !seen[topic.ID] {
@@ -195,14 +195,23 @@ func (s *PostService) GetByID(postID int64, currentUserID int64) (*model.Post, e
 		return nil, errors.New("帖子不存在")
 	}
 
-	// Don't count the author's own views
-	if post.UserID != currentUserID {
-		s.postRepo.IncrementView(postID)
-	}
-
 	if currentUserID > 0 {
 		post.IsLiked = s.likeRepo.IsLiked(currentUserID, postID)
 		post.IsFavorited = s.favoriteRepo.IsFavorited(currentUserID, postID)
 	}
 	return post, nil
+}
+
+// RecordView is deliberately separate from GET so that rendering and API reads
+// remain side-effect free. Repeated views are still counted by the existing
+// product policy, except for an author's own post.
+func (s *PostService) RecordView(postID, currentUserID int64) error {
+	post, err := s.GetByID(postID, currentUserID)
+	if err != nil {
+		return err
+	}
+	if post.UserID != currentUserID {
+		s.postRepo.IncrementView(postID)
+	}
+	return nil
 }

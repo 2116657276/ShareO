@@ -1,5 +1,3 @@
-version: "3.8"
-
 services:
   mysql:
     image: mysql:8.0
@@ -8,9 +6,10 @@ services:
       MYSQL_DATABASE: shareo
     volumes:
       - mysql_data:/var/lib/mysql
-      - ../migrations:/docker-entrypoint-initdb.d
+      - ../migrations:/migrations:ro
+      - ./mysql-init/001_schema.sh:/docker-entrypoint-initdb.d/001_schema.sh:ro
     ports:
-      - "3306:3306"
+      - "${SHAREO_MYSQL_PORT:-3306}:3306"
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
       interval: 10s
@@ -20,7 +19,7 @@ services:
   redis:
     image: redis:7-alpine
     ports:
-      - "6379:6379"
+      - "${SHAREO_REDIS_PORT:-6379}:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -28,7 +27,7 @@ services:
       retries: 5
 
   minio:
-    image: minio/minio:latest
+    image: minio/minio:RELEASE.2025-09-07T16-13-09Z@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e
     command: server /data --console-address ":9001"
     environment:
       MINIO_ROOT_USER: ${SHAREO_MINIO_ACCESS_KEY:-minioadmin}
@@ -36,8 +35,8 @@ services:
     volumes:
       - minio_data:/data
     ports:
-      - "9000:9000"
-      - "9001:9001"
+      - "${SHAREO_MINIO_PORT:-9000}:9000"
+      - "${SHAREO_MINIO_CONSOLE_PORT:-9001}:9001"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
       interval: 10s
@@ -45,12 +44,47 @@ services:
       retries: 3
 
   qdrant:
-    image: qdrant/qdrant:latest
+    image: qdrant/qdrant:v1.18.2@sha256:75eab8c4ba42096724fdcfde8b4de0b5713d529dde32f285a1f86fdcb2c9e50c
     ports:
-      - "6333:6333"
-      - "6334:6334"
+      - "${SHAREO_QDRANT_HTTP_PORT:-6333}:6333"
+      - "${SHAREO_QDRANT_GRPC_PORT:-6334}:6334"
     volumes:
       - qdrant_data:/qdrant/storage
+
+  ai-service:
+    build:
+      context: ../ai-service
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    environment:
+      SHAREO_AI_REDIS_URL: redis://redis:6379/0
+      SHAREO_AI_QDRANT_URL: http://qdrant:6333
+    ports:
+      - "${SHAREO_AI_PORT:-8000}:8000"
+    depends_on:
+      redis:
+        condition: service_healthy
+      qdrant:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/readyz', timeout=2)"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  ai-worker:
+    build:
+      context: ../ai-service
+    command: ["python", "-m", "app.workers"]
+    environment:
+      SHAREO_AI_REDIS_URL: redis://redis:6379/0
+      SHAREO_AI_QDRANT_URL: http://qdrant:6333
+    depends_on:
+      redis:
+        condition: service_healthy
+      qdrant:
+        condition: service_started
+    restart: unless-stopped
 
 volumes:
   mysql_data:

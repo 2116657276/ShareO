@@ -1,19 +1,28 @@
 package handler
 
 import (
+	"log/slog"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
 	"github.com/zhoujianlin/ShareO/internal/model"
 	"github.com/zhoujianlin/ShareO/internal/pkg/response"
+	"github.com/zhoujianlin/ShareO/internal/repository"
 	"github.com/zhoujianlin/ShareO/internal/service"
 )
 
 type AdminHandler struct {
-	svc *service.AdminService
+	svc          *service.AdminService
+	disconnector interface{ DisconnectUser(int64) }
 }
 
-func NewAdminHandler() *AdminHandler { return &AdminHandler{svc: service.NewAdminService()} }
+func NewAdminHandler(disconnector ...interface{ DisconnectUser(int64) }) *AdminHandler {
+	h := &AdminHandler{svc: service.NewAdminService()}
+	if len(disconnector) > 0 {
+		h.disconnector = disconnector[0]
+	}
+	return h
+}
 
 // --- Dashboard ---
 
@@ -158,6 +167,12 @@ func (h *AdminHandler) UpdateUserStatus(c *gin.Context) {
 	if err := h.svc.UpdateUserStatus(adminID, userID, req.Status); err != nil {
 		response.BadRequest(c, err.Error())
 		return
+	}
+	if req.Status == model.UserStatusBanned && h.disconnector != nil {
+		if err := repository.DeleteLoginToken(c.Request.Context(), userID); err != nil {
+			slog.Warn("failed to revoke banned user's login cache", "user_id", userID, "err", err)
+		}
+		h.disconnector.DisconnectUser(userID)
 	}
 	response.Success(c, nil)
 }

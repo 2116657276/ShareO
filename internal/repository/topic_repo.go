@@ -2,7 +2,7 @@ package repository
 
 import (
 	"errors"
-	"log"
+	"log/slog"
 	"strings"
 
 	"github.com/zhoujianlin/ShareO/internal/model"
@@ -16,7 +16,7 @@ func NewTopicRepo() *TopicRepo { return &TopicRepo{} }
 func (r *TopicRepo) CountByStatus(status int8) int64 {
 	var count int64
 	if err := DB.Model(&model.Topic{}).Where("status = ?", status).Count(&count).Error; err != nil {
-		log.Printf("TopicRepo.CountByStatus(%d): %v", status, err)
+		slog.Warn("failed to count topics by status", "status", status, "err", err)
 	}
 	return count
 }
@@ -100,7 +100,7 @@ func (r *TopicRepo) ReplacePostTopics(tx *gorm.DB, postID int64, topicIDs []int6
 		if !newSet[tid] {
 			if err := tx.Model(&model.Topic{}).Where("id = ? AND post_count > 0", tid).
 				UpdateColumn("post_count", gorm.Expr("post_count - 1")).Error; err != nil {
-				log.Printf("TopicRepo.ReplacePostTopics: failed to decrement post_count for topic %d: %v", tid, err)
+				slog.Warn("failed to decrement topic post count", "topic_id", tid, "err", err)
 			}
 		}
 	}
@@ -119,7 +119,7 @@ func (r *TopicRepo) ReplacePostTopics(tx *gorm.DB, postID int64, topicIDs []int6
 		if !contains(oldTopicIDs, tid) {
 			if err := tx.Model(&model.Topic{}).Where("id = ?", tid).
 				UpdateColumn("post_count", gorm.Expr("post_count + 1")).Error; err != nil {
-				log.Printf("TopicRepo.ReplacePostTopics: failed to increment post_count for topic %d: %v", tid, err)
+				slog.Warn("failed to increment topic post count", "topic_id", tid, "err", err)
 			}
 		}
 	}

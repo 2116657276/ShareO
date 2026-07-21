@@ -2,7 +2,7 @@ package repository
 
 import (
 	"errors"
-	"log"
+	"log/slog"
 
 	"github.com/zhoujianlin/ShareO/internal/model"
 	"gorm.io/gorm"
@@ -15,7 +15,7 @@ func NewCommentRepo() *CommentRepo { return &CommentRepo{} }
 func (r *CommentRepo) CountNonDeleted() int64 {
 	var count int64
 	if err := DB.Model(&model.Comment{}).Where("is_deleted = 0").Count(&count).Error; err != nil {
-		log.Printf("CommentRepo.CountNonDeleted: %v", err)
+		slog.Warn("failed to count comments", "err", err)
 	}
 	return count
 }
@@ -37,7 +37,7 @@ func (r *CommentRepo) Create(comment *model.Comment) error {
 		// Sync post comment_count via COUNT (idempotent, safe with triggers)
 		if syncErr := tx.Model(&model.Post{}).Where("id = ?", comment.PostID).UpdateColumn("comment_count",
 			gorm.Expr("(SELECT COUNT(*) FROM comments WHERE post_id = ? AND is_deleted = 0)", comment.PostID)).Error; syncErr != nil {
-			log.Printf("CommentRepo: failed to sync comment_count for post %d: %v", comment.PostID, syncErr)
+			slog.Warn("failed to sync post comment count", "post_id", comment.PostID, "err", syncErr)
 		}
 		return nil
 	})
@@ -86,7 +86,7 @@ func (r *CommentRepo) SoftDelete(id, userID int64) error {
 		// Sync post comment_count via COUNT (idempotent, safe with triggers)
 		if syncErr := tx.Model(&model.Post{}).Where("id = ?", comment.PostID).UpdateColumn("comment_count",
 			gorm.Expr("(SELECT COUNT(*) FROM comments WHERE post_id = ? AND is_deleted = 0)", comment.PostID)).Error; syncErr != nil {
-			log.Printf("CommentRepo: failed to sync comment_count for post %d: %v", comment.PostID, syncErr)
+			slog.Warn("failed to sync post comment count", "post_id", comment.PostID, "err", syncErr)
 		}
 		return nil
 	})

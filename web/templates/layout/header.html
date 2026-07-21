@@ -41,7 +41,11 @@
                 <li class="nav-item"><a class="nav-link" href="/admin"><i class="bi bi-shield-check"></i> 管理</a></li>
                 {{ end }}
                 <li class="nav-item"><a class="nav-link" href="/user/{{ .user_id }}"><i class="bi bi-person"></i> 主页</a></li>
-                <li class="nav-item"><a class="nav-link text-danger" href="/logout"><i class="bi bi-box-arrow-right"></i> 退出</a></li>
+                <li class="nav-item">
+                    <form action="/logout" method="post" onsubmit="return confirm('确认退出登录？')">
+                        <button class="nav-link text-danger border-0 bg-transparent" type="submit"><i class="bi bi-box-arrow-right"></i> 退出</button>
+                    </form>
+                </li>
                 {{ else }}
                 <li class="nav-item"><a class="nav-link" href="/login"><i class="bi bi-box-arrow-in-right"></i> 登录</a></li>
                 <li class="nav-item"><a class="nav-link" href="/register"><i class="bi bi-pencil-square"></i> 注册</a></li>
@@ -83,9 +87,11 @@
             <i class="bi bi-github me-2"></i>GitHub
         </a>
         {{ if .user_id }}
-        <a href="/logout" class="list-group-item list-group-item-action border-0 rounded-3 text-danger">
-            <i class="bi bi-box-arrow-right me-2"></i>退出登录
-        </a>
+        <form action="/logout" method="post" onsubmit="return confirm('确认退出登录？')">
+            <button type="submit" class="list-group-item list-group-item-action border-0 rounded-3 text-danger">
+                <i class="bi bi-box-arrow-right me-2"></i>退出登录
+            </button>
+        </form>
         {{ end }}
     </div>
 </div>

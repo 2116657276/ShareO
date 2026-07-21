@@ -2,270 +2,296 @@ package repository
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"strings"
+	"time"
 
 	"github.com/zhoujianlin/ShareO/internal/model"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 type ChatRepo struct {
 	db *gorm.DB
 }
 
-// NewChatRepo creates a ChatRepo with injected DB for testability.
-func NewChatRepo(db *gorm.DB) *ChatRepo {
-	return &ChatRepo{db: db}
+func NewChatRepo(db *gorm.DB) *ChatRepo { return &ChatRepo{db: db} }
+
+func (r *ChatRepo) ValidateActiveUsers(ctx context.Context, userIDs []int64) error {
+	if len(userIDs) == 0 {
+		return nil
+	}
+	var count int64
+	if err := r.db.WithContext(ctx).Model(&model.User{}).
+		Where("id IN ? AND status = ?", userIDs, model.UserStatusActive).
+		Count(&count).Error; err != nil {
+		return err
+	}
+	if count != int64(len(userIDs)) {
+		return gorm.ErrRecordNotFound
+	}
+	return nil
 }
 
-// --- Conversations ---
-
-// EnsureDM finds or creates a DM conversation between two users.
-// Uses dm_key unique constraint to handle concurrent creation safely —
-// on duplicate key error, retries the SELECT.
 func (r *ChatRepo) EnsureDM(ctx context.Context, user1ID, user2ID int64) (*model.Conversation, error) {
-	dmKey := dmKey(user1ID, user2ID)
-
-	// Try SELECT first (common case: DM already exists)
-	var conv model.Conversation
-	err := r.db.WithContext(ctx).Where("dm_key = ?", dmKey).First(&conv).Error
-	if err == nil {
-		return &conv, nil
-	}
-	if err != gorm.ErrRecordNotFound {
-		return nil, err
-	}
-
-	// Try INSERT — may fail with duplicate key if concurrent request won the race
-	conv = model.Conversation{Type: model.ConvTypeDM, DmKey: &dmKey}
-	if err := r.db.WithContext(ctx).Create(&conv).Error; err != nil {
-		// Duplicate key: concurrent request created it first — retry SELECT
-		if err := r.db.WithContext(ctx).Where("dm_key = ?", dmKey).First(&conv).Error; err != nil {
-			return nil, err
+	key := dmKey(user1ID, user2ID)
+	conv := model.Conversation{Type: model.ConvTypeDM, DmKey: &key}
+	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		// The duplicate branch returns the existing primary key through MySQL's
+		// LAST_INSERT_ID. Unlike "insert-ignore then select", this waits for the
+		// winning transaction and cannot observe a not-yet-committed gap.
+		if err := tx.Clauses(clause.OnConflict{
+			Columns: []clause.Column{{Name: "dm_key"}},
+			DoUpdates: clause.Assignments(map[string]any{
+				"id": gorm.Expr("LAST_INSERT_ID(id)"),
+			}),
+		}).Create(&conv).Error; err != nil {
+			return err
 		}
-		return &conv, nil
-	}
-
-	// Successfully created — add both users as members
-	members := []model.ConversationMember{
-		{ConversationID: conv.ID, UserID: user1ID, Role: model.ConvRoleMember},
-		{ConversationID: conv.ID, UserID: user2ID, Role: model.ConvRoleMember},
-	}
-	if err := r.db.WithContext(ctx).Create(&members).Error; err != nil {
-		return nil, err
-	}
-
-	return &conv, nil
+		if err := tx.Where("dm_key = ?", key).First(&conv).Error; err != nil {
+			return err
+		}
+		members := []model.ConversationMember{
+			{ConversationID: conv.ID, UserID: user1ID, Role: model.ConvRoleMember},
+			{ConversationID: conv.ID, UserID: user2ID, Role: model.ConvRoleMember},
+		}
+		return tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&members).Error
+	})
+	return &conv, err
 }
 
-// CreateGroup creates a group conversation with the given owner and members.
 func (r *ChatRepo) CreateGroup(ctx context.Context, ownerID int64, title string, memberIDs []int64) (*model.Conversation, error) {
-	conv := model.Conversation{
-		Type:    model.ConvTypeGroup,
-		Title:   title,
-		OwnerID: ownerID,
-	}
-	if err := r.db.WithContext(ctx).Create(&conv).Error; err != nil {
-		return nil, err
-	}
-
-	// Add owner as member with owner role
-	members := []model.ConversationMember{
-		{ConversationID: conv.ID, UserID: ownerID, Role: model.ConvRoleOwner},
-	}
-	for _, uid := range memberIDs {
-		if uid != ownerID {
-			members = append(members, model.ConversationMember{
-				ConversationID: conv.ID, UserID: uid, Role: model.ConvRoleMember,
-			})
+	conv := &model.Conversation{Type: model.ConvTypeGroup, Title: title, OwnerID: &ownerID}
+	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(conv).Error; err != nil {
+			return err
 		}
-	}
-	if err := r.db.WithContext(ctx).Create(&members).Error; err != nil {
-		return nil, err
-	}
-
-	return &conv, nil
+		members := make([]model.ConversationMember, 0, len(memberIDs)+1)
+		members = append(members, model.ConversationMember{
+			ConversationID: conv.ID, UserID: ownerID, Role: model.ConvRoleOwner,
+		})
+		for _, userID := range memberIDs {
+			if userID != ownerID {
+				members = append(members, model.ConversationMember{
+					ConversationID: conv.ID, UserID: userID, Role: model.ConvRoleMember,
+				})
+			}
+		}
+		return tx.Create(&members).Error
+	})
+	return conv, err
 }
 
-// GetConversation fetches a conversation by ID.
 func (r *ChatRepo) GetConversation(ctx context.Context, convID int64) (*model.Conversation, error) {
 	var conv model.Conversation
-	err := r.db.WithContext(ctx).First(&conv, convID).Error
-	if err != nil {
+	if err := r.db.WithContext(ctx).First(&conv, convID).Error; err != nil {
 		return nil, err
 	}
 	return &conv, nil
 }
 
-// ListConversations returns all conversations for a user, with last message and member info.
 func (r *ChatRepo) ListConversations(ctx context.Context, userID int64) ([]model.Conversation, error) {
-	// Get conversation IDs the user belongs to
-	var memberConvs []model.ConversationMember
-	if err := r.db.WithContext(ctx).
-		Where("user_id = ?", userID).
-		Find(&memberConvs).Error; err != nil {
-		return nil, err
-	}
-	if len(memberConvs) == 0 {
-		return []model.Conversation{}, nil
-	}
-
-	convIDs := make([]int64, len(memberConvs))
-	for i, m := range memberConvs {
-		convIDs[i] = m.ConversationID
-	}
-
-	var convs []model.Conversation
-	if err := r.db.WithContext(ctx).
-		Where("id IN ?", convIDs).
-		Order("updated_at DESC").
-		Find(&convs).Error; err != nil {
-		return nil, err
-	}
-
-	return convs, nil
+	var conversations []model.Conversation
+	err := r.db.WithContext(ctx).
+		Table("conversations AS c").
+		Select("c.*").
+		Joins("JOIN conversation_members cm ON cm.conversation_id = c.id").
+		Where("cm.user_id = ?", userID).
+		Order("c.updated_at DESC, c.id DESC").
+		Scan(&conversations).Error
+	return conversations, err
 }
 
-// --- Members ---
-
-// IsMember returns true if the user is a member of the conversation.
-func (r *ChatRepo) IsMember(ctx context.Context, convID, userID int64) bool {
+func (r *ChatRepo) IsMember(ctx context.Context, convID, userID int64) (bool, error) {
 	var count int64
-	r.db.WithContext(ctx).Model(&model.ConversationMember{}).
+	err := r.db.WithContext(ctx).Model(&model.ConversationMember{}).
 		Where("conversation_id = ? AND user_id = ?", convID, userID).
-		Count(&count)
-	return count > 0
+		Count(&count).Error
+	return count > 0, err
 }
 
-// GetMembers returns all members of a conversation.
 func (r *ChatRepo) GetMembers(ctx context.Context, convID int64) ([]model.ConversationMember, error) {
 	var members []model.ConversationMember
-	err := r.db.WithContext(ctx).
-		Where("conversation_id = ?", convID).
-		Preload("User").
-		Find(&members).Error
+	err := r.db.WithContext(ctx).Where("conversation_id = ?", convID).
+		Preload("User").Find(&members).Error
 	return members, err
 }
 
-// AddMember adds a user to a conversation.
-func (r *ChatRepo) AddMember(ctx context.Context, convID, userID int64) error {
-	m := model.ConversationMember{ConversationID: convID, UserID: userID, Role: model.ConvRoleMember}
-	return r.db.WithContext(ctx).Create(&m).Error
+func (r *ChatRepo) AddMembers(ctx context.Context, convID int64, userIDs []int64, maxMembers int) (bool, error) {
+	withinLimit := true
+	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		// Lock the conversation row so concurrent invitations cannot jointly
+		// exceed the member limit after separate service-level checks.
+		var conv model.Conversation
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&conv, convID).Error; err != nil {
+			return err
+		}
+		var count int64
+		if err := tx.Model(&model.ConversationMember{}).Where("conversation_id = ?", convID).Count(&count).Error; err != nil {
+			return err
+		}
+		var existing []int64
+		if err := tx.Model(&model.ConversationMember{}).
+			Where("conversation_id = ? AND user_id IN ?", convID, userIDs).
+			Pluck("user_id", &existing).Error; err != nil {
+			return err
+		}
+		existingSet := make(map[int64]struct{}, len(existing))
+		for _, userID := range existing {
+			existingSet[userID] = struct{}{}
+		}
+		members := make([]model.ConversationMember, 0, len(userIDs))
+		for _, userID := range userIDs {
+			if _, ok := existingSet[userID]; ok {
+				continue
+			}
+			members = append(members, model.ConversationMember{
+				ConversationID: convID, UserID: userID, Role: model.ConvRoleMember,
+			})
+		}
+		if count+int64(len(members)) > int64(maxMembers) {
+			withinLimit = false
+			return nil
+		}
+		if len(members) == 0 {
+			return nil
+		}
+		return tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&members).Error
+	})
+	return withinLimit, err
 }
 
-// RemoveMember removes a user from a conversation.
 func (r *ChatRepo) RemoveMember(ctx context.Context, convID, userID int64) error {
-	return r.db.WithContext(ctx).
-		Where("conversation_id = ? AND user_id = ?", convID, userID).
+	return r.db.WithContext(ctx).Where("conversation_id = ? AND user_id = ?", convID, userID).
 		Delete(&model.ConversationMember{}).Error
 }
 
-// --- Messages ---
-
-// CreateMessage inserts a message and returns the created record (with auto-generated ID).
-func (r *ChatRepo) CreateMessage(ctx context.Context, msg *model.Message) error {
-	return r.db.WithContext(ctx).Create(msg).Error
+func (r *ChatRepo) DissolveGroup(ctx context.Context, convID int64) error {
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("conversation_id = ?", convID).Delete(&model.Message{}).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("conversation_id = ?", convID).Delete(&model.ConversationMember{}).Error; err != nil {
+			return err
+		}
+		result := tx.Delete(&model.Conversation{}, convID)
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected == 0 {
+			return gorm.ErrRecordNotFound
+		}
+		return nil
+	})
 }
 
-// GetMessages returns messages using cursor-based pagination.
-// beforeID=0 means "most recent first"; otherwise returns messages with id < beforeID.
-func (r *ChatRepo) GetMessages(ctx context.Context, convID int64, beforeID int64, limit int) ([]model.Message, error) {
+func (r *ChatRepo) CreateMessage(ctx context.Context, msg *model.Message) error {
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(msg).Error; err != nil {
+			return err
+		}
+		if err := tx.Model(&model.Conversation{}).Where("id = ?", msg.ConversationID).
+			Update("updated_at", time.Now()).Error; err != nil {
+			return err
+		}
+		result := tx.Model(&model.ConversationMember{}).
+			Where("conversation_id = ? AND user_id = ?", msg.ConversationID, msg.SenderID).
+			Update("last_read_message_id", gorm.Expr("GREATEST(last_read_message_id, ?)", msg.ID))
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected == 0 {
+			return gorm.ErrRecordNotFound
+		}
+		return nil
+	})
+}
+
+func (r *ChatRepo) GetMessages(ctx context.Context, convID, beforeID, afterID int64, limit int) ([]model.Message, error) {
 	if limit <= 0 || limit > 100 {
 		limit = 30
 	}
-	var msgs []model.Message
-	query := r.db.WithContext(ctx).
-		Where("conversation_id = ?", convID).
-		Preload("Sender").
-		Order("id DESC").
-		Limit(limit)
-	if beforeID > 0 {
-		query = query.Where("id < ?", beforeID)
+	var messages []model.Message
+	query := r.db.WithContext(ctx).Where("conversation_id = ?", convID).Preload("Sender").Limit(limit)
+	if afterID > 0 {
+		query = query.Where("id > ?", afterID).Order("id ASC")
+	} else {
+		if beforeID > 0 {
+			query = query.Where("id < ?", beforeID)
+		}
+		query = query.Order("id DESC")
 	}
-	err := query.Find(&msgs).Error
-	return msgs, err
+	return messages, query.Find(&messages).Error
 }
 
-// GetLastMessage returns the most recent message in a conversation.
 func (r *ChatRepo) GetLastMessage(ctx context.Context, convID int64) (*model.Message, error) {
-	var msg model.Message
-	err := r.db.WithContext(ctx).
-		Where("conversation_id = ?", convID).
-		Order("id DESC").
-		First(&msg).Error
-	if err != nil {
-		if err == gorm.ErrRecordNotFound {
-			return nil, nil
-		}
-		return nil, err
+	var message model.Message
+	err := r.db.WithContext(ctx).Where("conversation_id = ?", convID).
+		Preload("Sender").Order("id DESC").First(&message).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, nil
 	}
-	return &msg, nil
+	return &message, err
 }
 
-// GetRecentMessages returns the most recent N messages for RAG context (Phase 3).
 func (r *ChatRepo) GetRecentMessages(ctx context.Context, convID int64, n int) ([]model.Message, error) {
-	var msgs []model.Message
-	err := r.db.WithContext(ctx).
-		Where("conversation_id = ?", convID).
-		Preload("Sender").
-		Order("id DESC").
-		Limit(n).
-		Find(&msgs).Error
-	return msgs, err
+	var messages []model.Message
+	err := r.db.WithContext(ctx).Where("conversation_id = ?", convID).
+		Preload("Sender").Order("id DESC").Limit(n).Find(&messages).Error
+	return messages, err
 }
 
-// --- Read tracking ---
-
-// UpdateReadMarker sets the user's last_read_message_id for a conversation.
 func (r *ChatRepo) UpdateReadMarker(ctx context.Context, convID, userID, messageID int64) error {
-	return r.db.WithContext(ctx).
-		Model(&model.ConversationMember{}).
-		Where("conversation_id = ? AND user_id = ?", convID, userID).
-		Update("last_read_message_id", messageID).Error
-}
-
-// GetUnreadCount returns total unread message count across all conversations for a user.
-func (r *ChatRepo) GetUnreadCount(ctx context.Context, userID int64) (int64, error) {
-	// Get all memberships for this user
-	var members []model.ConversationMember
-	if err := r.db.WithContext(ctx).
-		Where("user_id = ?", userID).
-		Find(&members).Error; err != nil {
-		return 0, err
-	}
-	if len(members) == 0 {
-		return 0, nil
-	}
-
-	// For each membership, count messages with id > last_read_message_id
-	var total int64
-	for _, m := range members {
-		var count int64
-		r.db.WithContext(ctx).Model(&model.Message{}).
-			Where("conversation_id = ? AND id > ?", m.ConversationID, m.LastReadMessageID).
-			Count(&count)
-		total += count
-	}
-	return total, nil
-}
-
-// GetLastReadMessageID returns the user's last_read_message_id for a conversation (0 if not a member).
-func (r *ChatRepo) GetLastReadMessageID(ctx context.Context, convID, userID int64) (int64, error) {
-	var member model.ConversationMember
-	err := r.db.WithContext(ctx).
-		Where("conversation_id = ? AND user_id = ?", convID, userID).
-		First(&member).Error
-	if err != nil {
-		if err == gorm.ErrRecordNotFound {
-			return 0, nil
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var member model.ConversationMember
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+			Where("conversation_id = ? AND user_id = ?", convID, userID).
+			First(&member).Error; err != nil {
+			return err
 		}
-		return 0, err
-	}
-	return member.LastReadMessageID, nil
+		var count int64
+		if err := tx.Model(&model.Message{}).
+			Where("id = ? AND conversation_id = ?", messageID, convID).Count(&count).Error; err != nil {
+			return err
+		}
+		if count == 0 {
+			return gorm.ErrRecordNotFound
+		}
+		// RowsAffected may be zero when messageID is older than the current
+		// marker. That is a successful idempotent call, not a missing member.
+		return tx.Model(&model.ConversationMember{}).Where("id = ?", member.ID).
+			Update("last_read_message_id", gorm.Expr("GREATEST(last_read_message_id, ?)", messageID)).Error
+	})
 }
 
-// --- Helpers ---
+func (r *ChatRepo) GetUnreadCount(ctx context.Context, userID int64) (int64, error) {
+	var count int64
+	err := r.db.WithContext(ctx).Table("messages AS m").
+		Joins("JOIN conversation_members cm ON cm.conversation_id = m.conversation_id").
+		Where("cm.user_id = ? AND m.id > cm.last_read_message_id AND m.sender_id <> ?", userID, userID).
+		Count(&count).Error
+	return count, err
+}
 
-// dmKey generates the canonical dm_key for two users: "smallerID:largerID".
+func (r *ChatRepo) GetConversationUnreadCount(ctx context.Context, convID, userID int64) (int64, error) {
+	var count int64
+	err := r.db.WithContext(ctx).Table("messages AS m").
+		Joins("JOIN conversation_members cm ON cm.conversation_id = m.conversation_id").
+		Where("cm.conversation_id = ? AND cm.user_id = ? AND m.id > cm.last_read_message_id AND m.sender_id <> ?", convID, userID, userID).
+		Count(&count).Error
+	return count, err
+}
+
+func (r *ChatRepo) SearchActiveUsers(ctx context.Context, query string, excludeUserID int64, limit int) ([]model.User, error) {
+	var users []model.User
+	pattern := "%" + strings.NewReplacer("\\", "\\\\", "%", "\\%", "_", "\\_").Replace(query) + "%"
+	err := r.db.WithContext(ctx).Select("id", "username", "avatar_url").
+		Where("status = ? AND id <> ? AND username LIKE ? ESCAPE '\\\\'", model.UserStatusActive, excludeUserID, pattern).
+		Order("username ASC").Limit(limit).Find(&users).Error
+	return users, err
+}
+
 func dmKey(a, b int64) string {
 	if a < b {
 		return fmt.Sprintf("%d:%d", a, b)

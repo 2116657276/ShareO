@@ -2,7 +2,9 @@ package config
 
 import (
 	"fmt"
+	"net/url"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/spf13/viper"
@@ -18,8 +20,9 @@ type Config struct {
 }
 
 type ServerConfig struct {
-	Port int    `mapstructure:"port"`
-	Mode string `mapstructure:"mode"`
+	Port           int      `mapstructure:"port"`
+	Mode           string   `mapstructure:"mode"`
+	TrustedOrigins []string `mapstructure:"trusted_origins"`
 }
 
 type DatabaseConfig struct {
@@ -106,6 +109,7 @@ func Load(path string) (*Config, error) {
 //	SHAREO_MINIO_ACCESS_KEY  — MinIO access key
 //	SHAREO_MINIO_SECRET_KEY  — MinIO secret key
 //	SHAREO_REDIS_PASSWORD    — Redis password
+//	SHAREO_TRUSTED_ORIGINS   — comma-separated exact origins for browser/WS requests
 func applyEnvOverrides(cfg *Config) {
 	if v := os.Getenv("SHAREO_DB_PASSWORD"); v != "" {
 		cfg.Database.Password = v
@@ -122,6 +126,9 @@ func applyEnvOverrides(cfg *Config) {
 	if v := os.Getenv("SHAREO_REDIS_PASSWORD"); v != "" {
 		cfg.Redis.Password = v
 	}
+	if v := os.Getenv("SHAREO_TRUSTED_ORIGINS"); v != "" {
+		cfg.Server.TrustedOrigins = strings.Split(v, ",")
+	}
 }
 
 // Validate checks that required config fields are present and valid.
@@ -131,6 +138,18 @@ func (c *Config) Validate() error {
 	}
 	if c.Server.Mode == "" {
 		c.Server.Mode = "debug"
+	}
+	for i, origin := range c.Server.TrustedOrigins {
+		origin = strings.TrimRight(strings.TrimSpace(origin), "/")
+		if origin == "" || strings.Contains(origin, "*") {
+			return fmt.Errorf("server.trusted_origins must contain exact non-empty origins")
+		}
+		parsed, err := url.Parse(origin)
+		if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" ||
+			parsed.User != nil || (parsed.Path != "" && parsed.Path != "/") || parsed.RawQuery != "" || parsed.Fragment != "" {
+			return fmt.Errorf("invalid trusted origin %q", origin)
+		}
+		c.Server.TrustedOrigins[i] = origin
 	}
 
 	if c.Database.Host == "" {

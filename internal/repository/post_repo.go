@@ -2,7 +2,7 @@ package repository
 
 import (
 	"errors"
-	"log"
+	"log/slog"
 	"sort"
 	"strings"
 	"time"
@@ -153,13 +153,13 @@ func (r *PostRepo) Feed(q FeedQuery) ([]model.Post, int64, error) {
 
 func (r *PostRepo) IncrementView(id int64) {
 	if err := DB.Model(&model.Post{}).Where("id = ?", id).UpdateColumn("view_count", gorm.Expr("view_count + 1")).Error; err != nil {
-		log.Printf("PostRepo.IncrementView(%d): %v", id, err)
+		slog.Warn("failed to increment post view count", "post_id", id, "err", err)
 	}
 }
 
 func (r *PostRepo) IncrementShare(id int64) {
 	if err := DB.Model(&model.Post{}).Where("id = ?", id).UpdateColumn("share_count", gorm.Expr("share_count + 1")).Error; err != nil {
-		log.Printf("PostRepo.IncrementShare(%d): %v", id, err)
+		slog.Warn("failed to increment post share count", "post_id", id, "err", err)
 	}
 }
 
@@ -183,7 +183,7 @@ func (r *PostRepo) AdminSoftDelete(id int64) error {
 func (r *PostRepo) CountByStatus(status string) int64 {
 	var count int64
 	if err := DB.Model(&model.Post{}).Where("status = ? AND is_deleted = 0", status).Count(&count).Error; err != nil {
-		log.Printf("PostRepo.CountByStatus(%s): %v", status, err)
+		slog.Warn("failed to count posts by status", "status", status, "err", err)
 	}
 	return count
 }
@@ -191,7 +191,7 @@ func (r *PostRepo) CountByStatus(status string) int64 {
 func (r *PostRepo) CountTotal() int64 {
 	var count int64
 	if err := DB.Model(&model.Post{}).Where("is_deleted = 0").Count(&count).Error; err != nil {
-		log.Printf("PostRepo.CountTotal: %v", err)
+		slog.Warn("failed to count posts", "err", err)
 	}
 	return count
 }
@@ -199,7 +199,7 @@ func (r *PostRepo) CountTotal() int64 {
 func (r *PostRepo) CountByUser(userID int64) int64 {
 	var count int64
 	if err := DB.Model(&model.Post{}).Where("user_id = ? AND is_deleted = 0 AND status = ?", userID, model.StatusApproved).Count(&count).Error; err != nil {
-		log.Printf("PostRepo.CountByUser(%d): %v", userID, err)
+		slog.Warn("failed to count posts by user", "user_id", userID, "err", err)
 	}
 	return count
 }
@@ -232,7 +232,7 @@ func (r *PostRepo) Search(q string, page, pageSize int) ([]model.Post, int64, er
 		base = base.Where("MATCH(content) AGAINST(? IN BOOLEAN MODE)", clean)
 		if err := base.Count(&total).Error; err != nil {
 			// FULLTEXT failed — fall back to LIKE with escaped pattern
-			log.Printf("PostRepo.Search: FULLTEXT failed, falling back to LIKE: %v", err)
+			slog.Warn("full-text post search failed; falling back to LIKE", "err", err)
 			base = DB.Model(&model.Post{}).Where("is_deleted = 0 AND status = ?", model.StatusApproved)
 			base = base.Where("content LIKE ?", "%"+escapeLikePattern(q)+"%")
 			if countErr := base.Count(&total).Error; countErr != nil {

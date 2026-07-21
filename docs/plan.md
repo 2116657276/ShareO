@@ -1,12 +1,12 @@
 # ShareO v2 详细开发计划
 
-> 更新时间: 2026-07-20 | 状态: **Phase 0 ✅ → Phase 1 待启动** | 上游: [roadmap.md](roadmap.md)（里程碑）/ [architecture.md](architecture.md)（架构）
+> 更新时间: 2026-07-21 | 状态: **Phase 0 本地门禁完成、远端 CI 待确认 / Phase 1 后端加固中** | 上游: [roadmap.md](roadmap.md)（里程碑）/ [architecture.md](architecture.md)（架构）
 >
 > 选型总原则：**优先标准库，其次成熟稳定的第三方库**，不引实验性依赖。每步给出验收标准；串行推进，Phase 内允许微调顺序。
 >
-> **Phase 0 完成于 2026-07-20**：22 项评审修复（24/24 含 SR-24）、密码修改、Makefile check、slog、CI、Docker Compose、ai-service 脚手架、队列骨架。详情见 [TASK.md](../../TASK.md)。
+> 任务状态以 [TASK.md](../TASK.md) 与本文为准。GitHub Issues 仅是可选协作工具。2026-07-21 审计发现早期“Phase 0 完成”缺少可复现与验收证据，因此在最终门禁通过前不再标记完成。当前按用户确认，后端成熟前以终端自动化（curl/Shell/集成测试）为主，浏览器与前端手工验收暂缓。
 
-## Phase 0 — 基建 + 修复清单（2026-07 下旬 ~ 08 中旬）
+## Phase 0 — 基建 + 修复清单（收口中）
 
 目标：还清技术债，把 v2 需要的底座（编排/AI 服务骨架/队列/检查工具链）立起来。
 
@@ -41,17 +41,17 @@
 
 ### 0.3 Docker Compose 依赖编排（TASK.md 遗留 P3）
 
-- `deploy/docker-compose.yml`: `mysql:8.0`、`redis:7-alpine`、`minio/minio:latest`、`qdrant/qdrant:latest`，带 named volume、healthcheck、端口对齐 config.yaml.example。
+- `deploy/docker-compose.yml`: `mysql:8.0`、`redis:7-alpine`、固定版本的 MinIO/Qdrant、ai-service/worker，带 named volume、healthcheck，端口与 `config.yaml.example` 对齐。
 - 首次启动自动执行 migrations（mysql 容器 `docker-entrypoint-initdb.d` 挂载）。
 - README 快速开始改为 compose 优先，`start.sh`（brew 路径）保留为备选。
-- **验收**: 全新环境 `docker compose up -d` + `make run` 即可访问站点。
+- **验收**: 全新环境 `docker compose up -d --wait` + `make run` 即可访问站点；2026-07-21 已在本机通过 Compose config/up/ready/reset，MinIO、Qdrant 和 uv 基础镜像记录 digest。
 
 ### 0.4 ai-service 脚手架
 
 - 目录按 [architecture.md §6](architecture.md)；依赖管理 **uv**（`pyproject.toml` + lock 提交）。
 - 依赖（本阶段）: `fastapi`、`uvicorn[standard]`、`pydantic-settings`、`redis`、`qdrant-client`、`httpx`；开发依赖 `ruff`、`pytest`。
-- 实现: `/healthz`（含 Redis/Qdrant 连通性）、`config.py`（`SHAREO_AI_*` 环境变量）、内部 token 校验依赖项。
-- **验收**: `uv run uvicorn app.main:app` 起服务，healthz 返回依赖状态；`uv run pytest` 绿。
+- 实现: `/healthz` 仅表示进程存活；`/readyz` 在 Redis 与 Qdrant 都可用时返回 200，否则 503；`config.py` 使用 `SHAREO_AI_*` 环境变量。
+- **验收**: `uv run uvicorn app.main:app` 起服务，liveness/readiness 语义正确；`uv run pytest` 绿。
 
 ### 0.5 队列骨架（Go 生产 → Python 消费打通）
 
@@ -60,28 +60,33 @@
 - Go `internal/handler/internal_handler.go`: `/internal/*` 路由组 + `X-Internal-Token` 校验中间件（token 走 `SHAREO_INTERNAL_TOKEN`）。
 - **验收**: 手工 XADD 一条测试消息，Python worker 消费、ACK、日志可见；kill worker 重启后 pending 消息被重领。
 
-**Phase 0 退出标准**: 0.1~0.5 验收全过 + 文档同步（README/TASK/roadmap）。
+### 0.6 2026-07-21 收口项
+
+- Streams 首次失败不 ACK；每 10 秒扫描、30 秒 idle 后 `XAUTOCLAIM`，总计 4 次处理后记录并 ACK；遵守 ADR-002 不设死信队列。
+- Python 固定 3.12，dev dependency group 与 `uv.lock` 入库，CI 使用 locked/frozen。
+- `make check` 串行执行 Go/Python/Shell；真实服务测试放到 `make test-integration`。
+- MySQL 初始化不再执行 seed/cleanup；Compose 增加 config/up/ready/reset/clean 命令。
+- 业务、仓储与 WS 日志完成 `slog` 迁移。
+
+**Phase 0 退出标准**: `make check`、真实 Redis 集成、Compose config/up/ready/reset、终端 API 脚本和文档同步全部有证据。上述本地门禁与工作区复核已完成；远端 CI 将在本次推送后确认，未确认前保持收口状态，不把暂缓的浏览器手工验收混入 Phase 0。
 
 ---
 
-## Phase 1 — IM：私聊 + 群组（2026-08 中旬 ~ 09 底）
+## Phase 1 — IM：私聊 + 邀请制群组（加固中）
 
 关键设计决策（写入 design/im.md 后执行）：**发消息走 REST，WebSocket 只做下行推送**——一致性简单（消息必先落库）、WS 断线也能发消息、天然复用限流和认证。
 
-| 步骤 | 内容 | 技术选型 | 验收 |
-|------|------|----------|------|
-| 1.1 | 设计文档 `design/im.md`（按模板，含 CSRF 评估） | — | 评审定稿 |
-| 1.2 | 迁移 `009_chat.sql`：`conversations`（type dm/group、title、owner_id）、`conversation_members`（UNIQUE(conv_id,user_id)、role、`last_read_message_id`）、`messages`（conv_id、sender_id、type、content、INDEX(conv_id,id)）；DM 唯一化用 `dm_key = "小uid:大uid"` 唯一列 | MySQL（现有） | 迁移可重复执行 |
-| 1.3 | model + repository：全部方法带 `context.Context`，构造函数注入（评审架构结论落地） | GORM（现有） | 单测（纯逻辑部分） |
-| 1.4 | `internal/ws`：Hub（按 userID 索引连接集合、注册/注销、向指定用户集扇出）、每连接 read/write pump goroutine、ping/pong 心跳（30s）、写缓冲满即断开 | **gorilla/websocket v1.5.x**（事实标准、维护活跃） | 竞态检测 `go test -race` 过 |
-| 1.5 | chat_service：EnsureDM（并发安全，靠 dm_key 唯一约束兜底）、CreateGroup、Join/Leave、SendMessage（校验成员→落库→查会话成员→Hub 推送）、History（`before_id` 游标分页）、MarkRead、UnreadCounts | — | service 单测 |
-| 1.6 | 路由：`GET /ws`（握手复用 Cookie JWT + Origin 校验）；REST `POST/GET /api/v1/conversations`、`GET/POST /api/v1/conversations/:id/messages`、`PUT .../read` | — | curl 全链路 |
-| 1.7 | 在线状态：`SETEX ws:online:{uid} 60`，心跳续期；会话列表显示在线点 | Redis（现有） | — |
-| 1.8 | 前端 `web/templates/chat/chat.html`：会话列表 + 消息窗 + 原生 WebSocket + 指数退避重连 + 断线期间 REST 拉增量 | Alpine.js（现有） | 双浏览器互测 |
-| 1.9 | header 未读徽章（复用通知铃铛模式）+ 帖子页"私信作者"入口 | — | — |
-| 1.10 | 冒烟脚本 `scripts/test_chat.sh` + 手测清单入 design/im.md | — | 全过 |
+| 步骤 | 当前实现 | 自动证据 | 尚缺证据 |
+|------|----------|----------|----------|
+| 1.1 数据一致性 | `010_chat_hardening.sql` 前向加约束；DM/建群/发消息/解散事务化；邀请上限并发保护 | repository/service 单测；迁移过的真实 `*_test` 库集成已通过 | CI/发布环境迁移演练（发布前补充） |
+| 1.2 群组模型 | 仅群主直接邀请；重复邀请幂等；普通成员退出；群主只能解散 | service 单测、`scripts/test_chat.sh` | 双浏览器验收（暂缓） |
+| 1.3 消息与未读 | 1–2000 字；精确未读 SQL；MarkRead 验证归属并单调推进 | 单元测试、MySQL 集成、`scripts/test_chat.sh` | 真实数据库执行已通过 |
+| 1.4 WS 与在线 | 完整登录缓存校验；30 秒心跳/60 秒 TTL；最后连接断开清 key；会话吊销主动断线 | Hub 单测、真实 Redis Compose | 双浏览器验收（暂缓） |
+| 1.5 恢复协议 | POST 与 WS 按消息 ID 去重；重连后 `after_id` 升序补齐；`before_id` 继续向前分页 | API 冒烟脚本、真实 MySQL | 浏览器断网验收（暂缓） |
+| 1.6 安全 | 精确 Origin；全站 `http.CrossOriginProtection`；POST logout；浏览计数 POST | CSRF 单元矩阵 | 部署域名配置验收 |
+| 1.7 页面 | `?conv=` 自动打开；建群、邀请、退出、解散入口；在线/未读每 30 秒刷新 | 模板实现（本轮不继续扩展） | 可用性手测（暂缓） |
 
-**退出标准**: roadmap 验收 + 消息可靠性手测（断网重连不丢不重——重连拉增量按 last message id）。
+**退出标准**: `make check`、`make test-integration`、终端 API/IM 冒烟、`go test -race ./...` 和安全/文档门禁全部通过；上述后端门禁当前已通过。双浏览器清单在用户确认后作为发布前补充验收，完成前官方状态保持“Phase 1 后端加固中”。
 
 ---
 

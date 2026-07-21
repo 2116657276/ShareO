@@ -1,7 +1,7 @@
 package service
 
 import (
-	"log"
+	"log/slog"
 	"sync/atomic"
 
 	"github.com/zhoujianlin/ShareO/internal/model"
@@ -41,7 +41,7 @@ func (s *NotificationService) Send(userID, actorID int64, notifType string, targ
 		TargetID: targetID,
 	}
 	if err := s.repo.Create(notif); err != nil {
-		log.Printf("NotificationService.Send: failed to create notification (user=%d, type=%s): %v", userID, notifType, err)
+		slog.Warn("failed to create notification", "user_id", userID, "type", notifType, "err", err)
 		atomic.AddInt64(&s.failCount, 1)
 	}
 	atomic.AddInt64(&s.totalCount, 1)

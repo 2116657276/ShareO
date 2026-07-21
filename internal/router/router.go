@@ -14,32 +14,32 @@ import (
 	"github.com/zhoujianlin/ShareO/internal/ws"
 )
 
-func SetupRouter() *gin.Engine {
+func SetupRouter(trustedOrigins ...string) *gin.Engine {
 	r := gin.Default()
 
 	r.Static("/static", "web/static") // 在 NoCache 之前挂载，静态资源可被浏览器缓存
 	r.Use(middleware.NoCache())
 	r.Use(gzip.Gzip(gzip.DefaultCompression)) // gzip压缩，大幅减少HTML/JSON/CSS传输
 
-	authH := handler.NewAuthHandler()
+	// WebSocket Hub — shared across chat, auth revocation, and admin actions.
+	hub := ws.NewHub()
+
+	authH := handler.NewAuthHandler(hub)
 	postH := handler.NewPostHandler()
 	feedH := handler.NewFeedHandler()
 	socialH := handler.NewSocialHandler()
-	adminH := handler.NewAdminHandler()
+	adminH := handler.NewAdminHandler(hub)
 	userH := handler.NewUserHandler()
 	uploadH := handler.NewUploadHandler()
 	notifH := handler.NewNotificationHandler()
 	topicH := handler.NewTopicHandler()
 	internalH := handler.NewInternalHandler()
 
-	// WebSocket Hub — shared across all handlers
-	hub := ws.NewHub()
-
 	// Chat
 	chatRepo := repository.NewChatRepo(repository.DB)
-	userRepo := repository.NewUserRepo()
-	chatSvc := service.NewChatService(chatRepo, userRepo, hub)
-	chatH := handler.NewChatHandler(chatSvc, hub)
+	presence := repository.NewRedisPresenceStore()
+	chatSvc := service.NewChatService(chatRepo, presence, hub)
+	chatH := handler.NewChatHandler(chatSvc, hub, trustedOrigins)
 
 	// === 首页：根据登录态分流 ===
 	// 未登录 → 登录页(区分admin/user入口)
@@ -78,6 +78,7 @@ func SetupRouter() *gin.Engine {
 			pub.GET("/feed", feedH.GetFeed)
 			pub.GET("/search", feedH.Search)
 			pub.GET("/posts/:id", postH.GetByID)
+			pub.POST("/posts/:id/view", postH.RecordView)
 			pub.GET("/posts/:id/comments", socialH.GetComments)
 			pub.GET("/users/:id/following", socialH.GetFollowing)
 			pub.GET("/users/:id/followers", socialH.GetFollowers)
@@ -107,6 +108,7 @@ func SetupRouter() *gin.Engine {
 		authAPI.POST("/posts/:id/comments", socialH.CreateComment)
 		authAPI.DELETE("/comments/:cid", socialH.DeleteComment)
 		authAPI.POST("/users/:id/follow", socialH.ToggleFollow)
+		authAPI.GET("/users/search", chatH.SearchUsers)
 		authAPI.POST("/upload", uploadLimiter, uploadH.UploadImage)
 
 		// Notifications
@@ -121,8 +123,9 @@ func SetupRouter() *gin.Engine {
 		authAPI.GET("/conversations/:id/messages", chatH.GetMessages)
 		authAPI.POST("/conversations/:id/messages", chatH.SendMessage)
 		authAPI.PUT("/conversations/:id/read", chatH.MarkRead)
-		authAPI.POST("/conversations/:id/join", chatH.JoinConversation)
-		authAPI.POST("/conversations/:id/leave", chatH.LeaveConversation)
+		authAPI.POST("/conversations/:id/members", chatH.InviteMembers)
+		authAPI.DELETE("/conversations/:id/members/me", chatH.LeaveConversation)
+		authAPI.DELETE("/conversations/:id", chatH.DissolveConversation)
 		authAPI.GET("/conversations/unread-count", chatH.UnreadCount)
 	}
 
@@ -170,7 +173,7 @@ func SetupRouter() *gin.Engine {
 		needLogin.GET("/notifications", notifH.NotificationsPage)
 		needLogin.GET("/topic/:id", topicH.TopicPage)
 		needLogin.GET("/chat", chatH.ChatPage)
-		needLogin.GET("/logout", authH.WebLogout)
+		needLogin.POST("/logout", authH.WebLogout)
 	}
 
 	// === Internal API (ai-service communication) ===
