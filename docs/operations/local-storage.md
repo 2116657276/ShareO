@@ -17,13 +17,32 @@ brew install minio/stable/minio
 bash scripts/start_minio_homebrew.sh
 curl --noproxy '*' --fail http://127.0.0.1:9000/minio/health/live
 # 或：make brew-minio-ready
+```
 
 若终端设置了 HTTP 代理，健康检查脚本会显式绕过代理访问本机 `127.0.0.1`；浏览器或其他客户端也应把 `127.0.0.1,localhost` 加入 `NO_PROXY`。
-```
 
 `start.sh` 会复用相同的数据目录和默认端口。Go 的 `/api/v1/images/...` 是图片代理；MinIO 未运行时，数据库中的图片 URL 不会消失，但代理会返回 404，页面会显示图片失效。
 
 Compose 的 `minio_data` named volume 与 `$HOME/minio_data` 完全不同。不要用 Compose 的 reset/clean 命令判断或清理 Homebrew 图片。
+
+## 混合开发依赖
+
+推荐本机使用 Homebrew MySQL/Redis/MinIO，只用 Docker 启动 Qdrant：
+
+```bash
+make brew-minio-ready
+make vector-up
+make vector-ready
+export SHAREO_INTERNAL_TOKEN=shareo-dev-internal
+make ai-run       # 独立终端
+make ai-worker    # 独立终端
+make run          # 独立终端
+make ai-search-ready
+```
+
+模型固定到 Hugging Face revision `36e679e65c2a2fead755ae21162091293ad37834`。Compose 使用 `hf_cache` volume，宿主机运行可通过 `SHAREO_AI_MODEL_CACHE_DIR` 指定缓存目录。
+
+隔离的真实搜图验收执行 `make test-image-search-e2e`。它只使用 `shareo_e2e`、Redis DB 15、`shareo-e2e` bucket 和 `images-e2e` collection；无论成功或失败都会清理这些资源，不会触碰日常开发数据。
 
 ## 清空本地开发数据
 

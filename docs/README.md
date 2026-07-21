@@ -13,6 +13,7 @@
 | `docs/architecture.md` | **架构唯一真相源**：组件、数据流、服务间约定 | 架构变化时同步更 |
 | `docs/roadmap.md` | 里程碑与毕设时间线 | 每个 Phase 结束时核对 |
 | `docs/plan.md` | 逐步开发计划（任务/选型/验收） | Phase 推进时勾选与修订 |
+| `docs/phases/` | Phase 0–4 的工作包、接口、失败模式、测试和退出证据 | 对应 Phase 设计或实现变化时 |
 | `docs/standards.md` | 开发规范（分层/Go/Python/API/Git/测试/安全） | 规范变化时 |
 | `docs/features.md` | 功能台账（路由/分层/文件索引） | 每个功能合入时 |
 | `docs/adr/` | 架构决策记录（ADR），每个重大选型一篇 | **做选型时先写，后编码** |

@@ -116,7 +116,27 @@ func (r *PostRepo) GetIndexPayload(id int64) (*IndexPayload, error) {
 	if err != nil {
 		return nil, err
 	}
-	payload := &IndexPayload{PostID: post.ID, Status: post.Status, Content: post.Content, CreatedAt: post.CreatedAt}
+	payload := buildIndexPayload(post)
+	return &payload, nil
+}
+
+func (r *PostRepo) ListIndexPayloads(afterID int64, limit int) ([]IndexPayload, error) {
+	var posts []model.Post
+	err := DB.Where("id > ? AND status = ? AND is_deleted = 0", afterID, model.StatusApproved).
+		Order("id ASC").Limit(limit).
+		Preload("Images", func(db *gorm.DB) *gorm.DB { return db.Order("sort_order ASC") }).Find(&posts).Error
+	if err != nil {
+		return nil, err
+	}
+	payloads := make([]IndexPayload, 0, len(posts))
+	for _, post := range posts {
+		payloads = append(payloads, buildIndexPayload(post))
+	}
+	return payloads, nil
+}
+
+func buildIndexPayload(post model.Post) IndexPayload {
+	payload := IndexPayload{PostID: post.ID, Status: post.Status, Content: post.Content, CreatedAt: post.CreatedAt}
 	for _, image := range post.Images {
 		objectKey := image.ImageURL
 		if marker := strings.Index(objectKey, "/api/v1/images/"); marker >= 0 {
@@ -131,7 +151,7 @@ func (r *PostRepo) GetIndexPayload(id int64) (*IndexPayload, error) {
 			ImageURL: "/api/v1/images/" + objectKey, CreatedAt: image.CreatedAt,
 		})
 	}
-	return payload, nil
+	return payload
 }
 
 func (r *PostRepo) Update(post *model.Post) error {

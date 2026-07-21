@@ -1,0 +1,43 @@
+# Disposable Phase 2 E2E configuration. Do not point this file at shared data.
+server:
+  port: 18080
+  mode: test
+  trusted_origins: []
+
+database:
+  host: 127.0.0.1
+  port: 3306
+  user: root
+  password: "shareo_pass"
+  dbname: shareo_e2e
+  charset: utf8mb4
+  max_idle_conns: 2
+  max_open_conns: 10
+  conn_max_lifetime: 300
+
+redis:
+  host: 127.0.0.1
+  port: 6379
+  password: ""
+  db: 15
+  pool_size: 5
+
+minio:
+  endpoint: 127.0.0.1:9000
+  access_key: minioadmin
+  secret_key: minioadmin
+  bucket: shareo-e2e
+  use_ssl: false
+
+jwt:
+  secret: shareo-e2e-only-secret
+  expire_hours: 1
+  login_cache_ttl_min: 30
+
+upload:
+  max_size: 52428800
+  allowed_types:
+    - image/jpeg
+    - image/png
+    - image/webp
+    - image/gif

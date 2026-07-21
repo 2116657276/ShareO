@@ -2,7 +2,7 @@
 
 Go Web 摄影作品管理与社区分享平台（类小红书产品形态），当前作为毕业设计向 v2 演进：**IM 私聊群组 / 图片语义搜索 / RAG Bot / Agent**。
 
-当前状态：**Phase 0 本地门禁完成、远端 CI 待确认 / Phase 1 后端加固中**。后端/接口已通过终端与真实依赖验收；浏览器和前端手工验收按当前决策暂缓，阶段状态与证据见 [TASK.md](TASK.md)。
+当前状态：**Phase 0 本地完成 / Phase 1 后端候选 / Phase 2 后端进行中**。项目分为后端能力线和发布验收线；实时状态见 [TASK.md](TASK.md)，分阶段执行文档见 [docs/phases/](docs/phases/README.md)。
 
 - **架构与决策**: [docs/architecture.md](docs/architecture.md) · [docs/adr/](docs/adr/)
 - **里程碑与详细计划**: [docs/roadmap.md](docs/roadmap.md) · [docs/plan.md](docs/plan.md)
@@ -29,6 +29,18 @@ make dev-up                        # MySQL/Redis/MinIO/Qdrant/AI API/Worker
 make dev-ready                     # 验证 AI liveness/readiness
 make seed                          # 可选：开发管理员与演示数据（不会自动执行）
 make run                           # 启动 Go 主服务
+```
+
+Homebrew MySQL/Redis/MinIO + Docker Qdrant 的推荐混合开发方式：
+
+```bash
+make brew-minio-ready
+make vector-up && make vector-ready
+export SHAREO_INTERNAL_TOKEN=shareo-dev-internal
+make ai-run                        # 终端 1
+make ai-worker                     # 终端 2
+make run                           # 终端 3
+make ai-search-ready
 ```
 
 环境要求：Go 1.25.1+、Python 3.12、uv、Docker Compose。没有 Docker 时可用 `./start.sh` 启动本机 MySQL/Redis/MinIO，但 Qdrant/AI readiness 仍需单独提供。终端 API/IM 验收不依赖浏览器：启动 Go 服务后执行 `bash scripts/test_api.sh` 与 `bash scripts/test_chat.sh`。
@@ -60,7 +72,7 @@ ShareO/
 ├── scripts/                  # API/IM 冒烟与辅助脚本
 ├── docs/                     # 文档体系（规范见 docs/README.md）
 │   ├── architecture.md  roadmap.md  plan.md  standards.md  features.md
-│   ├── adr/  design/  eval/  reviews/
+│   ├── phases/  adr/  design/  eval/  reviews/
 ├── config.yaml.example       # 配置模板（config.yaml 已 gitignore）
 ├── Makefile  start.sh        # 构建与一键启动
 └── TASK.md                   # 任务看板
@@ -80,6 +92,10 @@ ShareO/
 | `SHAREO_REDIS_PASSWORD` | Redis 密码 |
 | `SHAREO_TRUSTED_ORIGINS` | 逗号分隔的精确浏览器/WS origin |
 | `SHAREO_CONFIG` | 可选的 YAML 配置路径；未设置时读取 `config.yaml` |
+| `SHAREO_INTERNAL_TOKEN` / `SHAREO_AI_INTERNAL_TOKEN` | Go 与 AI 服务共享的内部令牌 |
+| `SHAREO_AI_MODEL_CACHE_DIR` | Chinese-CLIP 模型缓存目录 |
+| `SHAREO_AI_EMBEDDING_CONCURRENCY` | embedding 并发数，默认 1 |
+| `SHAREO_AI_IMAGE_COLLECTION` | Qdrant 图片 collection，默认 `images` |
 
 ## 功能与设计
 
@@ -104,4 +120,6 @@ ShareO/
 - **AI 服务**: Python FastAPI API + Streams Worker: `ai-service/`
 
 Phase 2 后端语义搜图通过 `GET /api/v1/search/images?q=...&limit=...` 提供 API。Go 负责图片代理和帖子可见性过滤，Python worker 只通过 Go 读取图片，不需要 MinIO 凭证。Go 与 ai-service 必须共享 `SHAREO_INTERNAL_TOKEN`；Compose worker 默认通过 `host.docker.internal:8080` 访问本机 Go 服务。
+
+真实全链路验收使用固定隔离资源（`shareo_e2e`、Redis DB 15、`shareo-e2e`、`images-e2e`），执行 `make test-image-search-e2e`。脚本会等待模型预热，验证索引/搜索/删除、重复回填和 worker 重启后的 pending 重领，并只清理这些隔离资源。首次运行需提前准备约数 GB 的模型缓存空间。
 - **测试**: 单元测试不依赖外部服务；真实 MySQL/Redis 用 `make test-integration`；API 行为见 `scripts/test_api.sh` 与 `scripts/test_chat.sh`

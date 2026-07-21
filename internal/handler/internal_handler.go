@@ -43,3 +43,26 @@ func (h *InternalHandler) IndexPayload(c *gin.Context) {
 	}
 	response.Success(c, payload)
 }
+
+func (h *InternalHandler) ListIndexPayloads(c *gin.Context) {
+	afterID, err := strconv.ParseInt(c.DefaultQuery("after_id", "0"), 10, 64)
+	if err != nil || afterID < 0 {
+		response.BadRequest(c, "after_id 必须是非负整数")
+		return
+	}
+	limit, err := strconv.Atoi(c.DefaultQuery("limit", "100"))
+	if err != nil || limit < 1 || limit > 200 {
+		response.BadRequest(c, "limit 必须为 1-200")
+		return
+	}
+	payloads, err := h.postRepo.ListIndexPayloads(afterID, limit)
+	if err != nil {
+		response.InternalError(c, "索引清单暂不可用")
+		return
+	}
+	nextAfterID := afterID
+	if len(payloads) > 0 {
+		nextAfterID = payloads[len(payloads)-1].PostID
+	}
+	response.Success(c, gin.H{"items": payloads, "next_after_id": nextAfterID})
+}

@@ -317,7 +317,7 @@
 | PUT | `/api/v1/admin/users/:id/status` | `adminH.UpdateUserStatus` | admin | — |
 | GET | `/api/v1/admin/logs` | `adminH.GetLogs` | admin | — |
 
-语义搜图的 Python 内部接口 `POST /v1/search/images` 和索引载荷 `GET /internal/posts/:id/index-payload` 均要求 `X-Internal-Token`，不属于公网 API。索引事件由审核通过、驳回、删除和 `make backfill-index` 发布到 Redis Streams。
+语义搜图的 Python 内部接口 `POST /v1/search/images`、`GET /readyz/search`、`GET /v1/meta/image-search`，以及 Go 索引载荷接口 `GET /internal/posts/:id/index-payload`、`GET /internal/posts/index-payloads` 均要求 `X-Internal-Token`，不属于公网 API。索引事件由审核通过、驳回、编辑、删除和 `make backfill-index` 发布到 Redis Streams。公网 `GET /api/v1/search/images` 返回去重后的 `post_id/image_id/image_url/score/post`，不暴露 MinIO `object_key`。
 
 ### Web 页面路由
 | 方法 | 路径 | Handler | 权限 |

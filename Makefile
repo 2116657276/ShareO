@@ -1,7 +1,8 @@
-.PHONY: run build migrate seed clean tidy start fmt check check-go check-python check-shell check-docs test-integration dev-config dev-up dev-ready dev-down dev-reset dev-clean-data brew-minio-ready brew-reset-data backfill-index
+.PHONY: run build migrate seed clean tidy start fmt check check-go check-python check-shell check-docs test-integration test-image-search-e2e dev-config dev-up dev-ready dev-down dev-reset dev-clean-data vector-up vector-ready vector-down ai-run ai-worker ai-search-ready brew-minio-ready brew-reset-data backfill-index reconcile-index eval-image-search
 
 COMPOSE ?= $(shell docker compose version >/dev/null 2>&1 && echo "docker compose" || echo "docker-compose")
 SHAREO_AI_PORT ?= 8000
+SHAREO_QDRANT_HTTP_PORT ?= 6333
 
 # One-click start (check services + build + launch + open browser)
 start:
@@ -90,6 +91,9 @@ test-integration:
 	go test -count=1 -tags=integration ./...
 	cd ai-service && uv run --frozen pytest -m integration
 
+test-image-search-e2e:
+	bash scripts/test_image_search_e2e.sh
+
 dev-config:
 	$(COMPOSE) -f deploy/docker-compose.yml config --quiet
 
@@ -110,6 +114,25 @@ dev-reset:
 dev-clean-data:
 	$(COMPOSE) -f deploy/docker-compose.yml down -v
 
+# Hybrid local development: Homebrew MySQL/Redis/MinIO + Docker Qdrant only.
+vector-up:
+	$(COMPOSE) -f deploy/docker-compose.yml up -d qdrant
+
+vector-ready:
+	curl --noproxy '*' --fail --silent --show-error http://127.0.0.1:$(SHAREO_QDRANT_HTTP_PORT)/readyz
+
+vector-down:
+	$(COMPOSE) -f deploy/docker-compose.yml stop qdrant
+
+ai-run:
+	cd ai-service && SHAREO_AI_INTERNAL_TOKEN="$${SHAREO_INTERNAL_TOKEN:-shareo-dev-internal}" uv run --frozen uvicorn app.main:app --host 127.0.0.1 --port $(SHAREO_AI_PORT)
+
+ai-worker:
+	cd ai-service && SHAREO_AI_INTERNAL_TOKEN="$${SHAREO_INTERNAL_TOKEN:-shareo-dev-internal}" uv run --frozen python -m app.workers
+
+ai-search-ready:
+	curl --noproxy '*' --fail --silent --show-error -H "X-Internal-Token: $${SHAREO_INTERNAL_TOKEN:-shareo-dev-internal}" http://127.0.0.1:$(SHAREO_AI_PORT)/readyz/search
+
 brew-minio-ready:
 	bash scripts/start_minio_homebrew.sh
 	curl --noproxy '*' --fail --silent --show-error http://127.0.0.1:9000/minio/health/live
@@ -119,6 +142,12 @@ brew-reset-data:
 
 backfill-index: ## 将所有 approved 帖子重新投递到语义搜图索引队列
 	go run ./cmd/backfill-index
+
+reconcile-index: ## 审计语义索引；APPLY=1 时修复缺失/过期/残留向量
+	cd ai-service && SHAREO_AI_INTERNAL_TOKEN="$${SHAREO_INTERNAL_TOKEN:-shareo-dev-internal}" uv run --frozen python -m app.commands.reconcile_index $(if $(filter 1,$(APPLY)),--apply,)
+
+eval-image-search: ## 对已标注的 40 条查询运行语义/FULLTEXT 对比评测
+	cd ai-service && uv run --frozen python -m app.commands.eval_image_search
 
 # Show help
 help:
@@ -132,14 +161,21 @@ help:
 	@echo "  make check-shell - Validate all shell scripts"
 	@echo "  make check-docs - Validate local Markdown links"
 	@echo "  make test-integration - Run tests that require MySQL/Redis"
+	@echo "  make test-image-search-e2e - Run disposable MySQL/Redis/MinIO/Qdrant semantic E2E"
 	@echo "  make dev-up    - Start development dependencies with Docker Compose"
 	@echo "  make dev-config - Validate Docker Compose configuration"
 	@echo "  make dev-ready - Verify AI liveness and readiness"
 	@echo "  make dev-down  - Stop development dependencies"
 	@echo "  make dev-reset - Recreate development dependencies and their data"
 	@echo "  make dev-clean-data - Stop services and remove development volumes"
+	@echo "  make vector-up/vector-ready/vector-down - Manage only Docker Qdrant"
+	@echo "  make ai-run / ai-worker - Run AI API or worker against local services"
+	@echo "  make ai-search-ready - Verify model + Qdrant search readiness"
 	@echo "  make brew-minio-ready - Start/check Homebrew MinIO on ports 9000/9001"
 	@echo "  make brew-reset-data - Destructively reset Homebrew ShareO data (CONFIRM=YES)"
+	@echo "  make backfill-index - Queue all approved posts for indexing"
+	@echo "  make reconcile-index [APPLY=1] - Audit or repair image index"
+	@echo "  make eval-image-search - Run labeled semantic vs keyword evaluation"
 	@echo "  make fmt       - Check code formatting (gofmt)"
 	@echo "  make migrate   - Run database migration"
 	@echo "  make seed      - Generate test data"

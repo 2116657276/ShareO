@@ -1,6 +1,6 @@
 # ShareO v2 架构文档
 
-> 更新时间: 2026-07-21 | 状态: Phase 0 本地门禁完成、远端 CI 待确认 / Phase 1 后端加固中，随实现滚动更新
+> 更新时间: 2026-07-21 | 状态: Phase 0 本地完成 / Phase 1 后端候选 / Phase 2 后端进行中
 
 ## 1. 演进目标
 
@@ -97,7 +97,9 @@ Worker 消费 (consumer group: ai-workers):
 | 浏览器写安全 | Go 1.25 `http.CrossOriginProtection` + 精确 trusted origins | 标准库优先，不维护 Token 库 |
 | 前端 | 维持 Go Templates + Alpine.js | 范围控制，不引 SPA |
 
-## 6. 目标项目结构
+## 6. 当前结构与目标结构
+
+当前代码已经包含 `internal/ws`、`internal/pkg/queue`、Phase 2 Go handler、`ai-service/app/core`、worker 和运维命令；尚未建立 RAG、Agent、独立 aiclient 包和搜索页面。下列目录是完成 Phase 4 后的目标结构，不代表当前全部存在。
 
 ```
 ShareO/

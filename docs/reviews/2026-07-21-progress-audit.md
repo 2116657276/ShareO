@@ -6,7 +6,7 @@
 
 审计前文档把 Phase 0 标为完成、Phase 1 标为待启动，但代码已经存在未成熟的 IM 实现，同时 Phase 0 的 Python CI、Streams 重领、Shell 脚本和 Compose 可复现性没有达到退出标准。名义进度与实际可验收进度不一致。
 
-本轮按“恢复可信基线 -> 加固 IM -> 同步文档”实施。当前后端与终端验收已显著前移：真实 MySQL/Redis、Compose、API/IM 冒烟均已取得证据；浏览器与前端手工验收按用户确认暂缓。因此 `TASK.md` 保持“Phase 0 本地门禁完成、远端 CI 待确认 / Phase 1 后端加固中”，不以代码存在代替阶段完成。
+本轮按“恢复可信基线 -> 加固 IM -> 同步文档”实施。当前正式状态统一为“Phase 0 本地完成 / Phase 1 后端候选 / Phase 2 后端进行中”；浏览器与发布验收等待 Phase 2 质量门禁。
 
 ## 2. 初始差距
 
@@ -20,22 +20,22 @@
 
 ## 3. 计划—实现—证据矩阵
 
-“提交”列在用户明确要求提交前记录为当前工作区；后续提交时替换为 commit SHA。
+历史收口工作对应提交 `57b9615`，后续发布状态记录为 `34f1069`，Phase 2 初始切片为 `7a96feb`。
 
 | 计划项 | 实现位置 | 提交 | 自动测试证据 | 手工/环境证据 | 状态 |
 |--------|----------|------|--------------|---------------|------|
-| Streams 4 次处理、XAUTOCLAIM、最终 ACK | `ai-service/app/workers/consumer.py` | 当前工作区 | Python 单测覆盖 ACK/重试/重领/重启；真实 Redis DB 15 的 2 项集成测试通过 | Redis 证据已取得 | 已实现 |
-| Python 3.12/uv lock/CI | `pyproject.toml`, `uv.lock`, `python.yml` | 当前工作区 | Ruff + format + pytest 通过 | CI 尚未在远端运行 | 加固中 |
-| Make/Shell | `Makefile`, `scripts/test_api.sh`, `scripts/test_chat.sh` | 当前工作区 | `bash -n` 已通过 | API/IM 脚本通过；API 34/34 | 已实现 |
-| Compose/AI readiness | `deploy/docker-compose.yml`, `ai-service/Dockerfile`, `/healthz`, `/readyz` | 当前工作区 | health 单测通过 | Compose config/up/ready/reset 通过；MySQL 15 张结构表、users=0；镜像 digest 已记录 | 已实现 |
-| slog 收口 | `internal/service`, `repository`, `ws` | 当前工作区 | 全仓检索无业务 `log.Printf/log.Println` | — | 已实现 |
-| 010 迁移与事务聊天 | `migrations/010_chat_hardening.sql`, `chat_repo.go` | 当前工作区 | 009→010 临时库迁移及 MySQL 集成通过；测试库/用户已自动清理 | 真实 MySQL 证据已取得 | 已实现 |
-| 邀请制群组/API | `chat_service.go`, `chat_handler.go`, `router.go` | 当前工作区 | 权限、限制、错误映射单测通过 | `scripts/test_chat.sh` 通过；双浏览器暂缓 | 已实现（终端） |
-| 精确未读/MarkRead | `chat_repo.go` | 当前工作区 | 真实 MySQL 验证准确未读、消息归属和单调读标记 | 证据已取得 | 已实现 |
-| WS 认证/吊销/在线 | `middleware/auth.go`, `ws/`, auth/admin handlers, `presence.go` | 当前工作区 | Hub 多连接与慢连接单测通过 | Redis Compose 已就绪；双浏览器暂缓 | 已实现（终端/单测） |
-| 去重/断线恢复/群 UI | `web/templates/chat/chat.html` | 当前工作区 | API 恢复路径纳入冒烟脚本 | 页面手工与断网测试暂缓 | 加固中（页面验收待后） |
-| Origin/CSRF/无副作用 GET | `cross_origin.go`, `chat_handler.go`, router/templates | 当前工作区 | 同源/可信/跨站/CLI 矩阵通过 | 部署域名 trusted origin 待验证 | 加固中 |
-| 文档与任务事实源 | `TASK.md`, `docs/plan.md`, 本审计等 | 当前工作区 | 链接检查通过 | 已同步终端验收结果与暂缓决策 | 已实现 |
+| Streams 4 次处理、XAUTOCLAIM、最终 ACK | `ai-service/app/workers/consumer.py` | `57b9615` | Python 单测覆盖 ACK/重试/重领/重启；真实 Redis DB 15 的 2 项集成测试通过 | Redis 证据已取得 | 已实现 |
+| Python 3.12/uv lock/CI | `pyproject.toml`, `uv.lock`, `python.yml` | `57b9615` | Ruff + format + pytest 通过 | CI 尚未在远端运行 | 加固中 |
+| Make/Shell | `Makefile`, `scripts/test_api.sh`, `scripts/test_chat.sh` | `57b9615` | `bash -n` 已通过 | API/IM 脚本通过；API 34/34 | 已实现 |
+| Compose/AI readiness | `deploy/docker-compose.yml`, `ai-service/Dockerfile`, `/healthz`, `/readyz` | `57b9615` | health 单测通过 | Compose config/up/ready/reset 通过；MySQL 15 张结构表、users=0；镜像 digest 已记录 | 已实现 |
+| slog 收口 | `internal/service`, `repository`, `ws` | `57b9615` | 全仓检索无业务 `log.Printf/log.Println` | — | 已实现 |
+| 010 迁移与事务聊天 | `migrations/010_chat_hardening.sql`, `chat_repo.go` | `57b9615` | 009→010 临时库迁移及 MySQL 集成通过；测试库/用户已自动清理 | 真实 MySQL 证据已取得 | 已实现 |
+| 邀请制群组/API | `chat_service.go`, `chat_handler.go`, `router.go` | `57b9615` | 权限、限制、错误映射单测通过 | `scripts/test_chat.sh` 通过；双浏览器暂缓 | 已实现（终端） |
+| 精确未读/MarkRead | `chat_repo.go` | `57b9615` | 真实 MySQL 验证准确未读、消息归属和单调读标记 | 证据已取得 | 已实现 |
+| WS 认证/吊销/在线 | `middleware/auth.go`, `ws/`, auth/admin handlers, `presence.go` | `57b9615` | Hub 多连接与慢连接单测通过 | Redis Compose 已就绪；双浏览器暂缓 | 已实现（终端/单测） |
+| 去重/断线恢复/群 UI | `web/templates/chat/chat.html` | `57b9615` | API 恢复路径纳入冒烟脚本 | 页面手工与断网测试暂缓 | 后端候选 |
+| Origin/CSRF/无副作用 GET | `cross_origin.go`, `chat_handler.go`, router/templates | `57b9615` | 同源/可信/跨站/CLI 矩阵通过 | 部署域名 trusted origin 待验证 | 后端候选 |
+| 文档与任务事实源 | `TASK.md`, `docs/plan.md`, 本审计等 | `34f1069` | 链接检查通过 | 已同步终端验收结果与暂缓决策 | 已实现 |
 
 ## 4. 门禁记录
 
@@ -44,13 +44,13 @@
 | Go 单元测试 | 通过 | `go test ./...` |
 | Python lint/format/unit | 通过 | Ruff、format check、10 项非集成 pytest |
 | Shell 语法 | 通过 | `start.sh` 与 `scripts/*.sh` |
-| `make check` | 通过 | Go fmt/vet/test、Python locked lint/format/10 项单测、Shell、48 个 Markdown 文件链接 |
+| `make check` | 通过 | Go fmt/vet/test、Python locked lint/format、Shell 与 Markdown 链接 |
 | `go test -race ./...` | 通过 | 最终工作区全包竞态检测通过 |
 | MySQL/Redis integration | 通过 | 临时 `*_test` 库完成 009→010 后 Go 集成通过；Redis 2 项真实集成通过；临时数据库和用户已清理 |
 | Compose config/up/ready/reset | 通过 | 使用本机 Docker Compose；通过 `make dev-config`、`make dev-up`、`make dev-ready`、`make dev-reset`；MinIO/Qdrant/uv digest 已写入 Compose/Dockerfile |
 | API 冒烟 | 通过 | `bash scripts/test_api.sh`：34 PASS / 0 FAIL；`bash scripts/test_chat.sh`：全部通过 |
 | 双浏览器 | 暂缓 | 用户确认后再做；清单保留在 `docs/design/im.md`，不阻塞当前后端终端成熟度推进 |
-| 文档链接/工作区检查 | 通过 | 48 个 Markdown 文件本地链接通过；Python 缓存已忽略并清理，无意外生成文件 |
+| 文档链接/工作区检查 | 通过 | 文档链接通过；Python 缓存已忽略并清理，无意外生成文件 |
 
 ## 5. 完成判定
 
@@ -81,7 +81,7 @@ Phase 0 和 Phase 1 只有在 `TASK.md` 最终门禁全部有可复核证据时�
 ## 8. 文档复核与当前发布状态（2026-07-21）
 
 - 复核发现并修正 `docs/plan.md` Phase 1.1 的状态漂移：迁移后的真实 `*_test` MySQL 集成已通过，不再列为缺失证据；保留 CI/发布环境迁移演练作为发布前补充。
-- `TASK.md`、`docs/plan.md`、`docs/roadmap.md` 统一标记为“Phase 0 本地门禁完成、远端 CI 待确认 / Phase 1 后端加固中”。
+- `TASK.md`、`docs/plan.md`、`docs/roadmap.md` 已重构为状态、执行索引和里程碑三层；阶段细节移入 `docs/phases/`。
 - 本地 Markdown 链接检查（48 个文件）与 `git diff --check` 已通过；本轮修改已形成本地提交并发布到 `agent/phase0-phase1-closeout`。由于 SSH/HTTPS Git transport 受当前网络限制，远端分支通过 GitHub API 写入等价快照，文件树已与本地 HEAD 核对一致；远端 CI 结果待确认。
 - 浏览器和前端手工验收继续按用户确认暂缓，不改变当前后端终端验收结论。
 
@@ -91,10 +91,18 @@ Phase 0 和 Phase 1 只有在 `TASK.md` 最终门禁全部有可复核证据时�
 - 本地启动固定使用 Homebrew 安装的 MinIO 二进制、`$HOME/minio_data`、API `9000`、Console `9001`；Compose named volume 不参与本机数据清理。
 - 旧数据按用户确认清理 MySQL `shareo`、Redis DB 0 和 MinIO `shareo` bucket；Phase 2 先实现后端语义搜图闭环，浏览器/前端暂缓。
 
-## 10. Phase 2 后端实现记录（当前工作区）
+## 10. Phase 2 后端实现记录（`7a96feb`）
 
 - Go 新增受 `X-Internal-Token` 保护的索引载荷接口和 `GET /api/v1/search/images`；查询侧再次过滤 approved/未删除帖子。
 - Python 新增 Chinese-CLIP 懒加载、Qdrant `images` collection、幂等 `index_post` worker；worker 通过 Go 图片代理读 medium 图片，不持有 MinIO 凭证。
 - 审核通过/驳回、用户删除、管理员删除和编辑重审进入 Streams；`make backfill-index` 支持 approved 存量回填。
 - 新增 `scripts/test_image_search.sh`，采用注册、上传、审核、轮询搜索命中、删除后消失的 curl 验收；需要显式 seed 管理员后运行。
-- 当前自动证据：Go `go test ./...`、Python 17 项非集成测试、Ruff/format、Shell 语法和 Markdown 链接检查均通过；真实 Qdrant + Chinese-CLIP 端到端仍待依赖服务启动后验收，因此 Phase 2 不标记完成。
+- 初始自动证据为 Go `go test ./...`、Python 20 项非集成测试、Ruff/format、Shell 语法和 Markdown 链接检查；真实 Qdrant + Chinese-CLIP 端到端仍待验收，因此 Phase 2 不标记完成。
+
+## 11. Phase 2 成熟化与文档分阶段重构
+
+- `TASK.md` 只保留当前状态和证据入口；`docs/plan.md` 改为执行索引，Phase 0–4 各自使用独立阶段文档。
+- 固定 Chinese-CLIP revision，增加模型后台预热、搜索专用 readiness/meta、并发限制、8 秒调用超时、Qdrant schema 拒绝覆盖和 `post_id` payload index。
+- 公网结果按帖子最高分去重且不暴露 `object_key`；增加索引 dry-run/apply 对账和拒绝空标签的 40 条查询评测器。
+- 隔离 E2E 固定使用 `shareo_e2e`、Redis DB 15、`shareo-e2e` bucket、`images-e2e` collection，覆盖删除 10 秒内不可见、重复回填和 worker 重启 45 秒内 pending 重领，并自动清理隔离资源。
+- 本轮已通过 Python 27 项非集成测试、2 项 Redis 集成测试、Go 单元/真实 MySQL 集成/race、Compose 配置、Shell 语法和 61 个 Markdown 链接；测试后的 `shareo_test` 与 Redis DB 15 均已清空。真实模型/Qdrant E2E 与人工评测尚未取得证据，Phase 2 保持进行中。

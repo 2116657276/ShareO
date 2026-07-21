@@ -40,8 +40,10 @@ Redis Streams 使用 `shareo:stream:index_post`，字段为 `action=upsert|delet
 
 ## 向量与设备
 
-Chinese-CLIP `OFA-Sys/chinese-clip-vit-base-patch16` 懒加载，设备顺序 CUDA → MPS → CPU；输出归一化为 512 维。Qdrant 使用 cosine 距离，payload 至少含 `post_id`、`image_id`、`object_key`、`created_at`。
+Chinese-CLIP `OFA-Sys/chinese-clip-vit-base-patch16` 固定 revision `36e679e65c2a2fead755ae21162091293ad37834`，启动后后台预热，设备顺序 CUDA → MPS → CPU；输出归一化为 512 维。Qdrant 使用 cosine 距离并为 `post_id` 建 payload index，payload 含 `post_id`、`image_id`、`object_key`、`created_at`、`model_revision`。`/readyz/search` 只在模型与 collection 均可用时返回 200。
+
+上面的 `object_key` 只存在于 Go↔AI 内部协议和 Qdrant payload。公网 `GET /api/v1/search/images` 每项固定返回 `post_id`、`image_id`、`image_url`、`score`、`post`，不会暴露对象键；同一帖子仅保留最高分图片。
 
 ## 本轮不做
 
-搜索页面、浏览器验收、评测集和 4060 吞吐实验留到后续 Phase 2 工作；当前以 API、worker、索引/删除和 curl 验收为准。
+搜索页面和浏览器验收等待真实闭环及质量评测通过；4060 吞吐只记录实验，不阻塞本地门禁。当前阶段细节以 [Phase 2 文档](../phases/phase-2-image-search.md) 为准。

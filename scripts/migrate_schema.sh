@@ -9,9 +9,18 @@ DB_USER="${MYSQL_USER:-root}"
 DB_NAME="${MYSQL_DATABASE:-shareo}"
 export MYSQL_PWD="${MYSQL_PASS:-shareo_pass}"
 
+if [[ ! "$DB_NAME" =~ ^[A-Za-z0-9_]+$ ]]; then
+    echo "MYSQL_DATABASE must contain only letters, digits, or underscores" >&2
+    exit 2
+fi
+
 mysql_args=(-h "$DB_HOST" -P "$DB_PORT" -u "$DB_USER")
 
-sed '/^-- 默认管理员账号/,$d' "$PROJECT_DIR/migrations/001_init.sql" | mysql "${mysql_args[@]}"
+sed \
+    -e "s/^CREATE DATABASE IF NOT EXISTS shareo$/CREATE DATABASE IF NOT EXISTS $DB_NAME/" \
+    -e "s/^USE shareo;$/USE $DB_NAME;/" \
+    -e '/^-- 默认管理员账号/,$d' \
+    "$PROJECT_DIR/migrations/001_init.sql" | mysql "${mysql_args[@]}"
 
 schema_migrations=(
     003_triggers.sql

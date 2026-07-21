@@ -31,3 +31,38 @@ def test_embedder_is_lazy():
     embedder = ImageEmbedder(device="cpu")
     assert embedder._model is None
     assert embedder._processor is None
+
+
+def test_warmup_pins_revision_and_cache():
+    calls = []
+
+    class ProcessorFactory:
+        @staticmethod
+        def from_pretrained(model, **kwargs):
+            calls.append(("processor", model, kwargs))
+            return object()
+
+    class Model:
+        def to(self, _device):
+            return self
+
+        def eval(self):
+            return self
+
+    class ModelFactory:
+        @staticmethod
+        def from_pretrained(model, **kwargs):
+            calls.append(("model", model, kwargs))
+            return Model()
+
+    embedder = ImageEmbedder(
+        device="cpu",
+        revision="fixed-rev",
+        cache_dir="/tmp/models",
+        processor_factory=ProcessorFactory,
+        model_factory=ModelFactory,
+    )
+    embedder.warmup()
+    assert embedder.loaded
+    assert embedder.metadata()["revision"] == "fixed-rev"
+    assert all(call[2] == {"revision": "fixed-rev", "cache_dir": "/tmp/models"} for call in calls)

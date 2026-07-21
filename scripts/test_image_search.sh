@@ -41,6 +41,9 @@ CREATE="$(curl --fail --silent -X POST "$BASE/api/v1/posts" -b "token=$TOKEN" \
   -H 'Content-Type: application/json' \
   -d "{\"content\":\"semantic image smoke test\",\"images\":[\"$IMGURL\"]}")"
 POSTID="$(printf '%s' "$CREATE" | python3 -c 'import json,sys; print(json.load(sys.stdin)["data"]["id"])')"
+if [ -n "${SHAREO_TEST_POST_ID_FILE:-}" ]; then
+  printf '%s\n' "$POSTID" > "$SHAREO_TEST_POST_ID_FILE"
+fi
 
 ADMIN_LOGIN="$(curl --fail --silent -X POST "$BASE/api/v1/auth/login" \
   -H 'Content-Type: application/json' \
@@ -50,7 +53,7 @@ curl --fail --silent -X POST "$BASE/api/v1/admin/posts/$POSTID/approve" \
   -b "token=$ADMIN_TOKEN" >/dev/null
 
 FOUND=""
-for _ in $(seq 1 60); do
+for _ in $(seq 1 180); do
   FOUND="$(curl --fail --silent --get "$BASE/api/v1/search/images" \
     --data-urlencode 'q=red square' --data-urlencode 'limit=20')"
   if printf '%s' "$FOUND" | grep -q "\"post_id\":$POSTID"; then
@@ -64,8 +67,13 @@ if ! printf '%s' "$FOUND" | grep -q "\"post_id\":$POSTID"; then
   exit 1
 fi
 
+if [ "${SHAREO_TEST_SKIP_DELETE:-0}" = "1" ]; then
+  echo "PASS approved post retained for isolated recovery checks post=$POSTID"
+  exit 0
+fi
+
 curl --fail --silent -X DELETE "$BASE/api/v1/admin/posts/$POSTID" -b "token=$ADMIN_TOKEN" >/dev/null
-for _ in $(seq 1 30); do
+for _ in $(seq 1 10); do
   FOUND="$(curl --fail --silent --get "$BASE/api/v1/search/images" \
     --data-urlencode 'q=red square' --data-urlencode 'limit=20')"
   if ! printf '%s' "$FOUND" | grep -q "\"post_id\":$POSTID"; then
@@ -74,5 +82,5 @@ for _ in $(seq 1 30); do
   fi
   sleep 1
 done
-echo "deleted post still appears in semantic search post=$POSTID" >&2
+echo "deleted post still appears in semantic search after 10 seconds post=$POSTID" >&2
 exit 1

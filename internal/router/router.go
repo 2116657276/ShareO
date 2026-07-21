@@ -184,6 +184,7 @@ func SetupRouter(trustedOrigins ...string) *gin.Engine {
 	internalAPI.Use(middleware.InternalTokenAuth())
 	{
 		internalAPI.GET("/health", internalH.HealthCheck)
+		internalAPI.GET("/posts/index-payloads", internalH.ListIndexPayloads)
 		internalAPI.GET("/posts/:id/index-payload", internalH.IndexPayload)
 	}
 

@@ -33,7 +33,7 @@ async def test_image_search_returns_qdrant_results(monkeypatch):
         )
     assert response.status_code == 200
     assert response.json()["results"][0]["post_id"] == 9
-    store.search.assert_awaited_once_with([1.0] * 512, 5)
+    store.search.assert_awaited_once_with([1.0] * 512, 15)
 
 
 @pytest.mark.asyncio

@@ -1,60 +1,43 @@
-# TASK.md — 开发任务跟踪
+# TASK.md — 当前任务与证据
 
-> 更新时间: 2026-07-21 | 当前阶段: **Phase 0 本地门禁完成、Phase 1 后端加固中 / Phase 2 语义搜图后端垂直切片进行中** | 详细计划: [docs/plan.md](docs/plan.md)
+> 更新时间: 2026-07-21 | 后端能力线: **Phase 2 进行中** | 发布验收线: **Phase 1 后端候选，页面验收待后**
 >
-> 本文件与 `docs/plan.md` 是任务状态的事实来源。GitHub Issues 仅用于可选协作，不决定阶段完成度。
+> 本文件是当前状态的唯一事实来源；执行顺序见 [docs/plan.md](docs/plan.md)，阶段细节见 [docs/phases/](docs/phases/README.md)。
 
-## Phase 0 收口
+## 已完成
 
-- [x] Redis Streams：失败不 ACK；30 秒 idle 后由 `XAUTOCLAIM` 重领；最多 4 次处理；最终记录上下文并 ACK，不设死信队列
-- [x] Python 3.12 + uv dev dependency group + `uv.lock`；CI locked/frozen；Ruff、pytest、Redis `aclose()` 已收口
-- [x] `make check-go` / `check-python` / `check-shell`；集成测试独立为 `make test-integration`
-- [x] `scripts/test_api.sh` 临时图片生成与清理修复；所有 Shell 脚本可做统一语法检查
-- [x] Compose 只自动执行结构迁移；开发凭证与示例配置一致；提供 config/up/ready/reset/clean 命令
-- [x] AI `/healthz` 与 `/readyz` 分离；Compose 使用 readiness healthcheck
-- [x] 业务层、仓储层和 WS 裸 `log.Printf/log.Println` 已迁移到 `slog`
-- [x] 在 Docker Compose 主机完成镜像拉取、启动、ready/reset 验收，并记录 MinIO/Qdrant/uv 基础镜像 digest（本机固定端口冲突时使用端口覆盖）
-- [x] 在真实 Redis DB 15 执行 pending 重领/最终 ACK 集成测试（2 项通过）
+- [x] Phase 0 本地工程基线：Go/Python/Shell/文档门禁、可靠 Streams、Compose、AI liveness/readiness、结构化日志（`57b9615`）
+- [x] Phase 1 后端候选：事务 IM、邀请制群组、精确未读、WS 恢复/吊销、Origin/CSRF、真实 MySQL/Redis 与终端验收（`57b9615`）
+- [x] Homebrew 本地数据重置、MinIO 运行固化、Phase 2 搜图后端初始切片（`7a96feb`）
+- [x] 当前本地门禁：`make check`、`make test-integration`、`go test -race ./...`、API/IM curl、Compose 与文档链接均已有证据
 
-## Phase 1 加固
+## 进行中：Phase 2 后端闭环
 
-- [x] 新增前向迁移 `010_chat_hardening.sql`：孤儿预检、清理查询、会话级联和用户限制外键
-- [x] `ChatRepository` / `PresenceStore` / `MessageHub` 接口化；Chat Handler 全部传递请求 context
-- [x] DM、建群、发消息、解散事务化；并发邀请成员上限通过行锁保护
-- [x] 消息/群名/成员数/用户搜索限制；统一 400/403/404/409 与数据库错误脱敏
-- [x] 精确未读 SQL；MarkRead 验证本会话消息并使用 `GREATEST`
-- [x] 删除公开 join/旧 leave；实现群主邀请、普通成员退出、群主解散、用户搜索
-- [x] WS 握手复用 JWT + Redis 登录缓存；登出、改密、封禁主动断开连接
-- [x] 精确 Origin 白名单；Redis 在线 TTL；最后连接断开删除在线 key
-- [x] 前端消息 ID 去重、`after_id` 断线补偿、`?conv=` 自动打开、30 秒刷新、群组操作入口
-- [x] Go 1.25.1+ `http.CrossOriginProtection`；`POST /logout`；浏览计数改为受保护的 POST
-- [x] 单元测试与可选 MySQL/Redis 集成测试骨架；扩展 `scripts/test_chat.sh`
-- [x] 在临时迁移的 `*_test` MySQL 库与真实 Redis DB 15 执行 `make test-integration`，通过后自动清理
-- [x] 运行终端 API/IM 冒烟脚本；双浏览器和前端手工清单按当前决策暂缓，不作为后端成熟前的工作项
+- [x] Chinese-CLIP 懒加载、设备选择、512 维向量和 Qdrant `images`
+- [x] 审核/删除索引事件、Go 图片代理 worker、公开搜索 API、回填命令
+- [x] 独立 Qdrant 本地命令与 AI API/worker 运行命令（待提交）
+- [x] 固定模型 revision、后台预热、搜索专用 readiness 和元信息（待提交）
+- [x] collection schema 校验与 `post_id` payload index（待提交）
+- [x] 每帖最高分去重、稳定公开响应、搜索结构化日志（待提交）
+- [ ] 隔离 E2E：上传→审核→索引→命中→删除→不可见
+- [x] 索引对账 dry-run/apply 与 40 条评测模板/执行器（待提交；数据待人工标注）
+- [ ] 真实依赖故障注入、评测集标注与质量/性能报告
 
-## 最终门禁
+## 发布验收线
 
-- [x] `make check`
-- [x] `make test-integration`（真实 MySQL/Redis，不以 skip 代替通过）
-- [x] `bash -n` 全部 Shell 脚本
-- [x] Compose config/up/ready/reset 验证
-- [x] `scripts/test_api.sh`（34/34）与 `scripts/test_chat.sh`
-- [x] `go test -race ./...`
-- [ ] 双浏览器手工清单全部勾选（按当前决策暂缓，后端/接口成熟后再执行）
-- [x] 文档链接检查、工作区意外文件检查
+- [ ] Phase 2 质量门禁通过后实现关键词/语义最小搜索页面
+- [ ] Phase 1 双浏览器、断网恢复、WS 吊销、群组操作和部署 trusted origin
+- [ ] Phase 2 页面空态、预热、降级和演示验收
 
-只有上面门禁都有证据后，才把 Phase 0 标为 100%、Phase 1 标为完成。当前证据见 [2026-07-21 进度审计](docs/reviews/2026-07-21-progress-audit.md)。
+## 阻塞与暂缓
 
-## Phase 2–4
+- 远端 CI 结果尚未取得可复核证据；Phase 0 只标记“本地完成”。
+- 当前执行环境的 Docker daemon、Qdrant 和 Homebrew MinIO 未运行；Phase 2 真实闭环不得标记完成。
+- Phase 3 必须等待 Phase 2 评测通过；Phase 4 Agent 是扩展目标，不影响核心完成判定。
 
-Phase 2 语义搜图后端已开始：
+## 当前证据
 
-- [x] Chinese-CLIP 懒加载、CUDA → MPS → CPU 设备选择、512 维归一化输出
-- [x] Qdrant `images` collection、索引载荷和 token 保护的 AI 搜索 API
-- [x] 审核/删除事件、Go 图片代理 worker、幂等 upsert/delete、`make backfill-index`
-- [x] Go `GET /api/v1/search/images` 可见性过滤和统一错误映射
-- [x] Python 单测、worker 单测和 `scripts/test_image_search.sh` 终端验收脚本
-- [ ] Homebrew MinIO + Qdrant + Chinese-CLIP 实际上传→审核→搜索→删除端到端证据
-- [ ] 搜索页面、浏览器验收、评测集与 4060 吞吐实验（按当前范围暂缓）
-
-任务和时间线保留在 `docs/plan.md` 与 `docs/roadmap.md`；没有真实 Qdrant/模型端到端证据前，Phase 2 不标记完成。
+- [2026-07-21 进度审计](docs/reviews/2026-07-21-progress-audit.md)
+- [Phase 0 详细计划](docs/phases/phase-0-foundation.md)
+- [Phase 1 详细计划](docs/phases/phase-1-im.md)
+- [Phase 2 详细计划](docs/phases/phase-2-image-search.md)

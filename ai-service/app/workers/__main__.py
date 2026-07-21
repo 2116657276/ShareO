@@ -22,7 +22,7 @@ async def main():
     logger = logging.getLogger(__name__)
     redis = Redis.from_url(settings.redis_url, decode_responses=True)
     http_client = httpx.AsyncClient(timeout=10.0)
-    vector_store = ImageVectorStore(settings.qdrant_url)
+    vector_store = ImageVectorStore(settings.qdrant_url, settings.image_collection)
     indexer = ImageIndexer(http_client, ImageEmbedder(), vector_store)
 
     async def handle_bot_task(msg_id: str, fields: dict):

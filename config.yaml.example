@@ -4,6 +4,7 @@ server:
   mode: debug  # debug | release | test
   trusted_origins: []  # Exact extra origins, e.g. ["https://shareo.example.com"]
   # Go ↔ ai-service internal calls use SHAREO_INTERNAL_TOKEN (environment only).
+  # Go calls ai-service at SHAREO_AI_BASE_URL (default http://127.0.0.1:8000).
 
 database:
   host: 127.0.0.1

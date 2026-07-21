@@ -59,6 +59,11 @@ services:
       SHAREO_AI_REDIS_URL: redis://redis:6379/0
       SHAREO_AI_QDRANT_URL: http://qdrant:6333
       SHAREO_AI_INTERNAL_TOKEN: ${SHAREO_INTERNAL_TOKEN:-shareo-dev-internal}
+      SHAREO_AI_MODEL_CACHE_DIR: /models
+      SHAREO_AI_EMBEDDING_REVISION: ${SHAREO_AI_EMBEDDING_REVISION:-36e679e65c2a2fead755ae21162091293ad37834}
+      SHAREO_AI_EMBEDDING_CONCURRENCY: ${SHAREO_AI_EMBEDDING_CONCURRENCY:-1}
+    volumes:
+      - hf_cache:/models
     ports:
       - "${SHAREO_AI_PORT:-8000}:8000"
     depends_on:
@@ -82,6 +87,11 @@ services:
       SHAREO_AI_QDRANT_URL: http://qdrant:6333
       SHAREO_AI_INTERNAL_TOKEN: ${SHAREO_INTERNAL_TOKEN:-shareo-dev-internal}
       SHAREO_AI_GO_BASE_URL: ${SHAREO_AI_GO_BASE_URL:-http://host.docker.internal:8080}
+      SHAREO_AI_MODEL_CACHE_DIR: /models
+      SHAREO_AI_EMBEDDING_REVISION: ${SHAREO_AI_EMBEDDING_REVISION:-36e679e65c2a2fead755ae21162091293ad37834}
+      SHAREO_AI_EMBEDDING_CONCURRENCY: ${SHAREO_AI_EMBEDDING_CONCURRENCY:-1}
+    volumes:
+      - hf_cache:/models
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:
@@ -95,3 +105,4 @@ volumes:
   mysql_data:
   minio_data:
   qdrant_data:
+  hf_cache:

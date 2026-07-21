@@ -1,5 +1,7 @@
 """Idempotent post image indexing worker."""
 
+import logging
+import time
 from io import BytesIO
 from typing import Any
 
@@ -9,6 +11,8 @@ from PIL import Image
 from app.config import settings
 from app.core.embedding import ImageEmbedder
 from app.core.vectorstore import ImageVectorStore, image_payload
+
+logger = logging.getLogger(__name__)
 
 
 class ImageIndexer:
@@ -29,10 +33,16 @@ class ImageIndexer:
         )
 
     async def handle(self, _msg_id: str, fields: dict[str, Any]) -> None:
+        started = time.perf_counter()
         action = str(fields.get("action", "upsert"))
         post_id = int(fields["post_id"])
         if action == "delete":
             await self.vector_store.delete_post(post_id)
+            logger.info(
+                "image index delete complete post_id=%d duration_ms=%.1f",
+                post_id,
+                (time.perf_counter() - started) * 1000,
+            )
             return
         if action != "upsert":
             raise ValueError(f"unsupported index action: {action}")
@@ -83,9 +93,16 @@ class ImageIndexer:
                     image["image_id"],
                     image["object_key"],
                     image["created_at"],
+                    settings.embedding_revision,
                 ),
             }
             for image, vector in zip(images, vectors, strict=True)
         ]
         await self.vector_store.delete_post(post_id)
         await self.vector_store.upsert(points)
+        logger.info(
+            "image index upsert complete post_id=%d images=%d duration_ms=%.1f",
+            post_id,
+            len(points),
+            (time.perf_counter() - started) * 1000,
+        )

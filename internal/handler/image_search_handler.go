@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"os"
 	"strconv"
@@ -27,14 +28,18 @@ type imageSearchAIResponse struct {
 	Results []imageSearchAIResult `json:"results"`
 }
 
+type imageSearchPostReader interface {
+	FindByIDs([]int64) ([]model.Post, error)
+}
+
 type ImageSearchHandler struct {
-	postRepo  *repository.PostRepo
+	postRepo  imageSearchPostReader
 	client    *http.Client
 	aiBaseURL string
 	token     string
 }
 
-func NewImageSearchHandler(postRepo *repository.PostRepo) *ImageSearchHandler {
+func NewImageSearchHandler(postRepo imageSearchPostReader) *ImageSearchHandler {
 	if postRepo == nil {
 		postRepo = repository.NewPostRepo()
 	}
@@ -44,13 +49,14 @@ func NewImageSearchHandler(postRepo *repository.PostRepo) *ImageSearchHandler {
 	}
 	return &ImageSearchHandler{
 		postRepo:  postRepo,
-		client:    &http.Client{Timeout: 5 * time.Second},
+		client:    &http.Client{Timeout: 8 * time.Second},
 		aiBaseURL: baseURL,
 		token:     os.Getenv("SHAREO_INTERNAL_TOKEN"),
 	}
 }
 
 func (h *ImageSearchHandler) Search(c *gin.Context) {
+	started := time.Now()
 	query := strings.TrimSpace(c.Query("q"))
 	if query == "" || utf8.RuneCountInString(query) > 200 {
 		response.BadRequest(c, "搜索描述长度必须为 1-200 个字符")
@@ -78,11 +84,13 @@ func (h *ImageSearchHandler) Search(c *gin.Context) {
 	}
 	resp, err := h.client.Do(req)
 	if err != nil {
+		slog.Warn("semantic image search request failed", "duration_ms", time.Since(started).Milliseconds(), "err", err)
 		response.Error(c, http.StatusServiceUnavailable, response.ErrCodeInternal, "语义搜图暂不可用")
 		return
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
+		slog.Warn("semantic image search unavailable", "status", resp.StatusCode, "duration_ms", time.Since(started).Milliseconds())
 		response.Error(c, http.StatusServiceUnavailable, response.ErrCodeInternal, "语义搜图暂不可用")
 		return
 	}
@@ -111,17 +119,27 @@ func (h *ImageSearchHandler) Search(c *gin.Context) {
 	for _, post := range posts {
 		postByID[post.ID] = post
 	}
-	results := make([]gin.H, 0, len(ai.Results))
+	results := make([]gin.H, 0, limit)
+	returnedPosts := make(map[int64]struct{}, limit)
 	for _, item := range ai.Results {
+		if len(results) >= limit {
+			break
+		}
+		if _, duplicate := returnedPosts[item.PostID]; duplicate {
+			continue
+		}
 		post, ok := postByID[item.PostID]
 		if !ok {
 			continue
 		}
+		returnedPosts[item.PostID] = struct{}{}
 		results = append(results, gin.H{
 			"image_id": item.ImageID, "post_id": item.PostID,
-			"object_key": item.ObjectKey, "score": item.Score,
-			"post": post,
+			"image_url": "/api/v1/images/" + strings.TrimPrefix(item.ObjectKey, "/"),
+			"score":     item.Score,
+			"post":      post,
 		})
 	}
+	slog.Info("semantic image search complete", "query_length", utf8.RuneCountInString(query), "results", len(results), "duration_ms", time.Since(started).Milliseconds())
 	response.Success(c, gin.H{"query": query, "results": results})
 }

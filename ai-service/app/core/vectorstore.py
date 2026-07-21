@@ -10,6 +10,7 @@ from qdrant_client.models import (
     FieldCondition,
     Filter,
     MatchValue,
+    PayloadSchemaType,
     PointStruct,
     VectorParams,
 )
@@ -26,11 +27,36 @@ class ImageVectorStore:
 
     async def ensure_collection(self) -> None:
         collections = await self.client.get_collections()
-        if any(item.name == self.collection_name for item in collections.collections):
+        exists = any(item.name == self.collection_name for item in collections.collections)
+        if not exists:
+            await self.client.create_collection(
+                collection_name=self.collection_name,
+                vectors_config=VectorParams(size=VECTOR_SIZE, distance=Distance.COSINE),
+            )
+        await self.validate_schema()
+        await self.ensure_payload_indexes()
+
+    async def validate_schema(self) -> None:
+        info = await self.client.get_collection(self.collection_name)
+        vectors = info.config.params.vectors
+        if isinstance(vectors, dict):
+            raise RuntimeError("images collection must use one unnamed vector")
+        if vectors.size != VECTOR_SIZE or vectors.distance != Distance.COSINE:
+            raise RuntimeError(
+                "incompatible images collection: "
+                f"expected size={VECTOR_SIZE} distance={Distance.COSINE.value}, "
+                f"got size={vectors.size} distance={vectors.distance.value}"
+            )
+
+    async def ensure_payload_indexes(self) -> None:
+        info = await self.client.get_collection(self.collection_name)
+        if "post_id" in (info.payload_schema or {}):
             return
-        await self.client.create_collection(
+        await self.client.create_payload_index(
             collection_name=self.collection_name,
-            vectors_config=VectorParams(size=VECTOR_SIZE, distance=Distance.COSINE),
+            field_name="post_id",
+            field_schema=PayloadSchemaType.INTEGER,
+            wait=True,
         )
 
     async def upsert(
@@ -81,9 +107,49 @@ class ImageVectorStore:
     async def close(self) -> None:
         await self.client.close()
 
+    async def metadata(self) -> dict[str, Any]:
+        await self.ensure_collection()
+        info = await self.client.get_collection(self.collection_name)
+        return {
+            "collection": self.collection_name,
+            "dimension": VECTOR_SIZE,
+            "distance": Distance.COSINE.value,
+            "points_count": int(info.points_count or 0),
+            "post_id_indexed": "post_id" in (info.payload_schema or {}),
+        }
+
+    async def inventory(self) -> list[dict[str, Any]]:
+        await self.ensure_collection()
+        items: list[dict[str, Any]] = []
+        offset = None
+        while True:
+            points, offset = await self.client.scroll(
+                collection_name=self.collection_name,
+                limit=100,
+                offset=offset,
+                with_payload=True,
+                with_vectors=False,
+            )
+            for point in points:
+                payload = dict(point.payload or {})
+                items.append(
+                    {
+                        "image_id": int(point.id),
+                        "post_id": int(payload.get("post_id", 0)),
+                        "model_revision": str(payload.get("model_revision", "")),
+                    }
+                )
+            if offset is None:
+                break
+        return items
+
 
 def image_payload(
-    post_id: int, image_id: int, object_key: str, created_at: datetime | str
+    post_id: int,
+    image_id: int,
+    object_key: str,
+    created_at: datetime | str,
+    model_revision: str = "",
 ) -> dict[str, Any]:
     timestamp = created_at.isoformat() if isinstance(created_at, datetime) else str(created_at)
     return {
@@ -91,4 +157,5 @@ def image_payload(
         "image_id": int(image_id),
         "object_key": object_key,
         "created_at": timestamp,
+        "model_revision": model_revision,
     }
