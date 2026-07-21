@@ -82,5 +82,5 @@ Phase 0 和 Phase 1 只有在 `TASK.md` 最终门禁全部有可复核证据时�
 
 - 复核发现并修正 `docs/plan.md` Phase 1.1 的状态漂移：迁移后的真实 `*_test` MySQL 集成已通过，不再列为缺失证据；保留 CI/发布环境迁移演练作为发布前补充。
 - `TASK.md`、`docs/plan.md`、`docs/roadmap.md` 统一标记为“Phase 0 本地门禁完成、远端 CI 待确认 / Phase 1 后端加固中”。
-- 本地 Markdown 链接检查（48 个文件）与 `git diff --check` 已通过；本轮修改尚未形成提交，推送后由远端 CI 提供下一层证据。
+- 本地 Markdown 链接检查（48 个文件）与 `git diff --check` 已通过；本轮修改已形成本地提交并发布到 `agent/phase0-phase1-closeout`。由于 SSH/HTTPS Git transport 受当前网络限制，远端分支通过 GitHub API 写入等价快照，文件树已与本地 HEAD 核对一致；远端 CI 结果待确认。
 - 浏览器和前端手工验收继续按用户确认暂缓，不改变当前后端终端验收结论。

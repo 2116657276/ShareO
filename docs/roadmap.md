@@ -10,7 +10,7 @@
 
 | Phase | 时间 | 主题 | 交付物 | 验收标准（可演示） |
 |-------|------|------|--------|--------------------|
-| **0 基建+还债** | 本地门禁完成 / 远端 CI 待确认 | 修复清单 + 可信开发底座 | `make check` 分层门禁；Python 3.12/uv lock；可靠 Streams 重试；可复现 Compose；AI liveness/readiness；全仓业务日志结构化 | 终端门禁、真实 Redis、Compose config/up/ready/reset、API/IM 脚本、文档与工作区复核均有证据；远端 CI 待本次推送确认 |
+| **0 基建+还债** | 本地门禁完成 / 远端 CI 待确认 | 修复清单 + 可信开发底座 | `make check` 分层门禁；Python 3.12/uv lock；可靠 Streams 重试；可复现 Compose；AI liveness/readiness；全仓业务日志结构化 | 终端门禁、真实 Redis、Compose config/up/ready/reset、API/IM 脚本、文档与工作区复核均有证据；收口分支已推送，远端 CI 待确认 |
 | **1 IM** | 后端加固中 | 私聊 + 邀请制群组 | 009/010 migrations；事务聊天；精确未读；WS Hub/在线/吊销；断线补偿；Origin/CSRF；群组 UI | 真实 MySQL/Redis、race、API/IM 终端证据已有；浏览器/前端验收按当前决策暂缓 |
 | **2 语义搜图** | 2026-10 ~ 11 中旬 (~6 周) | 向量化管线 + 搜索 | 设计文档 `design/image-search.md`；索引管线（审核通过触发 + 删除清理 + 存量回填）；搜图 API 与页面；**评测集 v1（30~50 条标注 query）+ Recall@K/MRR 报告**；4060 部署 + M1/4060 吞吐对比实验 | 中文自然语言搜图返回相关结果；删帖后搜不到；评测报告成文 |
 | **3 Bot + RAG** | 2026-11 中旬 ~ 2027-01 上旬 (~7 周, 含期末缓冲) | Bot 接入 IM | 设计文档 `design/rag-bot.md`；Bot 账号机制；@Bot/私聊触发；自研 RAG（分块/检索/拼 prompt/引用溯源）；RAG 评测（含 云 API vs 本地 7B 对比实验） | 群里 @Bot 提问站内内容，收到带帖子引用的回答；Bot 挂掉不影响聊天 |

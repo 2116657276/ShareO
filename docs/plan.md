@@ -68,7 +68,7 @@
 - MySQL 初始化不再执行 seed/cleanup；Compose 增加 config/up/ready/reset/clean 命令。
 - 业务、仓储与 WS 日志完成 `slog` 迁移。
 
-**Phase 0 退出标准**: `make check`、真实 Redis 集成、Compose config/up/ready/reset、终端 API 脚本和文档同步全部有证据。上述本地门禁与工作区复核已完成；远端 CI 将在本次推送后确认，未确认前保持收口状态，不把暂缓的浏览器手工验收混入 Phase 0。
+**Phase 0 退出标准**: `make check`、真实 Redis 集成、Compose config/up/ready/reset、终端 API 脚本和文档同步全部有证据。上述本地门禁与工作区复核已完成；收口分支已推送，远端 CI 结果待确认，未确认前保持收口状态，不把暂缓的浏览器手工验收混入 Phase 0。
 
 ---
 
