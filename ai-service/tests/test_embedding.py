@@ -1,3 +1,5 @@
+from types import SimpleNamespace
+
 from app.core.embedding import ImageEmbedder
 
 
@@ -25,6 +27,30 @@ def test_image_embedding_is_normalized_512_dimensions():
 def test_explicit_cpu_device_is_supported():
     embedder = ImageEmbedder(device="cpu")
     assert embedder.device == "cpu"
+
+
+def test_current_transformers_pooler_output_is_supported():
+    import torch
+    from PIL import Image
+
+    class Processor:
+        def __call__(self, **kwargs):
+            if "images" in kwargs:
+                return {"pixel_values": torch.ones((1, 3, 2, 2))}
+            return {"input_ids": torch.ones((1, 2), dtype=torch.long)}
+
+    class Model:
+        def get_image_features(self, **_kwargs):
+            return SimpleNamespace(pooler_output=torch.ones((1, 512)))
+
+        def get_text_features(self, **_kwargs):
+            return SimpleNamespace(pooler_output=torch.ones((1, 512)))
+
+    embedder = ImageEmbedder(device="cpu")
+    embedder._processor = Processor()
+    embedder._model = Model()
+    assert len(embedder.encode_images([Image.new("RGB", (2, 2))])[0]) == 512
+    assert len(embedder.encode_text("红色方块")) == 512
 
 
 def test_embedder_is_lazy():

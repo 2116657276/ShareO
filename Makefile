@@ -1,4 +1,4 @@
-.PHONY: up down reset logs check check-go check-python check-shell check-docs test-integration test-ai-e2e eval-ai demo-seed backfill-index reconcile-index
+.PHONY: up down reset logs check check-go check-python check-shell check-docs test-integration test-image-e2e test-ai-e2e eval-ai demo-seed backfill-index reconcile-index
 
 COMPOSE ?= $(shell docker compose version >/dev/null 2>&1 && echo "docker compose" || echo "docker-compose")
 
@@ -42,6 +42,9 @@ test-integration:
 	@test -n "$$SHAREO_TEST_REDIS_URL" || (echo "SHAREO_TEST_REDIS_URL is required" && exit 2)
 	go test -count=1 -tags=integration ./...
 	cd ai-service && uv run --frozen pytest -m integration
+
+test-image-e2e:
+	bash scripts/test_image_search_e2e.sh
 
 test-ai-e2e:
 	@test -x scripts/test_ai_e2e.sh || (echo "test-ai-e2e is implemented in stage 7" && exit 2)

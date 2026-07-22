@@ -12,7 +12,7 @@ from redis.asyncio import Redis
 from app.config import settings
 from app.core.embedding import ImageEmbedder
 from app.core.vectorstore import ImageVectorStore
-from app.workers.runtime import WorkerRuntime
+from app.workers.runtime import STREAM_INDEX_POST, WorkerRuntime
 
 logger = logging.getLogger(__name__)
 embedder = ImageEmbedder()
@@ -35,6 +35,11 @@ class ImageSearchRequest(BaseModel):
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startup and shutdown lifecycle for ai-service."""
+    logging.basicConfig(
+        level=settings.log_level,
+        format="%(asctime)s %(levelname)s %(name)s %(message)s",
+    )
+    logging.getLogger().setLevel(settings.log_level)
     logger.setLevel(settings.log_level)
     logger.info("ai-service starting (log_level=%s)", settings.log_level)
     app.state.embedding_semaphore = asyncio.Semaphore(max(1, settings.embedding_concurrency))
@@ -129,9 +134,20 @@ def require_internal_token(token: str | None) -> None:
         raise HTTPException(status_code=401, detail="unauthorized")
 
 
-@app.get("/readyz/search")
-async def search_readyz(x_internal_token: str | None = Header(default=None)):
+@app.get("/readyz/image-search")
+async def image_search_readyz(x_internal_token: str | None = Header(default=None)):
     require_internal_token(x_internal_token)
+    runtime = getattr(app.state, "worker_runtime", None)
+    consumers = runtime.status() if runtime is not None else {}
+    if consumers.get(STREAM_INDEX_POST) != "running":
+        return JSONResponse(
+            {
+                "status": "degraded",
+                "model": embedder.metadata(),
+                "consumer": consumers.get(STREAM_INDEX_POST, "stopped"),
+            },
+            status_code=503,
+        )
     if not embedder.loaded:
         return JSONResponse(
             {
@@ -145,6 +161,7 @@ async def search_readyz(x_internal_token: str | None = Header(default=None)):
         return {
             "status": "ready",
             "model": embedder.metadata(),
+            "consumer": consumers[STREAM_INDEX_POST],
             "vector_store": await vector_store.metadata(),
         }
     except Exception as exc:

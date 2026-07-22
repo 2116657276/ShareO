@@ -1,5 +1,7 @@
 """Lazy Chinese-CLIP image/text embedding with CPU/MPS/CUDA selection."""
 
+import logging
+import time
 from collections.abc import Sequence
 from threading import Lock
 from typing import Any
@@ -7,6 +9,8 @@ from typing import Any
 from PIL import Image
 
 from app.config import settings
+
+logger = logging.getLogger(__name__)
 
 
 class ImageEmbedder:
@@ -69,6 +73,7 @@ class ImageEmbedder:
                 return
             self._state = "loading"
             self._error = ""
+            started = time.perf_counter()
             try:
                 if self._processor_factory is None or self._model_factory is None:
                     import transformers
@@ -91,9 +96,22 @@ class ImageEmbedder:
                 self._processor = processor
                 self._model = model
                 self._state = "ready"
+                logger.info(
+                    "image model load complete model=%s revision=%s device=%s duration_ms=%.1f",
+                    self.model_name,
+                    self.revision,
+                    self.device,
+                    (time.perf_counter() - started) * 1000,
+                )
             except Exception as exc:
                 self._state = "failed"
                 self._error = str(exc)
+                logger.exception(
+                    "image model load failed model=%s revision=%s duration_ms=%.1f",
+                    self.model_name,
+                    self.revision,
+                    (time.perf_counter() - started) * 1000,
+                )
                 raise
 
     def warmup(self) -> None:
@@ -115,24 +133,46 @@ class ImageEmbedder:
 
         return values / torch.linalg.vector_norm(values, dim=-1, keepdim=True).clamp_min(1e-12)
 
+    @staticmethod
+    def _projected_features(output: Any) -> Any:
+        """Support both legacy Tensor and current Transformers model outputs."""
+        pooler_output = getattr(output, "pooler_output", None)
+        return pooler_output if pooler_output is not None else output
+
     def encode_images(self, images: Sequence[Image.Image]) -> list[list[float]]:
         if not images:
             return []
         import torch
 
+        started = time.perf_counter()
         self._load()
         inputs = self._processor(images=list(images), return_tensors="pt", padding=True)
         inputs = {key: value.to(self.device) for key, value in inputs.items()}
         with torch.inference_mode():
-            vectors = self._normalize(self._model.get_image_features(**inputs))
-        return vectors.detach().cpu().tolist()
+            output = self._model.get_image_features(**inputs)
+            vectors = self._normalize(self._projected_features(output))
+        result = vectors.detach().cpu().tolist()
+        logger.info(
+            "image batch encode complete count=%d duration_ms=%.1f",
+            len(images),
+            (time.perf_counter() - started) * 1000,
+        )
+        return result
 
     def encode_text(self, query: str) -> list[float]:
         import torch
 
+        started = time.perf_counter()
         self._load()
         inputs = self._processor(text=[query], return_tensors="pt", padding=True)
         inputs = {key: value.to(self.device) for key, value in inputs.items()}
         with torch.inference_mode():
-            vector = self._normalize(self._model.get_text_features(**inputs))[0]
-        return vector.detach().cpu().tolist()
+            output = self._model.get_text_features(**inputs)
+            vector = self._normalize(self._projected_features(output))[0]
+        result = vector.detach().cpu().tolist()
+        logger.info(
+            "image query encode complete query_length=%d duration_ms=%.1f",
+            len(query),
+            (time.perf_counter() - started) * 1000,
+        )
+        return result

@@ -1,6 +1,8 @@
+from types import SimpleNamespace
+from unittest.mock import AsyncMock
+
 import pytest
 from httpx import ASGITransport, AsyncClient
-from unittest.mock import AsyncMock
 
 from app import main
 
@@ -45,9 +47,15 @@ async def test_search_readyz_reports_warming(monkeypatch):
     monkeypatch.setattr(main.settings, "internal_token", "secret")
     monkeypatch.setattr(main.embedder, "_model", None)
     monkeypatch.setattr(main.embedder, "_state", "loading")
+    monkeypatch.setattr(
+        main.app.state,
+        "worker_runtime",
+        SimpleNamespace(status=lambda: {main.STREAM_INDEX_POST: "running"}),
+        raising=False,
+    )
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
-        resp = await client.get("/readyz/search", headers={"X-Internal-Token": "secret"})
+        resp = await client.get("/readyz/image-search", headers={"X-Internal-Token": "secret"})
     assert resp.status_code == 503
     assert resp.json()["status"] == "warming"
 
@@ -57,14 +65,39 @@ async def test_search_readyz_reports_model_and_collection(monkeypatch):
     monkeypatch.setattr(main.settings, "internal_token", "secret")
     monkeypatch.setattr(main.embedder, "_model", object())
     monkeypatch.setattr(main.embedder, "_state", "ready")
+    monkeypatch.setattr(
+        main.app.state,
+        "worker_runtime",
+        SimpleNamespace(status=lambda: {main.STREAM_INDEX_POST: "running"}),
+        raising=False,
+    )
     store = AsyncMock()
     store.metadata.return_value = {"collection": "images", "dimension": 512}
     monkeypatch.setattr(main, "vector_store", store)
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
-        resp = await client.get("/readyz/search", headers={"X-Internal-Token": "secret"})
+        resp = await client.get("/readyz/image-search", headers={"X-Internal-Token": "secret"})
     assert resp.status_code == 200
     assert resp.json()["vector_store"]["dimension"] == 512
+    assert resp.json()["consumer"] == "running"
+
+
+@pytest.mark.asyncio
+async def test_image_search_readyz_reports_stopped_consumer(monkeypatch):
+    monkeypatch.setattr(main.settings, "internal_token", "secret")
+    monkeypatch.setattr(main.embedder, "_model", object())
+    monkeypatch.setattr(main.embedder, "_state", "ready")
+    monkeypatch.setattr(
+        main.app.state,
+        "worker_runtime",
+        SimpleNamespace(status=lambda: {main.STREAM_INDEX_POST: "stopped"}),
+        raising=False,
+    )
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        resp = await client.get("/readyz/image-search", headers={"X-Internal-Token": "secret"})
+    assert resp.status_code == 503
+    assert resp.json()["consumer"] == "stopped"
 
 
 @pytest.mark.asyncio

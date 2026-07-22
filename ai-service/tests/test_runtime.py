@@ -36,6 +36,10 @@ async def test_runtime_starts_both_streams_and_closes_shared_resources():
 
     await runtime.start()
     await asyncio.gather(*(consumer.started.wait() for consumer in runtime.consumers))
+    assert runtime.status() == {
+        STREAM_INDEX_POST: "running",
+        STREAM_BOT_TASKS: "running",
+    }
     assert {consumer.stream for consumer in runtime.consumers} == {
         STREAM_INDEX_POST,
         STREAM_BOT_TASKS,
@@ -45,6 +49,10 @@ async def test_runtime_starts_both_streams_and_closes_shared_resources():
     assert bot_consumer.options["max_retries"] is None
 
     await runtime.stop()
+    assert runtime.status() == {
+        STREAM_INDEX_POST: "stopped",
+        STREAM_BOT_TASKS: "stopped",
+    }
     assert all(consumer.stopped for consumer in runtime.consumers)
     http.aclose.assert_awaited_once()
     redis.aclose.assert_awaited_once()

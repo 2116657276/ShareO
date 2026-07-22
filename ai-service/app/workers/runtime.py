@@ -89,3 +89,12 @@ class WorkerRuntime:
         await self.redis.aclose()
         await self.vector_store.close()
         logger.info("AI consumers stopped")
+
+    def status(self) -> dict[str, str]:
+        """Expose stream-level liveness for feature readiness probes."""
+        return {
+            consumer.stream: (
+                "running" if index < len(self.tasks) and not self.tasks[index].done() else "stopped"
+            )
+            for index, consumer in enumerate(self.consumers)
+        }

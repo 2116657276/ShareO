@@ -92,7 +92,7 @@ services:
       SHAREO_AI_EMBEDDING_REVISION: ${SHAREO_AI_EMBEDDING_REVISION:-36e679e65c2a2fead755ae21162091293ad37834}
       SHAREO_AI_EMBEDDING_CONCURRENCY: ${SHAREO_AI_EMBEDDING_CONCURRENCY:-1}
     volumes:
-      - hf_cache:/models
+      - ${SHAREO_AI_MODEL_CACHE_SOURCE:-hf_cache}:/models
     ports:
       - "${SHAREO_AI_PORT:-8000}:8000"
     depends_on:

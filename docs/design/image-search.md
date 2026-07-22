@@ -1,6 +1,6 @@
 # Phase 2 语义搜图后端设计（v1）
 
-> 状态：后端/API 垂直切片实现中；搜索页面和浏览器验收暂缓。
+> 状态：后端/API 与真实索引 E2E 已完成；搜索页面和 12 条质量评测在阶段 7 收口。
 
 ## 边界
 
@@ -40,7 +40,7 @@ Redis Streams 使用 `shareo:stream:index_post`，字段为 `action=upsert|delet
 
 ## 向量与设备
 
-Chinese-CLIP `OFA-Sys/chinese-clip-vit-base-patch16` 固定 revision `36e679e65c2a2fead755ae21162091293ad37834`，启动后后台预热，设备顺序 CUDA → MPS → CPU；输出归一化为 512 维。Qdrant 使用 cosine 距离并为 `post_id` 建 payload index，payload 含 `post_id`、`image_id`、`object_key`、`created_at`、`model_revision`。`/readyz/search` 只在模型与 collection 均可用时返回 200。
+Chinese-CLIP `OFA-Sys/chinese-clip-vit-base-patch16` 固定 revision `36e679e65c2a2fead755ae21162091293ad37834`，启动后后台预热，设备顺序 CUDA → MPS → CPU；输出归一化为 512 维。Qdrant 使用 cosine 距离并为 `post_id` 建 payload index，payload 含 `post_id`、`image_id`、`object_key`、`created_at`、`model_revision`。`/readyz/image-search` 只在模型、collection 与图片索引消费者均可用时返回 200。
 
 上面的 `object_key` 只存在于 Go↔AI 内部协议和 Qdrant payload。公网 `GET /api/v1/search/images` 每项固定返回 `post_id`、`image_id`、`image_url`、`score`、`post`，不会暴露对象键；同一帖子仅保留最高分图片。
 
