@@ -5,6 +5,7 @@ import pytest
 from redis.asyncio import Redis
 
 from app.workers.consumer import StreamConsumer
+from app.rag.vectorstore import TextVectorStore
 
 
 @pytest.mark.integration
@@ -56,3 +57,38 @@ async def test_pending_message_is_reclaimed_then_acked_after_retry_budget():
     finally:
         await redis.delete(stream)
         await redis.aclose()
+
+
+@pytest.mark.integration
+async def test_text_qdrant_round_trip():
+    qdrant_url = os.getenv("SHAREO_TEST_QDRANT_URL")
+    if not qdrant_url:
+        pytest.skip("set SHAREO_TEST_QDRANT_URL to run Qdrant integration tests")
+    collection = f"post-chunks-test-{uuid.uuid4().hex}"
+    store = TextVectorStore(qdrant_url, collection)
+    vector = [1.0 / (512**0.5)] * 512
+    try:
+        await store.ensure_collection()
+        await store.replace_post(
+            7,
+            [
+                {
+                    "chunk_id": "7:0",
+                    "vector": vector,
+                    "payload": {
+                        "post_id": 7,
+                        "chunk_id": "7:0",
+                        "chunk_text": "夜景使用三脚架。",
+                        "model_name": "BAAI/bge-small-zh-v1.5",
+                        "created_at": "2026-01-01",
+                    },
+                }
+            ],
+        )
+        results = await store.search(vector, 5)
+        assert results[0]["chunk_id"] == "7:0"
+        await store.delete_post(7)
+        assert await store.search(vector, 5) == []
+    finally:
+        await store.client.delete_collection(collection)
+        await store.close()

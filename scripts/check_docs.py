@@ -11,10 +11,13 @@ from urllib.parse import unquote
 ROOT = Path(__file__).resolve().parents[1]
 LINK_RE = re.compile(r"(?<!!)\[[^]]*]\(([^)]+)\)")
 SKIP_PREFIXES = ("http://", "https://", "mailto:", "#")
+SKIP_DIRECTORIES = {".git", ".venv", "node_modules", "__pycache__"}
 
 
 def markdown_files() -> list[Path]:
-    return sorted(path for path in ROOT.rglob("*.md") if ".git" not in path.parts)
+    return sorted(
+        path for path in ROOT.rglob("*.md") if not SKIP_DIRECTORIES.intersection(path.parts)
+    )
 
 
 def main() -> int:

@@ -1,5 +1,9 @@
 # Phase 3 — 私聊 RAG Bot
 
+> 详细协议见 [引用式 RAG 设计](../design/rag.md)。
+
+> 当前状态：文本索引、检索、LLM provider 与引用白名单已完成；私聊 Bot 和最终质量评测待完成。
+
 ## 范围
 
 - approved 正文按 400 字符、80 字符重叠分块，FastEmbed `BAAI/bge-small-zh-v1.5` 写入 `post_chunks`。

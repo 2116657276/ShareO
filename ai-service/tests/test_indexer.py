@@ -1,4 +1,5 @@
 from io import BytesIO
+from unittest.mock import AsyncMock
 
 import httpx
 import pytest
@@ -71,3 +72,45 @@ async def test_indexer_delete_is_idempotent():
         "1-0", {"action": "delete", "post_id": "7"}
     )
     assert store.deleted == [7]
+
+
+@pytest.mark.asyncio
+async def test_post_without_images_still_updates_text_index():
+    payload = {
+        "data": {
+            "post_id": 7,
+            "content": "只有正文也必须被索引。",
+            "created_at": "2026-01-01T00:00:00Z",
+            "images": [],
+        }
+    }
+
+    class Client:
+        async def get(self, url, **_kwargs):
+            return response(200, json=payload, url=url)
+
+    text_indexer = AsyncMock()
+    store = FakeStore()
+    await ImageIndexer(
+        Client(), FakeEmbedder(), store, text_indexer, internal_token="secret"
+    ).handle("1-0", {"action": "upsert", "post_id": "7"})
+    text_indexer.replace_post.assert_awaited_once_with(payload["data"])
+    assert store.deleted == [7]
+
+
+@pytest.mark.asyncio
+async def test_failed_image_module_does_not_starve_text_module():
+    payload = {"data": {"post_id": 7, "content": "正文", "images": []}}
+
+    class Client:
+        async def get(self, url, **_kwargs):
+            return response(200, json=payload, url=url)
+
+    image_store = AsyncMock()
+    image_store.delete_post.side_effect = RuntimeError("qdrant image failure")
+    text_indexer = AsyncMock()
+    with pytest.raises(RuntimeError, match="post index operation"):
+        await ImageIndexer(
+            Client(), FakeEmbedder(), image_store, text_indexer, internal_token="secret"
+        ).handle("1-0", {"action": "upsert", "post_id": "7"})
+    text_indexer.replace_post.assert_awaited_once_with(payload["data"])

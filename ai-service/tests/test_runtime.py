@@ -26,9 +26,12 @@ async def test_runtime_starts_both_streams_and_closes_shared_resources():
     redis = AsyncMock()
     http = AsyncMock()
     store = AsyncMock()
+    text_store = AsyncMock()
     runtime = WorkerRuntime(
         object(),
         store,
+        text_embedder=object(),
+        text_vector_store=text_store,
         redis=redis,
         http_client=http,
         consumer_factory=FakeConsumer,
@@ -57,3 +60,4 @@ async def test_runtime_starts_both_streams_and_closes_shared_resources():
     http.aclose.assert_awaited_once()
     redis.aclose.assert_awaited_once()
     store.close.assert_awaited_once()
+    text_store.close.assert_awaited_once()

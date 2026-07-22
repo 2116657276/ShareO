@@ -13,6 +13,9 @@ from redis.asyncio import Redis
 from app.config import settings
 from app.core.embedding import ImageEmbedder
 from app.core.vectorstore import ImageVectorStore
+from app.rag.embedding import TextEmbedder
+from app.rag.indexer import TextIndexer
+from app.rag.vectorstore import TextVectorStore
 from app.workers.consumer import StreamConsumer
 from app.workers.indexer import ImageIndexer
 
@@ -36,6 +39,8 @@ class WorkerRuntime:
         embedder: ImageEmbedder,
         vector_store: ImageVectorStore,
         *,
+        text_embedder: TextEmbedder | None = None,
+        text_vector_store: TextVectorStore | None = None,
         redis: Redis | None = None,
         http_client: httpx.AsyncClient | None = None,
         consumer_factory: Callable[..., StreamConsumer] = StreamConsumer,
@@ -47,7 +52,13 @@ class WorkerRuntime:
         )
         self.http = http_client or httpx.AsyncClient(timeout=10.0)
         self.vector_store = vector_store
-        self.indexer = ImageIndexer(self.http, embedder, vector_store)
+        self.text_vector_store = text_vector_store
+        text_indexer = (
+            TextIndexer(text_embedder, text_vector_store)
+            if text_embedder is not None and text_vector_store is not None
+            else None
+        )
+        self.indexer = ImageIndexer(self.http, embedder, vector_store, text_indexer)
         consumer_name = f"{socket.gethostname()}-{os.getpid()}"
         self.consumers = [
             consumer_factory(self.redis, STREAM_INDEX_POST, CONSUMER_GROUP, consumer_name),
@@ -88,6 +99,8 @@ class WorkerRuntime:
         await self.http.aclose()
         await self.redis.aclose()
         await self.vector_store.close()
+        if self.text_vector_store is not None:
+            await self.text_vector_store.close()
         logger.info("AI consumers stopped")
 
     def status(self) -> dict[str, str]:

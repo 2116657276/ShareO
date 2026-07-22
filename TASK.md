@@ -1,6 +1,6 @@
 # TASK.md — 当前任务
 
-> 更新时间：2026-07-22 | 当前阶段：轻量化重构阶段 5/7
+> 更新时间：2026-07-22 | 当前阶段：轻量化重构阶段 6/7
 
 ## 最终范围
 
@@ -16,14 +16,15 @@
 - [x] 阶段 2：数据库与业务裁剪
 - [x] 阶段 3：AI 单进程与统一 Compose
 - [x] 阶段 4：语义搜图修复
-- [ ] 阶段 5：文本索引与 RAG
+- [x] 阶段 5：文本索引与 RAG
 - [ ] 阶段 6：私聊 Bot
 - [ ] 阶段 7：Demo、评测和最终清理
 
 ## 当前风险
 
 - 语义搜图工程闭环已通过，12 条冻结查询及 Recall@5 门禁留到阶段 7 与 Demo 数据一起执行。
-- 云端 LLM Key 是 RAG 自然语言回答的必要配置，但缺失时不得影响社区和普通私聊。
+- RAG pipeline 已完成；阶段 6 仍需实现 Go 内部 Bot 协议、任务发布、幂等回复与引用可见性复核。
+- 云端 LLM Key 是自然语言回答的必要配置；真实 provider 演示与 15 条质量评测留到阶段 7。
 
 ## 阶段评审
 
@@ -33,3 +34,4 @@
 - 2026-07-22 阶段 2 通过：本地 `shareo` 已用新基线重建并确认仅有 12 张表、0 trigger、0 view；收藏、转帖、话题和群聊的模型、查询、路由与页面入口已删除。评审发现并修复了不可见帖子仍可点赞/评论、点赞列表总数包含不可见帖子、计数同步失败不回滚三个 P2 问题；`make check`、Go race、真实 MySQL 基线与私聊集成测试均通过。
 - 2026-07-22 阶段 3 通过：FastAPI lifespan 统一启动 API、图片索引和 Bot 任务消费者，并共享 Chinese-CLIP 与 Qdrant 实例；根目录 Compose 成为唯一运行方式，旧 Homebrew、独立 worker 和示例启动文件已删除。评审修复了 Linux 镜像误装 CUDA 依赖、Redis 阻塞读取超时和 MySQL 冷启动竞态；`make check`、Compose 配置检查及清空卷后的六服务首次冷启动均通过，两个 Stream 各保持单消费者且无 pending。
 - 2026-07-22 阶段 4 通过：Chinese-CLIP 后台预热与图片消费者纳入 `/readyz/image-search`，图片编码移入线程，载荷获取、下载、模型加载、编码及 Qdrant 删除/写入均记录分段耗时。真实 Compose E2E 发现并修复了新版 Transformers 返回 `BaseModelOutputWithPooling` 导致搜索 503 的 P1 兼容问题，以及重复事件检查提前成功、应用日志未输出两个 P2 问题；`make check` 和真实模型的审核→索引→命中→重复投递→重启重领→删除隔离链路通过。
+- 2026-07-22 阶段 5 通过：同一 `index_post` 已同时维护 `images` 与 `post_chunks`，FastEmbed 中文模型、400/80 分块、UUIDv5 point ID、双 payload index、检索去重、OpenAI-compatible provider、结构化回答和引用白名单已实现。评审修复了文本模型失败可能饿死图片索引、缺少 LLM Key 时空检索可能绕过降级、文档检查误扫 `.venv` 三个 P2 问题；55 个非集成测试、真实 FastEmbed 512 维编码、真实 Qdrant round-trip 及 Compose 图文双索引 E2E 均通过，缺少 Key 时仅 RAG 返回 503。

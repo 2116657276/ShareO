@@ -47,6 +47,7 @@ cd "$PROJECT_DIR"
 
 APP_URL="http://127.0.0.1:$APP_PORT"
 AI_URL="http://127.0.0.1:$AI_PORT"
+QDRANT_URL="http://127.0.0.1:$SHAREO_QDRANT_HTTP_PORT"
 for _ in $(seq 1 900); do
     if curl --noproxy '*' --fail --silent \
         -H "X-Internal-Token: $INTERNAL_TOKEN" \
@@ -63,6 +64,32 @@ curl --noproxy '*' --fail --silent \
 SHAREO_BASE_URL="$APP_URL" SHAREO_TEST_SKIP_DELETE=1 \
     SHAREO_TEST_POST_ID_FILE="$POST_ID_FILE" bash scripts/test_image_search.sh
 POST_ID="$(sed -n '1p' "$POST_ID_FILE")"
+
+TEXT_POINTS="$(curl --noproxy '*' --fail --silent -X POST \
+    "$QDRANT_URL/collections/post_chunks/points/scroll" \
+    -H 'Content-Type: application/json' \
+    -d "{\"filter\":{\"must\":[{\"key\":\"post_id\",\"match\":{\"value\":$POST_ID}}]},\"limit\":10,\"with_payload\":true}")"
+if ! grep -q "\"chunk_id\":\"$POST_ID:0\"" <<<"$TEXT_POINTS"; then
+    echo "approved post text was not written to post_chunks post=$POST_ID" >&2
+    exit 1
+fi
+echo "PASS approved post text indexed post=$POST_ID"
+
+RAG_READY="$(curl --noproxy '*' --silent \
+    -H "X-Internal-Token: $INTERNAL_TOKEN" "$AI_URL/readyz/rag")"
+if ! grep -q '"llm":"missing_configuration"' <<<"$RAG_READY"; then
+    echo "RAG readiness did not report missing LLM configuration" >&2
+    exit 1
+fi
+RAG_STATUS="$(curl --noproxy '*' --silent -o /dev/null -w '%{http_code}' \
+    -X POST "$AI_URL/v1/rag/answer" \
+    -H "X-Internal-Token: $INTERNAL_TOKEN" -H 'Content-Type: application/json' \
+    -d '{"question":"夜景怎么拍？","history":[],"top_k":8}')"
+if [ "$RAG_STATUS" != "503" ]; then
+    echo "RAG without LLM configuration returned HTTP $RAG_STATUS instead of 503" >&2
+    exit 1
+fi
+echo "PASS missing LLM configuration is isolated to RAG"
 
 "${compose[@]}" exec -T redis redis-cli XADD shareo:stream:index_post '*' action upsert post_id "$POST_ID" >/dev/null
 "${compose[@]}" exec -T redis redis-cli XADD shareo:stream:index_post '*' action upsert post_id "$POST_ID" >/dev/null
@@ -96,6 +123,18 @@ echo "PASS FastAPI restart reclaimed pending index task within 45 seconds"
 # A second post exercises the normal delete event and ten-second visibility goal.
 SHAREO_BASE_URL="$APP_URL" bash scripts/test_image_search.sh
 
+DELETED_POST_ID="$("${compose[@]}" exec -T mysql mysql -uroot -pshareo_pass -N -s shareo \
+    -e "SELECT MAX(id) FROM posts;")"
+TEXT_POINTS="$(curl --noproxy '*' --fail --silent -X POST \
+    "$QDRANT_URL/collections/post_chunks/points/scroll" \
+    -H 'Content-Type: application/json' \
+    -d "{\"filter\":{\"must\":[{\"key\":\"post_id\",\"match\":{\"value\":$DELETED_POST_ID}}]},\"limit\":10,\"with_payload\":true}")"
+if grep -q "\"chunk_id\":\"$DELETED_POST_ID:" <<<"$TEXT_POINTS"; then
+    echo "deleted post still appears in post_chunks post=$DELETED_POST_ID" >&2
+    exit 1
+fi
+echo "PASS deleted post text removed from post_chunks post=$DELETED_POST_ID"
+
 AI_LOG="$("${compose[@]}" logs --no-color ai-service)"
 for marker in \
     "image model load complete" \
@@ -103,11 +142,14 @@ for marker in \
     "image download complete" \
     "image embedding complete" \
     "image qdrant delete complete" \
-    "image qdrant upsert complete"; do
+    "image qdrant upsert complete" \
+    "text model load complete" \
+    "text embedding complete" \
+    "text qdrant replace complete"; do
     if ! grep -q "$marker" <<<"$AI_LOG"; then
         echo "missing staged AI log marker: $marker" >&2
         exit 1
     fi
 done
-echo "PASS staged image indexing timings were logged"
+echo "PASS staged image and text indexing timings were logged"
 echo "PASS semantic image-search Compose E2E"

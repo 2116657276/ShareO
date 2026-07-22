@@ -13,6 +13,7 @@ dependencies = [
     "Pillow>=10.4",
     "torch>=2.2",
     "transformers>=4.48",
+    "fastembed>=0.7,<0.8",
 ]
 
 [dependency-groups]

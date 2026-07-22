@@ -48,5 +48,5 @@ func main() {
 		}
 		page++
 	}
-	fmt.Printf("queued %d approved posts for image indexing\n", count)
+	fmt.Printf("queued %d approved posts for image and text indexing\n", count)
 }

@@ -2,6 +2,7 @@ import asyncio
 import logging
 import time
 from contextlib import asynccontextmanager
+from typing import Literal
 
 from fastapi import FastAPI, Header, HTTPException
 from fastapi.responses import JSONResponse
@@ -12,11 +13,24 @@ from redis.asyncio import Redis
 from app.config import settings
 from app.core.embedding import ImageEmbedder
 from app.core.vectorstore import ImageVectorStore
+from app.rag.embedding import TextEmbedder
+from app.rag.pipeline import RAGPipeline
+from app.rag.provider import LLMError, OpenAICompatibleProvider
+from app.rag.vectorstore import TextVectorStore
 from app.workers.runtime import STREAM_INDEX_POST, WorkerRuntime
 
 logger = logging.getLogger(__name__)
 embedder = ImageEmbedder()
 vector_store = ImageVectorStore(settings.qdrant_url, settings.image_collection)
+text_embedder = TextEmbedder()
+text_vector_store = TextVectorStore(settings.qdrant_url, settings.text_collection)
+llm_provider = OpenAICompatibleProvider(
+    settings.llm_base_url,
+    settings.llm_api_key,
+    settings.llm_model,
+    settings.llm_timeout_seconds,
+)
+rag_pipeline = RAGPipeline(text_embedder, text_vector_store, llm_provider)
 
 
 class ImageSearchRequest(BaseModel):
@@ -29,6 +43,25 @@ class ImageSearchRequest(BaseModel):
         value = value.strip()
         if not value:
             raise ValueError("query must not be blank")
+        return value
+
+
+class HistoryMessage(BaseModel):
+    role: Literal["user", "bot"]
+    content: str = Field(min_length=1, max_length=2000)
+
+
+class RAGAnswerRequest(BaseModel):
+    question: str = Field(min_length=1, max_length=500)
+    history: list[HistoryMessage] = Field(default_factory=list, max_length=20)
+    top_k: int = Field(default=8, ge=1, le=20)
+
+    @field_validator("question")
+    @classmethod
+    def question_must_have_content(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("question must not be blank")
         return value
 
 
@@ -47,32 +80,43 @@ async def lifespan(app: FastAPI):
         await vector_store.ensure_collection()
     except Exception as exc:
         logger.warning("image collection startup check failed: %s", exc)
-    runtime = WorkerRuntime(embedder, vector_store)
+    try:
+        await text_vector_store.ensure_collection()
+    except Exception as exc:
+        logger.warning("text collection startup check failed: %s", exc)
+    runtime = WorkerRuntime(
+        embedder,
+        vector_store,
+        text_embedder=text_embedder,
+        text_vector_store=text_vector_store,
+    )
     app.state.worker_runtime = runtime
     await runtime.start()
+    app.state.warmup_tasks = []
     if settings.embedding_warmup:
-        app.state.warmup_task = asyncio.create_task(asyncio.to_thread(embedder.warmup))
+        warmups = (("image", embedder), ("text", text_embedder))
+        for kind, model in warmups:
+            task = asyncio.create_task(asyncio.to_thread(model.warmup), name=f"warmup:{kind}")
 
-        def warmup_done(task: asyncio.Task) -> None:
-            try:
-                task.result()
-                logger.info(
-                    "image model warmup complete model=%s revision=%s device=%s",
-                    embedder.model_name,
-                    embedder.revision,
-                    embedder.device,
-                )
-            except asyncio.CancelledError:
-                logger.info("image model warmup cancelled")
-            except Exception as exc:
-                logger.error("image model warmup failed: %s", exc)
+            def warmup_done(done: asyncio.Task, label: str = kind) -> None:
+                try:
+                    done.result()
+                    logger.info("%s model warmup complete", label)
+                except asyncio.CancelledError:
+                    logger.info("%s model warmup cancelled", label)
+                except Exception as exc:
+                    logger.error("%s model warmup failed: %s", label, exc)
 
-        app.state.warmup_task.add_done_callback(warmup_done)
+            task.add_done_callback(warmup_done)
+            app.state.warmup_tasks.append(task)
+
     yield
-    warmup_task = getattr(app.state, "warmup_task", None)
-    if warmup_task is not None and not warmup_task.done():
-        warmup_task.cancel()
-        await asyncio.gather(warmup_task, return_exceptions=True)
+    warmup_tasks = [task for task in app.state.warmup_tasks if not task.done()]
+    for task in warmup_tasks:
+        task.cancel()
+    if warmup_tasks:
+        await asyncio.gather(*warmup_tasks, return_exceptions=True)
+    await llm_provider.close()
     await runtime.stop()
     logger.info("ai-service shutting down")
 
@@ -181,6 +225,66 @@ async def image_search_meta(x_internal_token: str | None = Header(default=None))
     except Exception:
         vector_meta = "unavailable"
     return {"model": embedder.metadata(), "vector_store": vector_meta}
+
+
+@app.get("/readyz/rag")
+async def rag_readyz(x_internal_token: str | None = Header(default=None)):
+    require_internal_token(x_internal_token)
+    runtime = getattr(app.state, "worker_runtime", None)
+    consumers = runtime.status() if runtime is not None else {}
+    status = {
+        "model": text_embedder.metadata(),
+        "consumer": consumers.get(STREAM_INDEX_POST, "stopped"),
+        "llm": "configured" if llm_provider.configured else "missing_configuration",
+    }
+    if not text_embedder.loaded or status["consumer"] != "running" or not llm_provider.configured:
+        return JSONResponse({"status": "degraded", **status}, status_code=503)
+    try:
+        return {
+            "status": "ready",
+            **status,
+            "vector_store": await text_vector_store.metadata(),
+            "prompt_version": settings.rag_prompt_version,
+        }
+    except Exception as exc:
+        logger.warning("rag readiness failed: %s", exc)
+        return JSONResponse(
+            {"status": "degraded", **status, "vector_store": "unavailable"},
+            status_code=503,
+        )
+
+
+@app.post("/v1/rag/answer")
+async def answer_rag(
+    payload: RAGAnswerRequest, x_internal_token: str | None = Header(default=None)
+):
+    require_internal_token(x_internal_token)
+    if not llm_provider.configured:
+        raise HTTPException(status_code=503, detail="rag unavailable: configuration")
+    try:
+        result = await rag_pipeline.answer(
+            payload.question,
+            payload.top_k,
+            [item.model_dump() for item in payload.history],
+        )
+        return {
+            "answer": result.answer,
+            "citations": [
+                {
+                    "post_id": item.post_id,
+                    "chunk_id": item.chunk_id,
+                    "excerpt": item.excerpt,
+                    "score": item.score,
+                }
+                for item in result.citations
+            ],
+        }
+    except LLMError as exc:
+        logger.warning("rag provider failed category=%s error=%s", exc.category, exc)
+        raise HTTPException(status_code=503, detail=f"rag unavailable: {exc.category}") from exc
+    except Exception as exc:
+        logger.exception("rag answer failed: %s", exc)
+        raise HTTPException(status_code=503, detail="rag unavailable") from exc
 
 
 @app.post("/v1/search/images")
