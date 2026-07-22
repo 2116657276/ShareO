@@ -2,6 +2,8 @@ package model
 
 import "time"
 
+const ShareOBotUsername = "shareo_bot"
+
 type User struct {
 	ID           int64     `gorm:"primaryKey;autoIncrement" json:"id"`
 	Username     string    `gorm:"type:varchar(50);uniqueIndex;not null" json:"username"`

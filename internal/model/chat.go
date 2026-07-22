@@ -46,3 +46,22 @@ type Message struct {
 }
 
 func (Message) TableName() string { return "messages" }
+
+type BotReply struct {
+	ID              int64     `gorm:"primaryKey;autoIncrement" json:"id"`
+	SourceMessageID int64     `gorm:"not null;uniqueIndex:uk_bot_replies_source" json:"source_message_id"`
+	ReplyMessageID  int64     `gorm:"not null;uniqueIndex:uk_bot_replies_reply" json:"reply_message_id"`
+	CreatedAt       time.Time `gorm:"autoCreateTime" json:"created_at"`
+}
+
+func (BotReply) TableName() string { return "bot_replies" }
+
+type BotCitation struct {
+	PostID  int64  `json:"post_id"`
+	ChunkID string `json:"chunk_id"`
+}
+
+type MessageMeta struct {
+	SourceMessageID int64         `json:"source_message_id,omitempty"`
+	Citations       []BotCitation `json:"citations,omitempty"`
+}

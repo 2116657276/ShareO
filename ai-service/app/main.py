@@ -89,6 +89,7 @@ async def lifespan(app: FastAPI):
         vector_store,
         text_embedder=text_embedder,
         text_vector_store=text_vector_store,
+        rag_pipeline=rag_pipeline,
     )
     app.state.worker_runtime = runtime
     await runtime.start()

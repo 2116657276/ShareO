@@ -5,7 +5,6 @@ import logging
 import os
 import socket
 from collections.abc import Callable
-from typing import Any
 
 import httpx
 from redis.asyncio import Redis
@@ -15,7 +14,9 @@ from app.core.embedding import ImageEmbedder
 from app.core.vectorstore import ImageVectorStore
 from app.rag.embedding import TextEmbedder
 from app.rag.indexer import TextIndexer
+from app.rag.pipeline import RAGPipeline
 from app.rag.vectorstore import TextVectorStore
+from app.workers.bot import BotTaskHandler
 from app.workers.consumer import StreamConsumer
 from app.workers.indexer import ImageIndexer
 
@@ -24,11 +25,6 @@ logger = logging.getLogger(__name__)
 STREAM_INDEX_POST = "shareo:stream:index_post"
 STREAM_BOT_TASKS = "shareo:stream:bot_tasks"
 CONSUMER_GROUP = "ai-workers"
-
-
-async def handle_bot_task(msg_id: str, fields: dict[str, Any]) -> None:
-    """Keep unexpected early Bot tasks pending until the RAG stage supplies its handler."""
-    raise RuntimeError(f"bot task handler is not enabled yet: id={msg_id} fields={fields!r}")
 
 
 class WorkerRuntime:
@@ -41,6 +37,7 @@ class WorkerRuntime:
         *,
         text_embedder: TextEmbedder | None = None,
         text_vector_store: TextVectorStore | None = None,
+        rag_pipeline: RAGPipeline | None = None,
         redis: Redis | None = None,
         http_client: httpx.AsyncClient | None = None,
         consumer_factory: Callable[..., StreamConsumer] = StreamConsumer,
@@ -59,6 +56,7 @@ class WorkerRuntime:
             else None
         )
         self.indexer = ImageIndexer(self.http, embedder, vector_store, text_indexer)
+        self.bot_handler = BotTaskHandler(self.http, rag_pipeline)
         consumer_name = f"{socket.gethostname()}-{os.getpid()}"
         self.consumers = [
             consumer_factory(self.redis, STREAM_INDEX_POST, CONSUMER_GROUP, consumer_name),
@@ -67,12 +65,15 @@ class WorkerRuntime:
                 STREAM_BOT_TASKS,
                 CONSUMER_GROUP,
                 consumer_name,
-                max_retries=None,
+                max_retries=3,
+                reclaim_interval_ms=settings.bot_reclaim_interval_ms,
+                min_idle_time_ms=settings.bot_min_idle_time_ms,
+                dead_letter_handler=self.bot_handler.fallback,
             ),
         ]
         self.handlers = {
             STREAM_INDEX_POST: self.indexer.handle,
-            STREAM_BOT_TASKS: handle_bot_task,
+            STREAM_BOT_TASKS: self.bot_handler,
         }
         self.tasks: list[asyncio.Task] = []
 

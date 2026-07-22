@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"strings"
 	"testing"
@@ -19,6 +20,13 @@ type fakeChatRepo struct {
 	createdMsg    *model.Message
 	markReadErr   error
 	requestedPage [3]int64
+	members       []model.ConversationMember
+	recent        []model.Message
+	visible       map[int64]struct{}
+	messages      []model.Message
+	messageByID   *model.Message
+	botReply      *model.Message
+	botCreated    bool
 }
 
 func (f *fakeChatRepo) ValidateActiveUsers(_ context.Context, ids []int64) error {
@@ -39,6 +47,9 @@ func (f *fakeChatRepo) ListConversations(context.Context, int64) ([]model.Conver
 }
 func (f *fakeChatRepo) IsMember(context.Context, int64, int64) (bool, error) { return f.isMember, nil }
 func (f *fakeChatRepo) GetMembers(context.Context, int64) ([]model.ConversationMember, error) {
+	if f.members != nil {
+		return f.members, nil
+	}
 	return []model.ConversationMember{{UserID: 1}, {UserID: 2}}, nil
 }
 func (f *fakeChatRepo) CreateMessage(_ context.Context, msg *model.Message) error {
@@ -46,15 +57,30 @@ func (f *fakeChatRepo) CreateMessage(_ context.Context, msg *model.Message) erro
 	f.createdMsg = msg
 	return nil
 }
+func (f *fakeChatRepo) GetMessageByID(context.Context, int64) (*model.Message, error) {
+	return f.messageByID, nil
+}
+func (f *fakeChatRepo) CreateBotReply(_ context.Context, _, _ int64, content string, _ []model.BotCitation) (*model.Message, bool, error) {
+	if f.botReply != nil {
+		return f.botReply, f.botCreated, nil
+	}
+	return &model.Message{ID: 100, Content: content}, true, nil
+}
+func (f *fakeChatRepo) VisiblePostIDs(context.Context, []int64) (map[int64]struct{}, error) {
+	return f.visible, nil
+}
 func (f *fakeChatRepo) GetMessages(_ context.Context, _ int64, before, after int64, limit int) ([]model.Message, error) {
 	f.requestedPage = [3]int64{before, after, int64(limit)}
+	if f.messages != nil {
+		return f.messages, nil
+	}
 	return []model.Message{{ID: 3}}, nil
 }
 func (f *fakeChatRepo) GetLastMessage(context.Context, int64) (*model.Message, error) {
 	return nil, nil
 }
 func (f *fakeChatRepo) GetRecentMessages(context.Context, int64, int) ([]model.Message, error) {
-	return nil, nil
+	return f.recent, nil
 }
 func (f *fakeChatRepo) UpdateReadMarker(context.Context, int64, int64, int64) error {
 	return f.markReadErr
@@ -120,5 +146,54 @@ func TestMarkReadMapsForeignMessageToNotFound(t *testing.T) {
 	svc, _ := newChatServiceForTest(repo)
 	if err := svc.MarkRead(context.Background(), 5, 2, 100); !errors.Is(err, ErrChatNotFound) {
 		t.Fatalf("mark read error = %v", err)
+	}
+}
+
+func TestBotTaskRequiresBotDMAndReturnsChronologicalHistory(t *testing.T) {
+	user := &model.User{ID: 1, Status: model.UserStatusActive}
+	bot := &model.User{ID: 2, Username: model.ShareOBotUsername, Status: model.UserStatusActive, IsBot: 1}
+	repo := &fakeChatRepo{
+		conversation: &model.Conversation{ID: 5},
+		messageByID:  &model.Message{ID: 9, ConversationID: 5, SenderID: user.ID},
+		members: []model.ConversationMember{
+			{UserID: user.ID, User: user}, {UserID: bot.ID, User: bot},
+		},
+		recent: []model.Message{{ID: 9}, {ID: 8}},
+	}
+	svc, _ := newChatServiceForTest(repo)
+	task, err := svc.GetBotTask(context.Background(), 9)
+	if err != nil || task.Bot.ID != bot.ID || task.History[0].ID != 8 || task.History[1].ID != 9 {
+		t.Fatalf("task=%+v err=%v", task, err)
+	}
+
+	ordinary := &model.User{ID: 3, Status: model.UserStatusActive}
+	repo.members[1] = model.ConversationMember{UserID: ordinary.ID, User: ordinary}
+	if _, err := svc.GetBotTask(context.Background(), 9); !errors.Is(err, ErrChatForbidden) {
+		t.Fatalf("ordinary DM bot task error=%v", err)
+	}
+}
+
+func TestMessageHistoryDropsCitationsForInvisiblePosts(t *testing.T) {
+	metaBytes, _ := json.Marshal(model.MessageMeta{Citations: []model.BotCitation{
+		{PostID: 10, ChunkID: "10:0"}, {PostID: 11, ChunkID: "11:0"},
+	}})
+	meta := string(metaBytes)
+	repo := &fakeChatRepo{
+		conversation: &model.Conversation{ID: 5},
+		isMember:     true,
+		visible:      map[int64]struct{}{10: {}},
+		messages:     []model.Message{{ID: 9, Meta: &meta}},
+	}
+	svc, _ := newChatServiceForTest(repo)
+	messages, err := svc.GetMessages(context.Background(), 5, 1, 0, 0, 30)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var filtered model.MessageMeta
+	if err := json.Unmarshal([]byte(*messages[0].Meta), &filtered); err != nil {
+		t.Fatal(err)
+	}
+	if len(filtered.Citations) != 1 || filtered.Citations[0].PostID != 10 {
+		t.Fatalf("citations=%v", filtered.Citations)
 	}
 }

@@ -5,20 +5,27 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
+	"github.com/zhoujianlin/ShareO/internal/model"
 	"github.com/zhoujianlin/ShareO/internal/pkg/response"
 	"github.com/zhoujianlin/ShareO/internal/repository"
+	"github.com/zhoujianlin/ShareO/internal/service"
 )
 
 // InternalHandler handles /internal/* routes for ai-service communication.
 type InternalHandler struct {
 	postRepo *repository.PostRepo
+	chatSvc  *service.ChatService
 }
 
-func NewInternalHandler(postRepo *repository.PostRepo) *InternalHandler {
+func NewInternalHandler(postRepo *repository.PostRepo, chatServices ...*service.ChatService) *InternalHandler {
 	if postRepo == nil {
 		postRepo = repository.NewPostRepo()
 	}
-	return &InternalHandler{postRepo: postRepo}
+	handler := &InternalHandler{postRepo: postRepo}
+	if len(chatServices) > 0 {
+		handler.chatSvc = chatServices[0]
+	}
+	return handler
 }
 
 // HealthCheck returns service health for internal monitoring by ai-service.
@@ -65,4 +72,47 @@ func (h *InternalHandler) ListIndexPayloads(c *gin.Context) {
 		nextAfterID = payloads[len(payloads)-1].PostID
 	}
 	response.Success(c, gin.H{"items": payloads, "next_after_id": nextAfterID})
+}
+
+func (h *InternalHandler) BotTask(c *gin.Context) {
+	if h.chatSvc == nil {
+		response.InternalError(c, "Bot 服务未配置")
+		return
+	}
+	messageID, err := strconv.ParseInt(c.Param("message_id"), 10, 64)
+	if err != nil || messageID <= 0 {
+		response.BadRequest(c, "消息 ID 无效")
+		return
+	}
+	task, err := h.chatSvc.GetBotTask(c.Request.Context(), messageID)
+	if err != nil {
+		handleChatError(c, err)
+		return
+	}
+	response.Success(c, task)
+}
+
+func (h *InternalHandler) BotReply(c *gin.Context) {
+	if h.chatSvc == nil {
+		response.InternalError(c, "Bot 服务未配置")
+		return
+	}
+	var req struct {
+		SourceMessageID int64               `json:"source_message_id" binding:"required"`
+		ConversationID  int64               `json:"conversation_id" binding:"required"`
+		Content         string              `json:"content" binding:"required"`
+		Citations       []model.BotCitation `json:"citations"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "Bot 回复格式无效")
+		return
+	}
+	message, err := h.chatSvc.ReplyAsBot(
+		c.Request.Context(), req.SourceMessageID, req.ConversationID, req.Content, req.Citations,
+	)
+	if err != nil {
+		handleChatError(c, err)
+		return
+	}
+	response.Success(c, message)
 }

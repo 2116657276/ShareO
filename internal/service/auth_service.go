@@ -36,6 +36,16 @@ type AuthResp struct {
 	User  *model.User `json:"user"`
 }
 
+func validateLoginCandidate(user *model.User) error {
+	if user == nil || user.IsBot != 0 {
+		return errors.New("用户名或密码错误")
+	}
+	if user.Status == 0 {
+		return errors.New("账号已被封禁")
+	}
+	return nil
+}
+
 func (s *AuthService) Register(req RegisterReq) (*AuthResp, error) {
 	req.Username = strings.TrimSpace(req.Username)
 	// Sanitize: reject HTML/script characters
@@ -89,11 +99,8 @@ func (s *AuthService) Login(req LoginReq) (*AuthResp, error) {
 	if err != nil {
 		return nil, err
 	}
-	if user == nil {
-		return nil, errors.New("用户名或密码错误")
-	}
-	if user.Status == 0 {
-		return nil, errors.New("账号已被封禁")
+	if err := validateLoginCandidate(user); err != nil {
+		return nil, err
 	}
 
 	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(req.Password)); err != nil {

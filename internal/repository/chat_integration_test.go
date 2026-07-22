@@ -4,6 +4,7 @@ package repository
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"reflect"
@@ -70,6 +71,78 @@ func TestLightweightBaselineSchema(t *testing.T) {
 		if count != 0 {
 			t.Fatalf("%s still contains %d removed columns", table, count)
 		}
+	}
+	var botCount int64
+	if err := db.Model(&model.User{}).
+		Where("username = ? AND is_bot = 1 AND status = ?", "shareo_bot", model.UserStatusActive).
+		Count(&botCount).Error; err != nil || botCount != 1 {
+		t.Fatalf("fixed bot count=%d err=%v", botCount, err)
+	}
+}
+
+func TestBotReplyIsAtomicIdempotentAndFiltersCitations(t *testing.T) {
+	db := openChatIntegrationDB(t)
+	ctx := context.Background()
+	repo := NewChatRepo(db)
+	stamp := time.Now().UnixNano()
+	user := model.User{
+		Username: fmt.Sprintf("bot_it_%d", stamp), PasswordHash: "test", Status: model.UserStatusActive,
+	}
+	if err := db.Create(&user).Error; err != nil {
+		t.Fatal(err)
+	}
+	var bot model.User
+	if err := db.Where("username = ? AND is_bot = 1", "shareo_bot").First(&bot).Error; err != nil {
+		t.Fatal(err)
+	}
+	posts := []model.Post{
+		{UserID: user.ID, Content: "可引用正文", Status: model.StatusApproved},
+		{UserID: user.ID, Content: "不可引用正文", Status: model.StatusRejected},
+	}
+	if err := db.Create(&posts).Error; err != nil {
+		t.Fatal(err)
+	}
+	conversation, err := repo.EnsureDM(ctx, user.ID, bot.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := &model.Message{ConversationID: conversation.ID, SenderID: user.ID, Content: "怎么拍？"}
+	if err := repo.CreateMessage(ctx, source); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		db.Where("source_message_id = ?", source.ID).Delete(&model.BotReply{})
+		db.Where("conversation_id = ?", conversation.ID).Delete(&model.Message{})
+		db.Where("conversation_id = ?", conversation.ID).Delete(&model.ConversationMember{})
+		db.Delete(&model.Conversation{}, conversation.ID)
+		db.Delete(&posts)
+		db.Delete(&user)
+	})
+
+	reply, created, err := repo.CreateBotReply(ctx, source.ID, conversation.ID, "使用三脚架。", []model.BotCitation{
+		{PostID: posts[0].ID, ChunkID: fmt.Sprintf("%d:0", posts[0].ID)},
+		{PostID: posts[1].ID, ChunkID: fmt.Sprintf("%d:0", posts[1].ID)},
+		{PostID: posts[0].ID, ChunkID: "999:0"},
+	})
+	if err != nil || !created {
+		t.Fatalf("first bot reply=%v created=%v err=%v", reply, created, err)
+	}
+	var meta model.MessageMeta
+	if reply.Meta == nil || json.Unmarshal([]byte(*reply.Meta), &meta) != nil {
+		t.Fatalf("reply meta=%v", reply.Meta)
+	}
+	if len(meta.Citations) != 1 || meta.Citations[0].PostID != posts[0].ID {
+		t.Fatalf("filtered citations=%v", meta.Citations)
+	}
+
+	duplicate, created, err := repo.CreateBotReply(ctx, source.ID, conversation.ID, "重复内容", nil)
+	if err != nil || created || duplicate.ID != reply.ID || duplicate.Content != reply.Content {
+		t.Fatalf("duplicate=%v created=%v err=%v", duplicate, created, err)
+	}
+	var replyCount int64
+	db.Model(&model.BotReply{}).Where("source_message_id = ?", source.ID).Count(&replyCount)
+	if replyCount != 1 {
+		t.Fatalf("bot reply idempotency rows=%d", replyCount)
 	}
 }
 

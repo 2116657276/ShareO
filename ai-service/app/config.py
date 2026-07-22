@@ -27,6 +27,8 @@ class Settings(BaseSettings):
     llm_api_key: str = ""
     llm_model: str = "deepseek-chat"
     llm_timeout_seconds: float = 30.0
+    bot_reclaim_interval_ms: int = 10_000
+    bot_min_idle_time_ms: int = 30_000
     rag_prompt_version: str = "rag-v1"
     search_max_limit: int = 20
     search_candidate_multiplier: int = 3

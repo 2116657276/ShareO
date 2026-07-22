@@ -9,6 +9,7 @@ import (
 	"github.com/zhoujianlin/ShareO/internal/handler"
 	"github.com/zhoujianlin/ShareO/internal/middleware"
 	jwtpkg "github.com/zhoujianlin/ShareO/internal/pkg/jwt"
+	"github.com/zhoujianlin/ShareO/internal/pkg/queue"
 	"github.com/zhoujianlin/ShareO/internal/repository"
 	"github.com/zhoujianlin/ShareO/internal/service"
 	"github.com/zhoujianlin/ShareO/internal/ws"
@@ -33,14 +34,15 @@ func SetupRouter(trustedOrigins ...string) *gin.Engine {
 	uploadH := handler.NewUploadHandler()
 	notifH := handler.NewNotificationHandler()
 	postRepo := repository.NewPostRepo()
-	internalH := handler.NewInternalHandler(postRepo)
 	imageSearchH := handler.NewImageSearchHandler(postRepo)
 
 	// Chat
 	chatRepo := repository.NewChatRepo(repository.DB)
 	presence := repository.NewRedisPresenceStore()
-	chatSvc := service.NewChatService(chatRepo, presence, hub)
+	aiBridge := service.NewAIBridge(queue.New(repository.RDB))
+	chatSvc := service.NewChatService(chatRepo, presence, hub, aiBridge)
 	chatH := handler.NewChatHandler(chatSvc, hub, trustedOrigins)
+	internalH := handler.NewInternalHandler(postRepo, chatSvc)
 
 	// === 首页：根据登录态分流 ===
 	// 未登录 → 登录页(区分admin/user入口)
@@ -179,6 +181,8 @@ func SetupRouter(trustedOrigins ...string) *gin.Engine {
 		internalAPI.GET("/health", internalH.HealthCheck)
 		internalAPI.GET("/posts/index-payloads", internalH.ListIndexPayloads)
 		internalAPI.GET("/posts/:id/index-payload", internalH.IndexPayload)
+		internalAPI.GET("/bot/tasks/:message_id", internalH.BotTask)
+		internalAPI.POST("/bot/reply", internalH.BotReply)
 	}
 
 	// === Admin Web Pages ===

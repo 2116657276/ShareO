@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -9,6 +10,7 @@ import (
 	"time"
 
 	"github.com/zhoujianlin/ShareO/internal/model"
+	"github.com/zhoujianlin/ShareO/internal/repository"
 	"gorm.io/gorm"
 )
 
@@ -32,6 +34,9 @@ type ChatRepository interface {
 	IsMember(context.Context, int64, int64) (bool, error)
 	GetMembers(context.Context, int64) ([]model.ConversationMember, error)
 	CreateMessage(context.Context, *model.Message) error
+	GetMessageByID(context.Context, int64) (*model.Message, error)
+	CreateBotReply(context.Context, int64, int64, string, []model.BotCitation) (*model.Message, bool, error)
+	VisiblePostIDs(context.Context, []int64) (map[int64]struct{}, error)
 	GetMessages(context.Context, int64, int64, int64, int) ([]model.Message, error)
 	GetLastMessage(context.Context, int64) (*model.Message, error)
 	GetRecentMessages(context.Context, int64, int) ([]model.Message, error)
@@ -57,10 +62,15 @@ type ChatService struct {
 	repo     ChatRepository
 	presence PresenceStore
 	hub      MessageHub
+	aiBridge *AIBridge
 }
 
-func NewChatService(repo ChatRepository, presence PresenceStore, hub MessageHub) *ChatService {
-	return &ChatService{repo: repo, presence: presence, hub: hub}
+func NewChatService(repo ChatRepository, presence PresenceStore, hub MessageHub, bridges ...*AIBridge) *ChatService {
+	service := &ChatService{repo: repo, presence: presence, hub: hub}
+	if len(bridges) > 0 {
+		service.aiBridge = bridges[0]
+	}
+	return service
 }
 
 func chatError(kind error, message string) error { return fmt.Errorf("%w: %s", kind, message) }
@@ -112,6 +122,12 @@ func (s *ChatService) SendMessage(ctx context.Context, senderID, convID int64, c
 		memberIDs = append(memberIDs, member.UserID)
 	}
 	s.hub.SendToUsers(memberIDs, WsMessage{Type: "new_message", Data: WsMessageData{Message: message}})
+	for _, member := range members {
+		if member.UserID != senderID && member.User != nil && member.User.IsBot != 0 && member.User.Username == model.ShareOBotUsername {
+			s.aiBridge.PublishBotTask(convID, message.ID)
+			break
+		}
+	}
 	return message, nil
 }
 
@@ -122,7 +138,14 @@ func (s *ChatService) GetMessages(ctx context.Context, convID, userID, beforeID,
 	if err := s.requireMember(ctx, convID, userID); err != nil {
 		return nil, err
 	}
-	return s.repo.GetMessages(ctx, convID, beforeID, afterID, limit)
+	messages, err := s.repo.GetMessages(ctx, convID, beforeID, afterID, limit)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.sanitizeMessageCitations(ctx, messages); err != nil {
+		return nil, err
+	}
+	return messages, nil
 }
 
 func (s *ChatService) MarkRead(ctx context.Context, convID, userID, messageID int64) error {
@@ -163,6 +186,13 @@ func (s *ChatService) ListConversations(ctx context.Context, userID int64) ([]Co
 		lastMessage, err := s.repo.GetLastMessage(ctx, conv.ID)
 		if err != nil {
 			return nil, err
+		}
+		if lastMessage != nil {
+			messages := []model.Message{*lastMessage}
+			if err := s.sanitizeMessageCitations(ctx, messages); err != nil {
+				return nil, err
+			}
+			lastMessage = &messages[0]
 		}
 		members, err := s.repo.GetMembers(ctx, conv.ID)
 		if err != nil {
@@ -254,6 +284,150 @@ func (s *ChatService) requireMember(ctx context.Context, convID, userID int64) e
 	}
 	if !member {
 		return chatError(ErrChatForbidden, "不是该会话的成员")
+	}
+	return nil
+}
+
+type BotTask struct {
+	Message      *model.Message      `json:"message"`
+	History      []model.Message     `json:"history"`
+	Bot          *model.User         `json:"bot"`
+	Conversation *model.Conversation `json:"conversation"`
+}
+
+func (s *ChatService) GetBotTask(ctx context.Context, messageID int64) (*BotTask, error) {
+	if messageID <= 0 {
+		return nil, chatError(ErrChatInvalid, "消息 ID 无效")
+	}
+	message, err := s.repo.GetMessageByID(ctx, messageID)
+	if err != nil {
+		return nil, err
+	}
+	if message == nil {
+		return nil, chatError(ErrChatNotFound, "消息不存在")
+	}
+	conversation, err := s.conversation(ctx, message.ConversationID)
+	if err != nil {
+		return nil, err
+	}
+	members, err := s.repo.GetMembers(ctx, conversation.ID)
+	if err != nil {
+		return nil, err
+	}
+	if len(members) != 2 {
+		return nil, chatError(ErrChatForbidden, "不是有效的 Bot 私聊")
+	}
+	var bot *model.User
+	senderIsMember := false
+	for _, member := range members {
+		if member.User == nil || member.User.Status != model.UserStatusActive {
+			return nil, chatError(ErrChatForbidden, "会话成员不可用")
+		}
+		if member.User.IsBot != 0 && member.User.Username == model.ShareOBotUsername {
+			if bot != nil {
+				return nil, chatError(ErrChatForbidden, "不是有效的 Bot 私聊")
+			}
+			copy := *member.User
+			bot = &copy
+		} else if member.UserID == message.SenderID && member.User.IsBot == 0 {
+			senderIsMember = true
+		}
+	}
+	if bot == nil || bot.ID == message.SenderID || !senderIsMember {
+		return nil, chatError(ErrChatForbidden, "不是有效的 Bot 私聊")
+	}
+	history, err := s.repo.GetRecentMessages(ctx, conversation.ID, 20)
+	if err != nil {
+		return nil, err
+	}
+	for left, right := 0, len(history)-1; left < right; left, right = left+1, right-1 {
+		history[left], history[right] = history[right], history[left]
+	}
+	return &BotTask{Message: message, History: history, Bot: bot, Conversation: conversation}, nil
+}
+
+func (s *ChatService) ReplyAsBot(
+	ctx context.Context,
+	sourceMessageID, conversationID int64,
+	content string,
+	citations []model.BotCitation,
+) (*model.Message, error) {
+	content = strings.TrimSpace(content)
+	if sourceMessageID <= 0 || conversationID <= 0 || content == "" || len([]rune(content)) > MaxMessageLength {
+		return nil, chatError(ErrChatInvalid, "Bot 回复参数无效")
+	}
+	if len(citations) > 5 {
+		return nil, chatError(ErrChatInvalid, "引用数量不能超过 5")
+	}
+	message, created, err := s.repo.CreateBotReply(
+		ctx, sourceMessageID, conversationID, content, citations,
+	)
+	if errors.Is(err, repository.ErrInvalidBotConversation) || errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, chatError(ErrChatForbidden, "不是有效的 Bot 私聊")
+	}
+	if err != nil {
+		return nil, err
+	}
+	messages := []model.Message{*message}
+	if err := s.sanitizeMessageCitations(ctx, messages); err != nil {
+		return nil, err
+	}
+	message = &messages[0]
+	if !created {
+		return message, nil
+	}
+	members, err := s.repo.GetMembers(ctx, conversationID)
+	if err != nil {
+		slog.Warn("bot reply committed but websocket members could not be loaded",
+			"conversation_id", conversationID, "message_id", message.ID, "err", err)
+		return message, nil
+	}
+	memberIDs := make([]int64, 0, len(members))
+	for _, member := range members {
+		memberIDs = append(memberIDs, member.UserID)
+	}
+	s.hub.SendToUsers(memberIDs, WsMessage{Type: "new_message", Data: WsMessageData{Message: message}})
+	return message, nil
+}
+
+func (s *ChatService) sanitizeMessageCitations(ctx context.Context, messages []model.Message) error {
+	postIDs := make([]int64, 0)
+	metas := make([]*model.MessageMeta, len(messages))
+	for index := range messages {
+		if messages[index].Meta == nil {
+			continue
+		}
+		var meta model.MessageMeta
+		if err := json.Unmarshal([]byte(*messages[index].Meta), &meta); err != nil {
+			messages[index].Meta = nil
+			continue
+		}
+		metas[index] = &meta
+		for _, citation := range meta.Citations {
+			postIDs = append(postIDs, citation.PostID)
+		}
+	}
+	visible, err := s.repo.VisiblePostIDs(ctx, postIDs)
+	if err != nil {
+		return err
+	}
+	for index, meta := range metas {
+		if meta == nil {
+			continue
+		}
+		filtered := meta.Citations[:0]
+		for _, citation := range meta.Citations {
+			if _, ok := visible[citation.PostID]; ok {
+				filtered = append(filtered, citation)
+			}
+		}
+		meta.Citations = filtered
+		encoded, err := json.Marshal(meta)
+		if err != nil {
+			return err
+		}
+		value := string(encoded)
+		messages[index].Meta = &value
 	}
 	return nil
 }

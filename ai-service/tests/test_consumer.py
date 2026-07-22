@@ -46,6 +46,34 @@ async def test_failed_message_is_acked_after_three_retries():
 
 
 @pytest.mark.asyncio
+async def test_final_failure_runs_dead_letter_handler_before_ack():
+    redis = AsyncMock()
+    redis.xpending_range.return_value = [{"times_delivered": 4}]
+    handler = AsyncMock(side_effect=RuntimeError("boom"))
+    dead_letter = AsyncMock()
+    consumer = make_consumer(redis, max_retries=3, dead_letter_handler=dead_letter)
+
+    await consumer._process_message(handler, "3-dead", {"message_id": "9"})
+
+    dead_letter.assert_awaited_once_with("3-dead", {"message_id": "9"})
+    redis.xack.assert_awaited_once_with("events", "workers", "3-dead")
+
+
+@pytest.mark.asyncio
+async def test_failed_dead_letter_handler_keeps_message_pending():
+    redis = AsyncMock()
+    redis.xpending_range.return_value = [{"times_delivered": 4}]
+    handler = AsyncMock(side_effect=RuntimeError("boom"))
+    dead_letter = AsyncMock(side_effect=RuntimeError("callback unavailable"))
+    consumer = make_consumer(redis, max_retries=3, dead_letter_handler=dead_letter)
+
+    await consumer._process_message(handler, "3-dead-failed", {"message_id": "9"})
+
+    dead_letter.assert_awaited_once()
+    redis.xack.assert_not_awaited()
+
+
+@pytest.mark.asyncio
 async def test_failed_message_with_unlimited_retries_is_never_acked():
     redis = AsyncMock()
     redis.xpending_range.return_value = [{"times_delivered": 999}]

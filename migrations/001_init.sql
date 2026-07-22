@@ -15,6 +15,21 @@ CREATE TABLE IF NOT EXISTS users (
     INDEX idx_users_bot (is_bot)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+INSERT INTO users (username, password_hash, email, bio, role, status, is_bot)
+VALUES (
+    'shareo_bot',
+    '!shareo-bot-login-disabled!',
+    'bot@shareo.local',
+    '基于已审核帖子回答问题，并附上可访问来源。',
+    'user',
+    1,
+    1
+)
+ON DUPLICATE KEY UPDATE
+    password_hash = VALUES(password_hash),
+    status = 1,
+    is_bot = 1;
+
 CREATE TABLE IF NOT EXISTS posts (
     id BIGINT PRIMARY KEY AUTO_INCREMENT,
     user_id BIGINT NOT NULL,

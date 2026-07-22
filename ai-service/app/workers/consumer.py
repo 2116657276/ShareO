@@ -25,6 +25,7 @@ class StreamConsumer:
         max_retries: int | None = 3,
         reclaim_interval_ms: int = 10_000,
         min_idle_time_ms: int = 30_000,
+        dead_letter_handler: Handler | None = None,
     ):
         self.redis = redis
         self.stream = stream
@@ -33,6 +34,7 @@ class StreamConsumer:
         self.max_retries = max_retries
         self.reclaim_interval_ms = reclaim_interval_ms
         self.min_idle_time_ms = min_idle_time_ms
+        self.dead_letter_handler = dead_letter_handler
         self._running = False
 
     async def ensure_group(self):
@@ -58,6 +60,16 @@ class StreamConsumer:
         except Exception:
             attempts = await self._delivery_count(msg_id)
             if self.max_retries is not None and attempts >= self.max_retries + 1:
+                if self.dead_letter_handler is not None:
+                    try:
+                        await self.dead_letter_handler(msg_id, fields)
+                    except Exception:
+                        logger.exception(
+                            "dead-letter handler failed; message remains pending stream=%s id=%s",
+                            self.stream,
+                            msg_id,
+                        )
+                        return
                 logger.exception(
                     "dropping message after retries stream=%s id=%s attempts=%d fields=%r",
                     self.stream,

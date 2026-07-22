@@ -2,8 +2,10 @@ package repository
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -15,6 +17,8 @@ import (
 type ChatRepo struct {
 	db *gorm.DB
 }
+
+var ErrInvalidBotConversation = errors.New("invalid bot conversation")
 
 func NewChatRepo(db *gorm.DB) *ChatRepo { return &ChatRepo{db: db} }
 
@@ -116,6 +120,184 @@ func (r *ChatRepo) CreateMessage(ctx context.Context, msg *model.Message) error 
 		}
 		return nil
 	})
+}
+
+func (r *ChatRepo) GetMessageByID(ctx context.Context, messageID int64) (*model.Message, error) {
+	var message model.Message
+	err := r.db.WithContext(ctx).Preload("Sender").First(&message, messageID).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, nil
+	}
+	return &message, err
+}
+
+func (r *ChatRepo) VisiblePostIDs(ctx context.Context, postIDs []int64) (map[int64]struct{}, error) {
+	visible := make(map[int64]struct{})
+	if len(postIDs) == 0 {
+		return visible, nil
+	}
+	var ids []int64
+	err := r.db.WithContext(ctx).Model(&model.Post{}).
+		Where("id IN ? AND status = ? AND is_deleted = 0", postIDs, model.StatusApproved).
+		Pluck("id", &ids).Error
+	for _, id := range ids {
+		visible[id] = struct{}{}
+	}
+	return visible, err
+}
+
+func validChunkID(postID int64, chunkID string) bool {
+	prefix := strconv.FormatInt(postID, 10) + ":"
+	if !strings.HasPrefix(chunkID, prefix) {
+		return false
+	}
+	suffix := strings.TrimPrefix(chunkID, prefix)
+	chunkNo, err := strconv.ParseInt(suffix, 10, 32)
+	return err == nil && chunkNo >= 0 && strconv.FormatInt(chunkNo, 10) == suffix
+}
+
+func filterBotCitations(tx *gorm.DB, citations []model.BotCitation) ([]model.BotCitation, error) {
+	postIDs := make([]int64, 0, len(citations))
+	seenIDs := make(map[int64]struct{}, len(citations))
+	for _, citation := range citations {
+		if citation.PostID > 0 {
+			if _, exists := seenIDs[citation.PostID]; !exists {
+				seenIDs[citation.PostID] = struct{}{}
+				postIDs = append(postIDs, citation.PostID)
+			}
+		}
+	}
+	var visibleIDs []int64
+	if len(postIDs) > 0 {
+		if err := tx.Clauses(clause.Locking{Strength: "SHARE"}).Model(&model.Post{}).
+			Where("id IN ? AND status = ? AND is_deleted = 0", postIDs, model.StatusApproved).
+			Pluck("id", &visibleIDs).Error; err != nil {
+			return nil, err
+		}
+	}
+	visible := make(map[int64]struct{}, len(visibleIDs))
+	for _, id := range visibleIDs {
+		visible[id] = struct{}{}
+	}
+	filtered := make([]model.BotCitation, 0, len(citations))
+	seenChunks := make(map[string]struct{}, len(citations))
+	for _, citation := range citations {
+		if _, ok := visible[citation.PostID]; !ok || !validChunkID(citation.PostID, citation.ChunkID) {
+			continue
+		}
+		if _, duplicate := seenChunks[citation.ChunkID]; duplicate {
+			continue
+		}
+		seenChunks[citation.ChunkID] = struct{}{}
+		filtered = append(filtered, citation)
+	}
+	return filtered, nil
+}
+
+func (r *ChatRepo) CreateBotReply(
+	ctx context.Context,
+	sourceMessageID, conversationID int64,
+	content string,
+	citations []model.BotCitation,
+) (*model.Message, bool, error) {
+	var result *model.Message
+	created := false
+	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var source model.Message
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&source, sourceMessageID).Error; err != nil {
+			return err
+		}
+		if source.ConversationID != conversationID {
+			return ErrInvalidBotConversation
+		}
+
+		var members []model.ConversationMember
+		if err := tx.Where("conversation_id = ?", conversationID).Preload("User").Find(&members).Error; err != nil {
+			return err
+		}
+		if len(members) != 2 {
+			return ErrInvalidBotConversation
+		}
+		var bot *model.User
+		sourceIsActiveMember := false
+		for _, member := range members {
+			if member.User == nil || member.User.Status != model.UserStatusActive {
+				return ErrInvalidBotConversation
+			}
+			if member.User.IsBot != 0 && member.User.Username == model.ShareOBotUsername {
+				if bot != nil {
+					return ErrInvalidBotConversation
+				}
+				copy := *member.User
+				bot = &copy
+			} else if member.UserID == source.SenderID && member.User.IsBot == 0 {
+				sourceIsActiveMember = true
+			}
+		}
+		if bot == nil || source.SenderID == bot.ID || !sourceIsActiveMember {
+			return ErrInvalidBotConversation
+		}
+
+		var existing model.BotReply
+		err := tx.Where("source_message_id = ?", sourceMessageID).First(&existing).Error
+		if err == nil {
+			var message model.Message
+			if err := tx.Preload("Sender").First(&message, existing.ReplyMessageID).Error; err != nil {
+				return err
+			}
+			result = &message
+			return nil
+		}
+		if !errors.Is(err, gorm.ErrRecordNotFound) {
+			return err
+		}
+
+		filtered, err := filterBotCitations(tx, citations)
+		if err != nil {
+			return err
+		}
+		metaBytes, err := json.Marshal(model.MessageMeta{
+			SourceMessageID: sourceMessageID,
+			Citations:       filtered,
+		})
+		if err != nil {
+			return err
+		}
+		meta := string(metaBytes)
+		message := &model.Message{
+			ConversationID: conversationID,
+			SenderID:       bot.ID,
+			Content:        content,
+			Meta:           &meta,
+			Sender:         bot,
+		}
+		if err := tx.Create(message).Error; err != nil {
+			return err
+		}
+		if err := tx.Model(&model.Conversation{}).Where("id = ?", conversationID).
+			Update("updated_at", time.Now()).Error; err != nil {
+			return err
+		}
+		memberUpdate := tx.Model(&model.ConversationMember{}).
+			Where("conversation_id = ? AND user_id = ?", conversationID, bot.ID).
+			Update("last_read_message_id", gorm.Expr("GREATEST(last_read_message_id, ?)", message.ID))
+		if memberUpdate.Error != nil {
+			return memberUpdate.Error
+		}
+		if memberUpdate.RowsAffected == 0 {
+			return ErrInvalidBotConversation
+		}
+		if err := tx.Create(&model.BotReply{
+			SourceMessageID: sourceMessageID,
+			ReplyMessageID:  message.ID,
+		}).Error; err != nil {
+			return err
+		}
+		result = message
+		created = true
+		return nil
+	})
+	return result, created, err
 }
 
 func (r *ChatRepo) GetMessages(ctx context.Context, convID, beforeID, afterID int64, limit int) ([]model.Message, error) {

@@ -49,7 +49,8 @@ async def test_runtime_starts_both_streams_and_closes_shared_resources():
     }
     assert len(runtime.tasks) == 2
     bot_consumer = next(item for item in runtime.consumers if item.stream == STREAM_BOT_TASKS)
-    assert bot_consumer.options["max_retries"] is None
+    assert bot_consumer.options["max_retries"] == 3
+    assert bot_consumer.options["dead_letter_handler"] is not None
 
     await runtime.stop()
     assert runtime.status() == {
