@@ -1,28 +1,22 @@
-# ADR-005: RAG 实现 —— 自研 pipeline，不引入 LangChain/LlamaIndex
+# ADR-005：轻量 RAG 组件组合
 
-- 日期: 2026-07-19
-- 状态: 已接受
-
-## 背景
-
-Bot 的 RAG 能力（站内帖子检索增强问答）需要决定实现路径：用编排框架还是手写。这是毕业设计，评价标准是"理解深度 + 可论证性"，不是交付速度。
-
-## 候选方案
-
-1. LangChain / LlamaIndex 全家桶
-2. 自研 pipeline：chunk → embed → retrieve → (rerank) → prompt → answer with citations
+- 日期：2026-07-22
+- 状态：已接受
 
 ## 决定
 
-选自研。ai-service 的 `rag/` 模块手写完整链路：中文友好的分块策略、BGE 向量检索、可选 rerank、prompt 组装、带帖子引用的回答生成。LLM 调用只依赖 OpenAI 兼容 SDK 这一层薄封装。
+RAG 使用 FastEmbed + Qdrant Client + `httpx` OpenAI-compatible 调用 + 自研受限 pipeline，不引入 LangChain、LlamaIndex、RAGFlow 或 Agent 框架。
 
 ## 理由
 
-- 答辩上"每一步为什么这么做"必须自己答；手写意味着分块粒度、top-k、prompt 结构、引用机制全部是自己的决策，全部可写进论文并做消融实验。
-- 框架的抽象在毕设规模是负资产：调试隔着多层封装，版本变动快，且"调通了框架"在答辩里不构成贡献。
-- 依赖面小：transformers + qdrant-client + openai SDK 即可，环境干净。
+- 帖子正文规模小，流程固定为分块、检索、Prompt、回答和引用校验。
+- `BAAI/bge-small-zh-v1.5` 可由 FastEmbed 以较轻的 ONNX 运行时加载。
+- 自研 pipeline 可以直接保留确定性 chunk ID、帖子可见性和引用白名单。
+- 项目目标是练习 Go 与 AI 服务集成，而不是展示编排框架配置。
 
-## 后果与代价
+## 约束
 
-- 分块、重试、上下文窗口管理都要自己写 → 正是学习目标本身，且各组件保持函数级简单。
-- 后期若要复杂编排（多步 Agent 工具循环），自研循环不够用时再评估引入轻量框架（届时新增 ADR）。
+- LLM 只通过环境变量配置的 OpenAI-compatible 接口调用。
+- 模型输出的 chunk ID 必须属于本次检索结果。
+- 所有引用在写入聊天消息前由 Go 验证。
+- 不实现 rerank、GraphRAG、Agent 或工具循环。
