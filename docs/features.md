@@ -1,6 +1,6 @@
 # ShareO 功能清单
 
-> 更新时间: 2026-07-21 | 版本: v2 Phase 1 后端加固中、Phase 2 语义搜图后端进行中 | 路由以 `internal/router/router.go` 为准 · 14 张业务表
+> 更新时间: 2026-07-22 | 版本: v2 Phase 1 后端候选、Phase 2 语义搜图真实 E2E 门禁阻塞 | 路由以 `internal/router/router.go` 为准 · 14 张业务表
 
 ---
 

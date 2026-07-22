@@ -1,6 +1,6 @@
 # ShareO v2 架构文档
 
-> 更新时间: 2026-07-21 | 状态: Phase 0 本地完成 / Phase 1 后端候选 / Phase 2 后端进行中
+> 更新时间: 2026-07-22 | 状态: Phase 0 本地完成 / Phase 1 后端候选 / Phase 2 真实 E2E 门禁阻塞
 
 ## 1. 演进目标
 
@@ -82,7 +82,7 @@ Worker 消费 (consumer group: ai-workers):
 ```
 
 - Bot 是 `users` 表中 `is_bot=true` 的特殊用户，天然复用 IM 全部管线。
-- 降级：ai-service 不可用时主站与 IM 完全不受影响，Bot 仅表现为"未回复"。
+- 降级：ai-service 不可用时主站与 IM 完全不受影响；Phase 3 要求 Bot 任务最终返回固定可理解兜底消息，并通过 source message 幂等。
 
 ## 5. 技术栈与决策索引
 

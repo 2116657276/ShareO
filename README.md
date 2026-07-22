@@ -2,7 +2,7 @@
 
 Go Web 摄影作品管理与社区分享平台（类小红书产品形态），当前作为毕业设计向 v2 演进：**IM 私聊群组 / 图片语义搜索 / RAG Bot / Agent**。
 
-当前状态：**Phase 0 本地完成 / Phase 1 后端候选 / Phase 2 后端进行中**。项目分为后端能力线和发布验收线；实时状态见 [TASK.md](TASK.md)，分阶段执行文档见 [docs/phases/](docs/phases/README.md)。
+当前状态：**Phase 0 本地完成 / Phase 1 后端候选 / Phase 2 真实 E2E 门禁阻塞**。项目分为后端能力线和发布验收线；实时状态见 [TASK.md](TASK.md)，分阶段执行文档见 [docs/phases/](docs/phases/README.md)。Phase 3 Bot + RAG 暂不进入运行时代码实现，必须先完成并复核 Phase 2 worker 索引收敛。
 
 - **架构与决策**: [docs/architecture.md](docs/architecture.md) · [docs/adr/](docs/adr/)
 - **里程碑与详细计划**: [docs/roadmap.md](docs/roadmap.md) · [docs/plan.md](docs/plan.md)

@@ -1,6 +1,6 @@
 # Phase 2 — 语义搜图
 
-> 更新时间: 2026-07-21 | 状态: 后端进行中
+> 更新时间: 2026-07-22 | 状态: 真实 E2E 门禁阻塞
 
 ## 目标与当前基线
 
@@ -44,7 +44,7 @@
 | 交付 | 提交 | 自动证据 | 环境证据 |
 |------|------|----------|----------|
 | 初始索引/搜索切片 | `7a96feb` | Python 20 项非集成测试、Go/race | 待真实 Qdrant/模型 E2E |
-| 成熟化代码与分阶段文档 | `5c6e087` | Python 27 项非集成测试、Go、Shell、61 个 Markdown 链接 | 隔离 E2E 脚本已建立，待真实运行 |
+| 成熟化代码与分阶段文档 | `5c6e087` | Python 27 项非集成测试、Go、Shell、62 个 Markdown 链接 | 隔离 E2E 已运行，但 worker 未在 180 秒内完成图片命中 |
 
 ## 暂缓项
 
@@ -52,4 +52,6 @@
 
 ## 2026-07-22 门禁复核
 
-本轮已通过 Go/Python/Shell/Markdown 本地门禁，并启动真实 MySQL、Redis、Qdrant 和 MinIO。修复了隔离 E2E 搜索轮询将短暂 503 提前视为失败的问题；修复后 approved 图片仍未在 180 秒内命中，worker 索引收敛和日志证据待继续定位。Phase 2 保持进行中，Phase 3 不启动。详见 [阶段评审](../reviews/2026-07-22-phase2-gate-review.md)。
+本轮已通过 Go/Python/Shell/Markdown 本地门禁，并启动真实 MySQL、Redis、Qdrant 和 MinIO。修复了隔离 E2E 搜索轮询将短暂 503 提前视为失败的问题；修复后 approved 图片仍未在 180 秒内命中，worker 索引收敛和日志证据待继续定位。Phase 2 保持阻塞，Phase 3 不启动。详见 [阶段评审](../reviews/2026-07-22-phase2-gate-review.md)。
+
+下一步先补齐 worker readiness/预热状态和结构化索引失败日志，区分图片代理、模型编码、Qdrant upsert 与查询过滤的失败点；修复后重跑完整隔离 E2E、worker 重启 45 秒重领、删除后 10 秒不可见和 Qdrant/MinIO/Redis 故障注入，随后再进行 `image_search_v1` 标注与 Recall/MRR 评测。
