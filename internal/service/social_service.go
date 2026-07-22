@@ -9,13 +9,12 @@ import (
 )
 
 type SocialService struct {
-	likeRepo     *repository.LikeRepo
-	favoriteRepo *repository.FavoriteRepo
-	followRepo   *repository.FollowRepo
-	commentRepo  *repository.CommentRepo
-	userRepo     *repository.UserRepo
-	postRepo     *repository.PostRepo
-	notifSvc     *NotificationService
+	likeRepo    *repository.LikeRepo
+	followRepo  *repository.FollowRepo
+	commentRepo *repository.CommentRepo
+	userRepo    *repository.UserRepo
+	postRepo    *repository.PostRepo
+	notifSvc    *NotificationService
 }
 
 // Sentinel errors for handler-layer HTTP status decisions
@@ -26,13 +25,12 @@ var (
 
 func NewSocialService() *SocialService {
 	return &SocialService{
-		likeRepo:     repository.NewLikeRepo(),
-		favoriteRepo: repository.NewFavoriteRepo(),
-		followRepo:   repository.NewFollowRepo(),
-		commentRepo:  repository.NewCommentRepo(),
-		userRepo:     repository.NewUserRepo(),
-		postRepo:     repository.NewPostRepo(),
-		notifSvc:     NewNotificationService(),
+		likeRepo:    repository.NewLikeRepo(),
+		followRepo:  repository.NewFollowRepo(),
+		commentRepo: repository.NewCommentRepo(),
+		userRepo:    repository.NewUserRepo(),
+		postRepo:    repository.NewPostRepo(),
+		notifSvc:    NewNotificationService(),
 	}
 }
 
@@ -40,7 +38,7 @@ func NewSocialService() *SocialService {
 
 func (s *SocialService) ToggleLike(userID, postID int64) (bool, error) {
 	post, err := s.postRepo.FindByIDLight(postID)
-	if err != nil || post == nil || post.IsDeleted == 1 {
+	if err != nil || post == nil || post.IsDeleted == 1 || post.Status != model.StatusApproved {
 		return false, ErrPostNotFound
 	}
 	liked, err := s.likeRepo.Toggle(userID, postID)
@@ -53,21 +51,6 @@ func (s *SocialService) ToggleLike(userID, postID int64) (bool, error) {
 func (s *SocialService) GetLikedPosts(userID int64, page, pageSize int) ([]model.Post, int64, error) {
 	page, pageSize = clampPage(page, pageSize)
 	return s.likeRepo.GetUserLikedPosts(userID, page, pageSize)
-}
-
-// --- Favorite ---
-
-func (s *SocialService) ToggleFavorite(userID, postID int64) (bool, error) {
-	post, err := s.postRepo.FindByIDLight(postID)
-	if err != nil || post == nil || post.IsDeleted == 1 {
-		return false, ErrPostNotFound
-	}
-	return s.favoriteRepo.Toggle(userID, postID)
-}
-
-func (s *SocialService) GetFavorites(userID int64, page, pageSize int) ([]model.Post, int64, error) {
-	page, pageSize = clampPage(page, pageSize)
-	return s.favoriteRepo.GetUserFavorites(userID, page, pageSize)
 }
 
 // --- Follow ---
@@ -120,7 +103,7 @@ func (s *SocialService) CreateComment(userID int64, req CreateCommentReq) (*mode
 	}
 
 	post, err := s.postRepo.FindByIDLight(req.PostID)
-	if err != nil || post == nil || post.IsDeleted == 1 {
+	if err != nil || post == nil || post.IsDeleted == 1 || post.Status != model.StatusApproved {
 		return nil, ErrPostNotFound
 	}
 

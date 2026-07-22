@@ -16,8 +16,6 @@ type fakeChatRepo struct {
 	isMember      bool
 	unread        int64
 	validatedIDs  []int64
-	createdGroup  []int64
-	removedUser   int64
 	createdMsg    *model.Message
 	markReadErr   error
 	requestedPage [3]int64
@@ -28,11 +26,7 @@ func (f *fakeChatRepo) ValidateActiveUsers(_ context.Context, ids []int64) error
 	return nil
 }
 func (f *fakeChatRepo) EnsureDM(_ context.Context, a, _ int64) (*model.Conversation, error) {
-	return &model.Conversation{ID: a, Type: model.ConvTypeDM}, nil
-}
-func (f *fakeChatRepo) CreateGroup(_ context.Context, owner int64, title string, ids []int64) (*model.Conversation, error) {
-	f.createdGroup = append([]int64(nil), ids...)
-	return &model.Conversation{ID: 12, Type: model.ConvTypeGroup, OwnerID: &owner, Title: title}, nil
+	return &model.Conversation{ID: a}, nil
 }
 func (f *fakeChatRepo) GetConversation(context.Context, int64) (*model.Conversation, error) {
 	if f.conversation == nil {
@@ -47,14 +41,6 @@ func (f *fakeChatRepo) IsMember(context.Context, int64, int64) (bool, error) { r
 func (f *fakeChatRepo) GetMembers(context.Context, int64) ([]model.ConversationMember, error) {
 	return []model.ConversationMember{{UserID: 1}, {UserID: 2}}, nil
 }
-func (f *fakeChatRepo) AddMembers(context.Context, int64, []int64, int) (bool, error) {
-	return true, nil
-}
-func (f *fakeChatRepo) RemoveMember(_ context.Context, _ int64, userID int64) error {
-	f.removedUser = userID
-	return nil
-}
-func (f *fakeChatRepo) DissolveGroup(context.Context, int64) error { return nil }
 func (f *fakeChatRepo) CreateMessage(_ context.Context, msg *model.Message) error {
 	msg.ID = 99
 	f.createdMsg = msg
@@ -96,33 +82,6 @@ func (*fakeHub) DisconnectUser(int64)           {}
 func newChatServiceForTest(repo *fakeChatRepo) (*ChatService, *fakeHub) {
 	hub := &fakeHub{}
 	return NewChatService(repo, fakePresence{}, hub), hub
-}
-
-func TestCreateGroupNormalizesMembersAndTitle(t *testing.T) {
-	repo := &fakeChatRepo{}
-	svc, _ := newChatServiceForTest(repo)
-	conv, err := svc.CreateGroup(context.Background(), 1, "  Team  ", []int64{2, 2, 1, 3})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if conv.Title != "Team" || len(repo.createdGroup) != 2 || repo.createdGroup[0] != 2 || repo.createdGroup[1] != 3 {
-		t.Fatalf("unexpected normalized group: %#v members=%v", conv, repo.createdGroup)
-	}
-}
-
-func TestGroupPermissionRules(t *testing.T) {
-	ownerID := int64(1)
-	repo := &fakeChatRepo{conversation: &model.Conversation{ID: 5, Type: model.ConvTypeGroup, OwnerID: &ownerID}, isMember: true}
-	svc, _ := newChatServiceForTest(repo)
-	if err := svc.InviteMembers(context.Background(), 5, 2, []int64{3}); !errors.Is(err, ErrChatForbidden) {
-		t.Fatalf("non-owner invite error = %v", err)
-	}
-	if err := svc.LeaveGroup(context.Background(), 5, 1); !errors.Is(err, ErrChatConflict) {
-		t.Fatalf("owner leave error = %v", err)
-	}
-	if err := svc.LeaveGroup(context.Background(), 5, 2); err != nil || repo.removedUser != 2 {
-		t.Fatalf("member leave error = %v, removed=%d", err, repo.removedUser)
-	}
 }
 
 func TestMessageLimitsAndBroadcast(t *testing.T) {

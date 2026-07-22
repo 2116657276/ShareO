@@ -1,4 +1,4 @@
-.PHONY: run build migrate seed clean tidy start fmt check check-go check-python check-shell check-docs test-integration test-image-search-e2e dev-config dev-up dev-ready dev-down dev-reset dev-clean-data vector-up vector-ready vector-down ai-run ai-worker ai-search-ready brew-minio-ready brew-reset-data backfill-index reconcile-index eval-image-search
+.PHONY: run build migrate reset clean tidy start fmt check check-go check-python check-shell check-docs test-integration test-image-search-e2e dev-config dev-up dev-ready dev-down dev-reset dev-clean-data vector-up vector-ready vector-down ai-run ai-worker ai-search-ready brew-minio-ready brew-reset-data backfill-index reconcile-index eval-image-search
 
 COMPOSE ?= $(shell docker compose version >/dev/null 2>&1 && echo "docker compose" || echo "docker-compose")
 SHAREO_AI_PORT ?= 8000
@@ -23,13 +23,6 @@ migrate:
 	bash scripts/migrate_schema.sh
 	@echo "Migration complete."
 
-# Generate test data (50 users with posts)
-seed:
-	@echo "Generating test data..."
-	mysql -u root -p"${MYSQL_PASS}" shareo < migrations/002_seed.sql
-	mysql -u root -p"${MYSQL_PASS}" shareo < migrations/003_triggers.sql
-	@echo "Seed complete."
-
 # Tidy Go modules
 tidy:
 	go mod tidy
@@ -38,16 +31,9 @@ tidy:
 clean:
 	rm -rf bin/
 
-# Reset database (drop and recreate)
-reset-db:
-	@echo "Dropping and recreating database..."
-	mysql -u root -p"${MYSQL_PASS}" -e "DROP DATABASE IF EXISTS shareo;"
-	bash scripts/migrate_schema.sh
-	@echo "Database reset complete."
-
-# Full setup: migrate + seed + run
-setup: migrate seed
-	@echo "Setup complete. Run 'make run' to start."
+# Reset the configured local/test database. Requires explicit confirmation.
+reset:
+	@CONFIRM="$(CONFIRM)" bash scripts/reset_data.sh
 
 # Format check — fails if any Go file is not gofmt compliant
 fmt:
@@ -178,8 +164,6 @@ help:
 	@echo "  make eval-image-search - Run labeled semantic vs keyword evaluation"
 	@echo "  make fmt       - Check code formatting (gofmt)"
 	@echo "  make migrate   - Run database migration"
-	@echo "  make seed      - Generate test data"
-	@echo "  make setup     - migrate + seed"
-	@echo "  make reset-db  - Drop & recreate database"
+	@echo "  make reset CONFIRM=YES - Rebuild the configured local/test database"
 	@echo "  make tidy      - go mod tidy"
 	@echo "  make clean     - Remove build artifacts"

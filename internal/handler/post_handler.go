@@ -2,7 +2,6 @@ package handler
 
 import (
 	"net/http"
-	"strconv"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -42,22 +41,6 @@ func (h *PostHandler) Update(c *gin.Context) {
 		return
 	}
 	post, err := h.svc.Update(userID, postID, req.Content)
-	if err != nil {
-		response.BadRequest(c, err.Error())
-		return
-	}
-	response.Success(c, post)
-}
-
-func (h *PostHandler) Repost(c *gin.Context) {
-	userID := c.GetInt64("user_id")
-	postID := getInt64Param(c, "id")
-	var req service.RepostReq
-	if err := c.ShouldBindJSON(&req); err != nil {
-		response.BadRequest(c, "请求参数格式错误")
-		return
-	}
-	post, err := h.svc.Repost(userID, postID, req)
 	if err != nil {
 		response.BadRequest(c, err.Error())
 		return
@@ -142,16 +125,6 @@ func (h *PostHandler) WebCreate(c *gin.Context) {
 	if len(imageURLs) == 1 && imageURLs[0] == "" {
 		imageURLs = nil
 	}
-	topicIDsStr := c.PostFormArray("topic_ids")
-
-	var topicIDs []int64
-	for _, s := range topicIDsStr {
-		id, _ := strconv.ParseInt(s, 10, 64)
-		if id > 0 {
-			topicIDs = append(topicIDs, id)
-		}
-	}
-
 	if len(imageURLs) == 0 {
 		// Try single file upload
 		_, err := c.FormFile("image")
@@ -165,9 +138,8 @@ func (h *PostHandler) WebCreate(c *gin.Context) {
 	}
 
 	req := service.CreatePostReq{
-		Content:  content,
-		Images:   imageURLs,
-		TopicIDs: topicIDs,
+		Content: content,
+		Images:  imageURLs,
 	}
 	_, err := h.svc.Create(userID, req)
 	if err != nil {

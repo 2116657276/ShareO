@@ -6,6 +6,8 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"reflect"
+	"sort"
 	"strings"
 	"sync"
 	"testing"
@@ -37,6 +39,40 @@ func openChatIntegrationDB(t *testing.T) *gorm.DB {
 	return db
 }
 
+func TestLightweightBaselineSchema(t *testing.T) {
+	db := openChatIntegrationDB(t)
+	expected := []string{
+		"bot_replies", "comments", "conversation_members", "conversations",
+		"follows", "likes", "messages", "notifications", "post_images",
+		"posts", "system_logs", "users",
+	}
+	var tables []string
+	if err := db.Raw(`SELECT TABLE_NAME FROM information_schema.TABLES
+		WHERE TABLE_SCHEMA = DATABASE() AND TABLE_TYPE = 'BASE TABLE'`).Scan(&tables).Error; err != nil {
+		t.Fatal(err)
+	}
+	sort.Strings(tables)
+	if !reflect.DeepEqual(tables, expected) {
+		t.Fatalf("business tables = %v, want %v", tables, expected)
+	}
+
+	removedColumns := map[string][]string{
+		"posts":         {"favorite_count", "share_count", "is_repost", "repost_of_id", "repost_text"},
+		"conversations": {"type", "title", "owner_id"},
+	}
+	for table, columns := range removedColumns {
+		var count int64
+		if err := db.Raw(`SELECT COUNT(*) FROM information_schema.COLUMNS
+			WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME IN ?`, table, columns).
+			Scan(&count).Error; err != nil {
+			t.Fatal(err)
+		}
+		if count != 0 {
+			t.Fatalf("%s still contains %d removed columns", table, count)
+		}
+	}
+}
+
 func TestChatRepositoryIntegration(t *testing.T) {
 	db := openChatIntegrationDB(t)
 	ctx := context.Background()
@@ -55,7 +91,7 @@ func TestChatRepositoryIntegration(t *testing.T) {
 	t.Cleanup(func() {
 		db.Where("sender_id IN ?", userIDs).Delete(&model.Message{})
 		db.Where("user_id IN ?", userIDs).Delete(&model.ConversationMember{})
-		db.Where("owner_id IN ? OR dm_key = ?", userIDs, dmKeyValue).Delete(&model.Conversation{})
+		db.Where("dm_key = ?", dmKeyValue).Delete(&model.Conversation{})
 		db.Delete(&users)
 	})
 
@@ -139,34 +175,11 @@ func TestChatRepositoryIntegration(t *testing.T) {
 		t.Fatal("failed message transaction left a message behind")
 	}
 
-	group, err := repo.CreateGroup(ctx, users[0].ID, "integration", []int64{users[1].ID})
-	if err != nil {
-		t.Fatal(err)
-	}
-	withinLimit, err := repo.AddMembers(ctx, group.ID, []int64{users[2].ID}, 2)
-	if err != nil || withinLimit {
-		t.Fatalf("member limit was not enforced: withinLimit=%v err=%v", withinLimit, err)
-	}
-	withinLimit, err = repo.AddMembers(ctx, group.ID, []int64{users[2].ID}, 3)
-	if err != nil || !withinLimit {
-		t.Fatalf("invite failed: withinLimit=%v err=%v", withinLimit, err)
-	}
-	withinLimit, err = repo.AddMembers(ctx, group.ID, []int64{users[2].ID}, 3)
-	if err != nil || !withinLimit { // duplicate invitation stays idempotent
-		t.Fatalf("duplicate invite failed: withinLimit=%v err=%v", withinLimit, err)
-	}
-	if err := repo.DissolveGroup(ctx, group.ID); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := repo.GetConversation(ctx, group.ID); err == nil {
-		t.Fatal("dissolved conversation still exists")
-	}
-
 	var fkCount int64
 	if err := db.Raw(`SELECT COUNT(*) FROM information_schema.TABLE_CONSTRAINTS
 		WHERE CONSTRAINT_SCHEMA = DATABASE() AND CONSTRAINT_NAME IN
-		('fk_chat_member_conversation','fk_chat_member_user','fk_chat_message_conversation','fk_chat_message_sender','fk_chat_conversation_owner')`).
-		Scan(&fkCount).Error; err != nil || fkCount != 5 {
-		t.Fatalf("migration 010 constraints=%d err=%v", fkCount, err)
+		('fk_conversation_members_conversation','fk_conversation_members_user','fk_messages_conversation','fk_messages_sender')`).
+		Scan(&fkCount).Error; err != nil || fkCount != 4 {
+		t.Fatalf("baseline chat constraints=%d err=%v", fkCount, err)
 	}
 }

@@ -11,7 +11,6 @@ import (
 	"os/signal"
 	"path/filepath"
 	"regexp"
-	"strings"
 	"syscall"
 	"time"
 
@@ -24,7 +23,6 @@ import (
 	"github.com/zhoujianlin/ShareO/internal/router"
 )
 
-var hashtagLinkRE = regexp.MustCompile(`#([\p{L}\p{N}_]+)`)
 var (
 	mediumToThumbRE = regexp.MustCompile(`/posts/medium/`)
 	anyToMediumRE   = regexp.MustCompile(`/posts/(original|thumb)/`)
@@ -98,33 +96,6 @@ func main() {
 		"mediumURL": func(url string) string {
 			// Ensure URL uses medium size: /posts/original/ → /posts/medium/, /posts/thumb/ → /posts/medium/
 			return anyToMediumRE.ReplaceAllString(url, "/posts/medium/")
-		},
-		"renderHashtags": func(content string) template.HTML {
-			// Split content by hashtag matches, escape plain text parts,
-			// and build safe hashtag links. Prevents stored XSS.
-			var buf strings.Builder
-			indices := hashtagLinkRE.FindAllStringIndex(content, -1)
-			last := 0
-			for _, idx := range indices {
-				// Escape plain text before the hashtag
-				if idx[0] > last {
-					buf.WriteString(template.HTMLEscapeString(content[last:idx[0]]))
-				}
-				// Build safe hashtag link
-				match := content[idx[0]:idx[1]]
-				name := strings.TrimPrefix(match, "#")
-				buf.WriteString(`<a href="/topic/`)
-				buf.WriteString(template.HTMLEscapeString(name))
-				buf.WriteString(`" class="hashtag-link">#`)
-				buf.WriteString(template.HTMLEscapeString(name))
-				buf.WriteString(`</a>`)
-				last = idx[1]
-			}
-			// Escape remaining plain text after the last hashtag
-			if last < len(content) {
-				buf.WriteString(template.HTMLEscapeString(content[last:]))
-			}
-			return template.HTML(buf.String())
 		},
 	})
 

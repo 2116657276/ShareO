@@ -9,7 +9,6 @@ type Comment struct {
 	ParentID   *int64    `gorm:"index:idx_comments_parent" json:"parent_id"`
 	ReplyToUID *int64    `json:"reply_to_uid"`
 	Content    string    `gorm:"type:text;not null" json:"content"`
-	LikeCount  int       `gorm:"default:0" json:"like_count"`
 	IsDeleted  int8      `gorm:"default:0" json:"is_deleted"`
 	CreatedAt  time.Time `gorm:"autoCreateTime" json:"created_at"`
 

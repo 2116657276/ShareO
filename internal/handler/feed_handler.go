@@ -64,15 +64,8 @@ func (h *FeedHandler) HomePage(c *gin.Context) {
 	sortBy := c.DefaultQuery("sort", "latest")
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 
-	var topicID *int64
-	if tidStr := c.Query("topic_id"); tidStr != "" {
-		tid, _ := strconv.ParseInt(tidStr, 10, 64)
-		topicID = &tid
-	}
-
 	req := service.FeedReq{
 		Sort:     sortBy,
-		TopicID:  topicID,
 		Page:     page,
 		PageSize: 12,
 	}

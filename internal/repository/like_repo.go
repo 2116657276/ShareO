@@ -3,6 +3,7 @@ package repository
 import (
 	"errors"
 	"log/slog"
+	"sort"
 
 	"github.com/zhoujianlin/ShareO/internal/model"
 	"gorm.io/gorm"
@@ -24,10 +25,10 @@ func (r *LikeRepo) Toggle(userID, postID int64) (bool, error) {
 			if delErr := tx.Delete(&existing).Error; delErr != nil {
 				return delErr
 			}
-			// Sync post like_count via COUNT (idempotent, safe with triggers)
+			// Sync post like_count via COUNT so duplicate/retried toggles converge.
 			if syncErr := tx.Model(&model.Post{}).Where("id = ?", postID).UpdateColumn("like_count",
 				gorm.Expr("(SELECT COUNT(*) FROM likes WHERE post_id = ?)", postID)).Error; syncErr != nil {
-				slog.Warn("failed to sync post like count", "action", "unlike", "post_id", postID, "err", syncErr)
+				return syncErr
 			}
 			liked = false
 			return nil
@@ -38,10 +39,10 @@ func (r *LikeRepo) Toggle(userID, postID int64) (bool, error) {
 			if createErr := tx.Create(&like).Error; createErr != nil {
 				return createErr
 			}
-			// Sync post like_count via COUNT (idempotent, safe with triggers)
+			// Sync post like_count via COUNT so duplicate/retried toggles converge.
 			if syncErr := tx.Model(&model.Post{}).Where("id = ?", postID).UpdateColumn("like_count",
 				gorm.Expr("(SELECT COUNT(*) FROM likes WHERE post_id = ?)", postID)).Error; syncErr != nil {
-				slog.Warn("failed to sync post like count", "action", "like", "post_id", postID, "err", syncErr)
+				return syncErr
 			}
 			liked = true
 			return nil
@@ -84,30 +85,34 @@ func (r *LikeRepo) GetUserLikedPosts(userID int64, page, pageSize int) ([]model.
 	var total int64
 	var postIDs []int64
 
-	DB.Model(&model.Like{}).Where("user_id = ?", userID).Count(&total)
+	visibleLikes := DB.Table("likes AS l").
+		Joins("JOIN posts AS p ON p.id = l.post_id").
+		Where("l.user_id = ? AND p.is_deleted = 0 AND p.status = ?", userID, model.StatusApproved)
+	if err := visibleLikes.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
 
 	offset := (page - 1) * pageSize
-	DB.Model(&model.Like{}).Where("user_id = ?", userID).
-		Order("created_at DESC").Offset(offset).Limit(pageSize).Pluck("post_id", &postIDs)
+	if err := visibleLikes.Order("l.created_at DESC").Offset(offset).Limit(pageSize).
+		Pluck("l.post_id", &postIDs).Error; err != nil {
+		return nil, 0, err
+	}
 
 	if len(postIDs) == 0 {
 		return []model.Post{}, total, nil
 	}
 
 	var posts []model.Post
-	DB.Where("id IN ? AND is_deleted = 0 AND status = ?", postIDs, model.StatusApproved).
-		Preload("User").Preload("Images").Find(&posts)
+	if err := DB.Where("id IN ? AND is_deleted = 0 AND status = ?", postIDs, model.StatusApproved).
+		Preload("User").Preload("Images").Find(&posts).Error; err != nil {
+		return nil, 0, err
+	}
 
 	// preserve order from likes
 	orderMap := make(map[int64]int, len(postIDs))
 	for i, pid := range postIDs {
 		orderMap[pid] = i
 	}
-	sorted := make([]model.Post, 0, len(posts))
-	for _, p := range posts {
-		if _, ok := orderMap[p.ID]; ok {
-			sorted = append(sorted, p)
-		}
-	}
-	return sorted, total, nil
+	sort.Slice(posts, func(i, j int) bool { return orderMap[posts[i].ID] < orderMap[posts[j].ID] })
+	return posts, total, nil
 }

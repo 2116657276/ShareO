@@ -36,7 +36,7 @@ func (r *ChatRepo) ValidateActiveUsers(ctx context.Context, userIDs []int64) err
 
 func (r *ChatRepo) EnsureDM(ctx context.Context, user1ID, user2ID int64) (*model.Conversation, error) {
 	key := dmKey(user1ID, user2ID)
-	conv := model.Conversation{Type: model.ConvTypeDM, DmKey: &key}
+	conv := model.Conversation{DmKey: key}
 	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		// The duplicate branch returns the existing primary key through MySQL's
 		// LAST_INSERT_ID. Unlike "insert-ignore then select", this waits for the
@@ -53,34 +53,12 @@ func (r *ChatRepo) EnsureDM(ctx context.Context, user1ID, user2ID int64) (*model
 			return err
 		}
 		members := []model.ConversationMember{
-			{ConversationID: conv.ID, UserID: user1ID, Role: model.ConvRoleMember},
-			{ConversationID: conv.ID, UserID: user2ID, Role: model.ConvRoleMember},
+			{ConversationID: conv.ID, UserID: user1ID},
+			{ConversationID: conv.ID, UserID: user2ID},
 		}
 		return tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&members).Error
 	})
 	return &conv, err
-}
-
-func (r *ChatRepo) CreateGroup(ctx context.Context, ownerID int64, title string, memberIDs []int64) (*model.Conversation, error) {
-	conv := &model.Conversation{Type: model.ConvTypeGroup, Title: title, OwnerID: &ownerID}
-	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := tx.Create(conv).Error; err != nil {
-			return err
-		}
-		members := make([]model.ConversationMember, 0, len(memberIDs)+1)
-		members = append(members, model.ConversationMember{
-			ConversationID: conv.ID, UserID: ownerID, Role: model.ConvRoleOwner,
-		})
-		for _, userID := range memberIDs {
-			if userID != ownerID {
-				members = append(members, model.ConversationMember{
-					ConversationID: conv.ID, UserID: userID, Role: model.ConvRoleMember,
-				})
-			}
-		}
-		return tx.Create(&members).Error
-	})
-	return conv, err
 }
 
 func (r *ChatRepo) GetConversation(ctx context.Context, convID int64) (*model.Conversation, error) {
@@ -116,74 +94,6 @@ func (r *ChatRepo) GetMembers(ctx context.Context, convID int64) ([]model.Conver
 	err := r.db.WithContext(ctx).Where("conversation_id = ?", convID).
 		Preload("User").Find(&members).Error
 	return members, err
-}
-
-func (r *ChatRepo) AddMembers(ctx context.Context, convID int64, userIDs []int64, maxMembers int) (bool, error) {
-	withinLimit := true
-	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		// Lock the conversation row so concurrent invitations cannot jointly
-		// exceed the member limit after separate service-level checks.
-		var conv model.Conversation
-		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&conv, convID).Error; err != nil {
-			return err
-		}
-		var count int64
-		if err := tx.Model(&model.ConversationMember{}).Where("conversation_id = ?", convID).Count(&count).Error; err != nil {
-			return err
-		}
-		var existing []int64
-		if err := tx.Model(&model.ConversationMember{}).
-			Where("conversation_id = ? AND user_id IN ?", convID, userIDs).
-			Pluck("user_id", &existing).Error; err != nil {
-			return err
-		}
-		existingSet := make(map[int64]struct{}, len(existing))
-		for _, userID := range existing {
-			existingSet[userID] = struct{}{}
-		}
-		members := make([]model.ConversationMember, 0, len(userIDs))
-		for _, userID := range userIDs {
-			if _, ok := existingSet[userID]; ok {
-				continue
-			}
-			members = append(members, model.ConversationMember{
-				ConversationID: convID, UserID: userID, Role: model.ConvRoleMember,
-			})
-		}
-		if count+int64(len(members)) > int64(maxMembers) {
-			withinLimit = false
-			return nil
-		}
-		if len(members) == 0 {
-			return nil
-		}
-		return tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&members).Error
-	})
-	return withinLimit, err
-}
-
-func (r *ChatRepo) RemoveMember(ctx context.Context, convID, userID int64) error {
-	return r.db.WithContext(ctx).Where("conversation_id = ? AND user_id = ?", convID, userID).
-		Delete(&model.ConversationMember{}).Error
-}
-
-func (r *ChatRepo) DissolveGroup(ctx context.Context, convID int64) error {
-	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := tx.Where("conversation_id = ?", convID).Delete(&model.Message{}).Error; err != nil {
-			return err
-		}
-		if err := tx.Where("conversation_id = ?", convID).Delete(&model.ConversationMember{}).Error; err != nil {
-			return err
-		}
-		result := tx.Delete(&model.Conversation{}, convID)
-		if result.Error != nil {
-			return result.Error
-		}
-		if result.RowsAffected == 0 {
-			return gorm.ErrRecordNotFound
-		}
-		return nil
-	})
 }
 
 func (r *ChatRepo) CreateMessage(ctx context.Context, msg *model.Message) error {

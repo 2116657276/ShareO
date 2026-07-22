@@ -101,21 +101,13 @@ func (h *ChatHandler) ListConversations(c *gin.Context) {
 func (h *ChatHandler) CreateConversation(c *gin.Context) {
 	userID := c.GetInt64("user_id")
 	var req struct {
-		UserID    int64   `json:"user_id"`
-		Title     string  `json:"title"`
-		MemberIDs []int64 `json:"member_ids"`
+		UserID int64 `json:"user_id" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.BadRequest(c, "请求格式无效")
 		return
 	}
-	var conversation any
-	var err error
-	if req.UserID > 0 {
-		conversation, err = h.chatSvc.EnsureDM(c.Request.Context(), userID, req.UserID)
-	} else {
-		conversation, err = h.chatSvc.CreateGroup(c.Request.Context(), userID, req.Title, req.MemberIDs)
-	}
+	conversation, err := h.chatSvc.EnsureDM(c.Request.Context(), userID, req.UserID)
 	if err != nil {
 		handleChatError(c, err)
 		return
@@ -196,43 +188,6 @@ func (h *ChatHandler) UnreadCount(c *gin.Context) {
 		return
 	}
 	response.Success(c, gin.H{"total": count})
-}
-
-func (h *ChatHandler) InviteMembers(c *gin.Context) {
-	var req struct {
-		UserIDs []int64 `json:"user_ids" binding:"required"`
-	}
-	if err := c.ShouldBindJSON(&req); err != nil {
-		response.BadRequest(c, "至少选择一位成员")
-		return
-	}
-	if err := h.chatSvc.InviteMembers(
-		c.Request.Context(), getInt64Param(c, "id"), c.GetInt64("user_id"), req.UserIDs,
-	); err != nil {
-		handleChatError(c, err)
-		return
-	}
-	response.Success(c, nil)
-}
-
-func (h *ChatHandler) LeaveConversation(c *gin.Context) {
-	if err := h.chatSvc.LeaveGroup(
-		c.Request.Context(), getInt64Param(c, "id"), c.GetInt64("user_id"),
-	); err != nil {
-		handleChatError(c, err)
-		return
-	}
-	response.Success(c, nil)
-}
-
-func (h *ChatHandler) DissolveConversation(c *gin.Context) {
-	if err := h.chatSvc.DissolveGroup(
-		c.Request.Context(), getInt64Param(c, "id"), c.GetInt64("user_id"),
-	); err != nil {
-		handleChatError(c, err)
-		return
-	}
-	response.Success(c, nil)
 }
 
 func (h *ChatHandler) SearchUsers(c *gin.Context) {

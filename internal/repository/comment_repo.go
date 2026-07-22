@@ -34,10 +34,10 @@ func (r *CommentRepo) Create(comment *model.Comment) error {
 		if err := tx.Create(comment).Error; err != nil {
 			return err
 		}
-		// Sync post comment_count via COUNT (idempotent, safe with triggers)
+		// Keep the row and denormalized counter in the same Go transaction.
 		if syncErr := tx.Model(&model.Post{}).Where("id = ?", comment.PostID).UpdateColumn("comment_count",
 			gorm.Expr("(SELECT COUNT(*) FROM comments WHERE post_id = ? AND is_deleted = 0)", comment.PostID)).Error; syncErr != nil {
-			slog.Warn("failed to sync post comment count", "post_id", comment.PostID, "err", syncErr)
+			return syncErr
 		}
 		return nil
 	})
@@ -83,10 +83,10 @@ func (r *CommentRepo) SoftDelete(id, userID int64) error {
 			return gorm.ErrRecordNotFound
 		}
 
-		// Sync post comment_count via COUNT (idempotent, safe with triggers)
+		// Keep the soft delete and denormalized counter in the same Go transaction.
 		if syncErr := tx.Model(&model.Post{}).Where("id = ?", comment.PostID).UpdateColumn("comment_count",
 			gorm.Expr("(SELECT COUNT(*) FROM comments WHERE post_id = ? AND is_deleted = 0)", comment.PostID)).Error; syncErr != nil {
-			slog.Warn("failed to sync post comment count", "post_id", comment.PostID, "err", syncErr)
+			return syncErr
 		}
 		return nil
 	})

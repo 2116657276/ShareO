@@ -35,38 +35,16 @@ func (h *SocialHandler) ToggleLike(c *gin.Context) {
 
 func (h *SocialHandler) GetLikes(c *gin.Context) {
 	userID := c.GetInt64("user_id")
+	h.getLikesByUser(c, userID)
+}
+
+func (h *SocialHandler) GetUserLikes(c *gin.Context) {
+	h.getLikesByUser(c, getInt64Param(c, "id"))
+}
+
+func (h *SocialHandler) getLikesByUser(c *gin.Context, userID int64) {
 	page, pageSize := getPageSizePair(c, 12)
 	posts, total, err := h.svc.GetLikedPosts(userID, page, pageSize)
-	if err != nil {
-		response.InternalError(c, err.Error())
-		return
-	}
-	response.Success(c, response.PageResponse{
-		List: posts, Total: total, Page: page, PageSize: pageSize,
-	})
-}
-
-// --- Favorite ---
-
-func (h *SocialHandler) ToggleFavorite(c *gin.Context) {
-	userID := c.GetInt64("user_id")
-	postID := getInt64Param(c, "id")
-	favorited, err := h.svc.ToggleFavorite(userID, postID)
-	if err != nil {
-		if errors.Is(err, service.ErrPostNotFound) {
-			response.NotFound(c, err.Error())
-		} else {
-			response.BadRequest(c, err.Error())
-		}
-		return
-	}
-	response.Success(c, gin.H{"favorited": favorited})
-}
-
-func (h *SocialHandler) GetFavorites(c *gin.Context) {
-	userID := c.GetInt64("user_id")
-	page, pageSize := getPageSizePair(c, 12)
-	posts, total, err := h.svc.GetFavorites(userID, page, pageSize)
 	if err != nil {
 		response.InternalError(c, err.Error())
 		return

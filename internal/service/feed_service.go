@@ -13,20 +13,17 @@ import (
 type FeedService struct {
 	postRepo *repository.PostRepo
 	likeRepo *repository.LikeRepo
-	favRepo  *repository.FavoriteRepo
 }
 
 func NewFeedService() *FeedService {
 	return &FeedService{
 		postRepo: repository.NewPostRepo(),
 		likeRepo: repository.NewLikeRepo(),
-		favRepo:  repository.NewFavoriteRepo(),
 	}
 }
 
 type FeedReq struct {
 	Sort     string `form:"sort"` // model.SortLatest (default) or "hot"
-	TopicID  *int64 `form:"topic_id"`
 	UserID   *int64 `form:"user_id"`
 	Page     int    `form:"page"`
 	PageSize int    `form:"page_size"`
@@ -44,7 +41,7 @@ func (s *FeedService) GetFeed(req FeedReq, currentUserID int64) ([]model.Post, i
 	}
 
 	// Try Redis cache for first page of latest feed (hot feed always fresh)
-	if req.Page == 1 && req.Sort == model.SortLatest && req.TopicID == nil && req.UserID == nil {
+	if req.Page == 1 && req.Sort == model.SortLatest && req.UserID == nil {
 		cached, cachedTotal, ok := s.getCachedFeed()
 		if ok && len(cached) >= req.PageSize {
 			// Slice to requested page_size
@@ -59,7 +56,6 @@ func (s *FeedService) GetFeed(req FeedReq, currentUserID int64) ([]model.Post, i
 
 	q := repository.FeedQuery{
 		UserID:   req.UserID,
-		TopicID:  req.TopicID,
 		Sort:     req.Sort,
 		Page:     req.Page,
 		PageSize: req.PageSize,
@@ -73,7 +69,7 @@ func (s *FeedService) GetFeed(req FeedReq, currentUserID int64) ([]model.Post, i
 	s.fillUserInteraction(posts, currentUserID)
 
 	// Cache first page of latest feed (store page_size=20 worth + total)
-	if req.Page == 1 && req.Sort == model.SortLatest && req.TopicID == nil && req.UserID == nil {
+	if req.Page == 1 && req.Sort == model.SortLatest && req.UserID == nil {
 		s.cacheFeed(posts, total)
 	}
 
@@ -98,10 +94,8 @@ func (s *FeedService) fillUserInteraction(posts []model.Post, userID int64) {
 		postIDs[i] = p.ID
 	}
 	likedMap := s.likeRepo.GetUserLikedPostIDs(userID, postIDs)
-	favoritedMap := s.favRepo.GetUserFavoritedPostIDs(userID, postIDs)
 	for i := range posts {
 		posts[i].IsLiked = likedMap[posts[i].ID]
-		posts[i].IsFavorited = favoritedMap[posts[i].ID]
 	}
 }
 

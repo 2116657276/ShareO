@@ -85,10 +85,6 @@ function renderPostCard(post) {
     const likeIcon = post.is_liked ? 'bi-heart-fill liked' : 'bi-heart';
     const badgeHtml = imgCount > 1 ? `<span class="card-img-badge"><i class="bi bi-images"></i> ${imgCount}</span>` : '';
 
-    if (post.is_repost && post.repost_of) {
-        return renderRepostCard(post, likeIcon);
-    }
-
     return `<a href="/post/${post.id}" class="text-decoration-none feed-item">
         <div class="feed-card">
             <div class="card-img-container skeleton-bg">
@@ -102,55 +98,6 @@ function renderPostCard(post) {
                 <div class="card-meta">
                     <img src="${avatar}" class="author-avatar" onerror="this.src='/static/img/default-avatar.svg'">
                     <span>${username}</span>
-                    <span class="ms-auto"><i class="bi ${likeIcon}"></i> ${post.like_count}</span>
-                </div>
-            </div>
-        </div></a>`;
-}
-
-function renderRepostCard(post, likeIcon) {
-    const orig = post.repost_of;
-    const origUser = escapeHTML(orig.user ? orig.user.username : '');
-    const origAvatar = escapeHTML(orig.user && orig.user.avatar_url ? orig.user.avatar_url : '/static/img/default-avatar.svg');
-    const origContent = escapeHTML(orig.content || '');
-    const origCover = escapeHTML(orig.cover_image || '');
-    const username = escapeHTML(post.user ? post.user.username : '');
-    const avatar = escapeHTML(post.user && post.user.avatar_url ? post.user.avatar_url : '/static/img/default-avatar.svg');
-    const repostContent = escapeHTML(post.content || '');
-    const repostCover = escapeHTML(post.cover_image || '');
-    const origImgCount = orig.images ? orig.images.length : 0;
-    const repostImgCount = post.images ? post.images.length : 0;
-    const hasBothImages = repostImgCount > 0 && origImgCount > 0;
-
-    let imageSection = '';
-    if (hasBothImages) {
-        imageSection = `<div class="pip-container">
-            <div class="pip-main"><img src="${repostCover}" decoding="async" loading="eager" onload="this.parentElement.classList.remove('skeleton-bg')" onerror="this.parentElement.classList.add('img-error')"></div>
-            <div class="pip-original"><img src="${origCover}" decoding="async" loading="eager" onload="this.parentElement.classList.remove('skeleton-bg')" onerror="this.parentElement.classList.add('img-error')"></div>
-        </div>`;
-    } else if (repostImgCount > 0) {
-        imageSection = `<div class="card-img-container skeleton-bg"><img src="${repostCover}" decoding="async" loading="eager" onload="this.parentElement.classList.remove('skeleton-bg')" onerror="this.parentElement.classList.add('img-error')"></div>`;
-    } else if (origImgCount > 0) {
-        imageSection = `<div class="card-img-container skeleton-bg"><img src="${origCover}" decoding="async" loading="eager" onload="this.parentElement.classList.remove('skeleton-bg')" onerror="this.parentElement.classList.add('img-error')"></div>`;
-    }
-
-    return `<a href="/post/${post.id}" class="text-decoration-none feed-item">
-        <div class="feed-card repost-card">
-            <div class="repost-header">
-                <img src="${avatar}" class="author-avatar" onerror="this.src='/static/img/default-avatar.svg'">
-                <span class="repost-indicator"><i class="bi bi-repeat"></i> ${username} 转帖</span>
-            </div>
-            ${post.content ? `<div class="repost-main-text">${repostContent}</div>` : ''}
-            ${imageSection}
-            <div class="repost-original">
-                <div class="repost-original-header">
-                    <img src="${origAvatar}" class="author-avatar" onerror="this.src='/static/img/default-avatar.svg'">
-                    <span>${origUser}</span>
-                </div>
-                <div class="repost-original-body">${origContent || '无标题'}</div>
-            </div>
-            <div class="card-body" style="padding:8px 12px">
-                <div class="card-meta">
                     <span class="ms-auto"><i class="bi ${likeIcon}"></i> ${post.like_count}</span>
                 </div>
             </div>

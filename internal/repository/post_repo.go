@@ -57,8 +57,6 @@ func (r *PostRepo) FindByID(id int64) (*model.Post, error) {
 	var post model.Post
 	err := DB.Preload("User").Preload("Images", func(db *gorm.DB) *gorm.DB {
 		return db.Order("sort_order ASC")
-	}).Preload("Topics").Preload("RepostOf").Preload("RepostOf.User").Preload("RepostOf.Images", func(db *gorm.DB) *gorm.DB {
-		return db.Order("sort_order ASC")
 	}).First(&post, id).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, nil
@@ -74,9 +72,6 @@ func (r *PostRepo) FindByIDs(ids []int64) ([]model.Post, error) {
 	var posts []model.Post
 	err := DB.Where("id IN ? AND is_deleted = 0 AND status = ?", ids, model.StatusApproved).
 		Preload("User").Preload("Images", func(db *gorm.DB) *gorm.DB {
-		return db.Order("sort_order ASC")
-	}).Preload("Topics").
-		Preload("RepostOf").Preload("RepostOf.User").Preload("RepostOf.Images", func(db *gorm.DB) *gorm.DB {
 		return db.Order("sort_order ASC")
 	}).Find(&posts).Error
 	if err != nil {
@@ -156,7 +151,7 @@ func buildIndexPayload(post model.Post) IndexPayload {
 
 func (r *PostRepo) Update(post *model.Post) error {
 	// Use Updates with specific fields to avoid cascade-saving Preloaded associations
-	// (User, Images, Topics, RepostOf, etc.)
+	// (User, Images, etc.)
 	return DB.Model(post).Updates(map[string]interface{}{
 		"content": post.Content,
 		"status":  post.Status,
@@ -172,7 +167,6 @@ func (r *PostRepo) SoftDelete(id, userID int64) error {
 type FeedQuery struct {
 	UserID   *int64 // filter by author
 	Status   string // post status filter
-	TopicID  *int64 // filter by topic
 	Sort     string // "latest" or "hot"
 	Page     int
 	PageSize int
@@ -192,11 +186,6 @@ func (r *PostRepo) Feed(q FeedQuery) ([]model.Post, int64, error) {
 	} else {
 		query = query.Where("status = ?", model.StatusApproved)
 	}
-	if q.TopicID != nil {
-		query = query.Joins("JOIN topic_posts ON topic_posts.post_id = posts.id").
-			Where("topic_posts.topic_id = ?", *q.TopicID)
-	}
-
 	if err := query.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
@@ -210,8 +199,6 @@ func (r *PostRepo) Feed(q FeedQuery) ([]model.Post, int64, error) {
 	offset := (q.Page - 1) * q.PageSize
 	err := query.Preload("User").Preload("Images", func(db *gorm.DB) *gorm.DB {
 		return db.Order("sort_order ASC")
-	}).Preload("Topics").Preload("RepostOf").Preload("RepostOf.User").Preload("RepostOf.Images", func(db *gorm.DB) *gorm.DB {
-		return db.Order("sort_order ASC")
 	}).Order(orderClause).Offset(offset).Limit(q.PageSize).Find(&posts).Error
 
 	return posts, total, err
@@ -220,12 +207,6 @@ func (r *PostRepo) Feed(q FeedQuery) ([]model.Post, int64, error) {
 func (r *PostRepo) IncrementView(id int64) {
 	if err := DB.Model(&model.Post{}).Where("id = ?", id).UpdateColumn("view_count", gorm.Expr("view_count + 1")).Error; err != nil {
 		slog.Warn("failed to increment post view count", "post_id", id, "err", err)
-	}
-}
-
-func (r *PostRepo) IncrementShare(id int64) {
-	if err := DB.Model(&model.Post{}).Where("id = ?", id).UpdateColumn("share_count", gorm.Expr("share_count + 1")).Error; err != nil {
-		slog.Warn("failed to increment post share count", "post_id", id, "err", err)
 	}
 }
 

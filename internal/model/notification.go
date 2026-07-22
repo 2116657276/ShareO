@@ -7,7 +7,6 @@ const (
 	NotifTypeLike    = "like"
 	NotifTypeComment = "comment"
 	NotifTypeFollow  = "follow"
-	NotifTypeRepost  = "repost"
 	NotifTypeReview  = "review"
 )
 

@@ -32,7 +32,6 @@ func SetupRouter(trustedOrigins ...string) *gin.Engine {
 	userH := handler.NewUserHandler()
 	uploadH := handler.NewUploadHandler()
 	notifH := handler.NewNotificationHandler()
-	topicH := handler.NewTopicHandler()
 	postRepo := repository.NewPostRepo()
 	internalH := handler.NewInternalHandler(postRepo)
 	imageSearchH := handler.NewImageSearchHandler(postRepo)
@@ -85,6 +84,7 @@ func SetupRouter(trustedOrigins ...string) *gin.Engine {
 			pub.GET("/posts/:id/comments", socialH.GetComments)
 			pub.GET("/users/:id/following", socialH.GetFollowing)
 			pub.GET("/users/:id/followers", socialH.GetFollowers)
+			pub.GET("/users/:id/likes", socialH.GetUserLikes)
 		}
 	}
 
@@ -103,10 +103,7 @@ func SetupRouter(trustedOrigins ...string) *gin.Engine {
 		authAPI.POST("/posts", postLimiter, postH.Create)
 		authAPI.PUT("/posts/:id", postH.Update)
 		authAPI.DELETE("/posts/:id", postH.Delete)
-		authAPI.POST("/posts/:id/repost", postH.Repost)
 		authAPI.POST("/posts/:id/like", socialH.ToggleLike)
-		authAPI.POST("/posts/:id/favorite", socialH.ToggleFavorite)
-		authAPI.GET("/favorites", socialH.GetFavorites)
 		authAPI.GET("/likes", socialH.GetLikes)
 		authAPI.POST("/posts/:id/comments", socialH.CreateComment)
 		authAPI.DELETE("/comments/:cid", socialH.DeleteComment)
@@ -126,9 +123,6 @@ func SetupRouter(trustedOrigins ...string) *gin.Engine {
 		authAPI.GET("/conversations/:id/messages", chatH.GetMessages)
 		authAPI.POST("/conversations/:id/messages", chatH.SendMessage)
 		authAPI.PUT("/conversations/:id/read", chatH.MarkRead)
-		authAPI.POST("/conversations/:id/members", chatH.InviteMembers)
-		authAPI.DELETE("/conversations/:id/members/me", chatH.LeaveConversation)
-		authAPI.DELETE("/conversations/:id", chatH.DissolveConversation)
 		authAPI.GET("/conversations/unread-count", chatH.UnreadCount)
 	}
 
@@ -174,7 +168,6 @@ func SetupRouter(trustedOrigins ...string) *gin.Engine {
 		needLogin.POST("/settings", authH.WebSettings)
 		needLogin.POST("/settings/password", authH.WebChangePassword)
 		needLogin.GET("/notifications", notifH.NotificationsPage)
-		needLogin.GET("/topic/:id", topicH.TopicPage)
 		needLogin.GET("/chat", chatH.ChatPage)
 		needLogin.POST("/logout", authH.WebLogout)
 	}

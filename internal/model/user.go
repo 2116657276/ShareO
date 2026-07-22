@@ -11,6 +11,7 @@ type User struct {
 	Bio          string    `gorm:"type:varchar(200);default:''" json:"bio"`
 	Role         string    `gorm:"type:enum('user','admin');default:'user'" json:"role"`
 	Status       int8      `gorm:"default:1;comment:1=正常 0=封禁" json:"status"`
+	IsBot        int8      `gorm:"default:0;index:idx_users_bot" json:"is_bot"`
 	CreatedAt    time.Time `gorm:"autoCreateTime" json:"created_at"`
 	UpdatedAt    time.Time `gorm:"autoUpdateTime" json:"updated_at"`
 

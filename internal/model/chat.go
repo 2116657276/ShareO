@@ -2,29 +2,15 @@ package model
 
 import "time"
 
-// Conversation types
-const (
-	ConvTypeDM    = "dm"
-	ConvTypeGroup = "group"
-)
-
-// Conversation roles
-const (
-	ConvRoleOwner  = "owner"
-	ConvRoleMember = "member"
-)
-
-// Conversation represents a DM or group chat.
+// Conversation represents a private direct-message chat.
 type Conversation struct {
 	ID        int64     `gorm:"primaryKey;autoIncrement" json:"id"`
-	Type      string    `gorm:"type:varchar(10);not null;default:'dm'" json:"type"`
-	Title     string    `gorm:"type:varchar(100);default:''" json:"title"`
-	OwnerID   *int64    `gorm:"default:null" json:"owner_id"`
-	DmKey     *string   `gorm:"type:varchar(50);uniqueIndex:idx_dm_key" json:"dm_key"` // nullable; NULLs don't conflict in unique index
+	DmKey     string    `gorm:"type:varchar(50);uniqueIndex:uk_conversations_dm_key;not null" json:"dm_key"`
 	CreatedAt time.Time `gorm:"autoCreateTime" json:"created_at"`
 	UpdatedAt time.Time `gorm:"autoUpdateTime" json:"updated_at"`
 
 	// Non-persisted: populated by service layer for API responses
+	Title       string               `gorm:"-" json:"title"`
 	LastMessage *Message             `gorm:"-" json:"last_message,omitempty"`
 	Members     []ConversationMember `gorm:"-" json:"members,omitempty"`
 	UnreadCount int64                `gorm:"-" json:"unread_count"`
@@ -32,12 +18,11 @@ type Conversation struct {
 
 func (Conversation) TableName() string { return "conversations" }
 
-// ConversationMember links a user to a conversation with a role.
+// ConversationMember links one of the two users to a private conversation.
 type ConversationMember struct {
 	ID                int64     `gorm:"primaryKey;autoIncrement" json:"id"`
 	ConversationID    int64     `gorm:"not null;uniqueIndex:idx_conv_user,priority:1" json:"conversation_id"`
 	UserID            int64     `gorm:"not null;uniqueIndex:idx_conv_user,priority:2;index:idx_user_conv,priority:1" json:"user_id"`
-	Role              string    `gorm:"type:varchar(10);default:'member'" json:"role"`
 	LastReadMessageID int64     `gorm:"not null;default:0" json:"last_read_message_id"`
 	JoinedAt          time.Time `gorm:"autoCreateTime" json:"joined_at"`
 

@@ -2,6 +2,8 @@ package service
 
 import (
 	"errors"
+	"fmt"
+	"log/slog"
 
 	"github.com/zhoujianlin/ShareO/internal/model"
 	"github.com/zhoujianlin/ShareO/internal/repository"
@@ -10,7 +12,6 @@ import (
 type AdminService struct {
 	postRepo    *repository.PostRepo
 	userRepo    *repository.UserRepo
-	topicRepo   *repository.TopicRepo
 	logRepo     *repository.LogRepo
 	likeRepo    *repository.LikeRepo
 	commentRepo *repository.CommentRepo
@@ -22,7 +23,6 @@ func NewAdminService() *AdminService {
 	return &AdminService{
 		postRepo:    repository.NewPostRepo(),
 		userRepo:    repository.NewUserRepo(),
-		topicRepo:   repository.NewTopicRepo(),
 		logRepo:     repository.NewLogRepo(),
 		likeRepo:    repository.NewLikeRepo(),
 		commentRepo: repository.NewCommentRepo(),
@@ -50,6 +50,7 @@ func (s *AdminService) DeletePost(postID int64, adminID int64) error {
 	s.feedSvc.InvalidateCache()
 	// Notify the author about forced deletion
 	s.notifSvc.Send(post.UserID, adminID, model.NotifTypeReview, postID)
+	s.writeAdminLog(adminID, "delete_post", fmt.Sprintf("post_id=%d", postID))
 	return nil
 }
 
@@ -69,6 +70,7 @@ func (s *AdminService) ReviewPost(postID int64, status, comment string, reviewer
 		if post, findErr := s.postRepo.FindByID(postID); findErr == nil && post != nil {
 			s.notifSvc.Send(post.UserID, reviewerID, model.NotifTypeReview, postID)
 		}
+		s.writeAdminLog(reviewerID, "review_post", fmt.Sprintf("post_id=%d status=%s", postID, status))
 	}
 	return err
 }
@@ -106,7 +108,17 @@ func (s *AdminService) UpdateUserStatus(adminID, targetUserID int64, status int8
 	if status != model.UserStatusBanned && status != model.UserStatusActive {
 		return errors.New("状态值无效")
 	}
-	return s.userRepo.UpdateStatus(targetUserID, status)
+	if err := s.userRepo.UpdateStatus(targetUserID, status); err != nil {
+		return err
+	}
+	s.writeAdminLog(adminID, "update_user_status", fmt.Sprintf("user_id=%d status=%d", targetUserID, status))
+	return nil
+}
+
+func (s *AdminService) writeAdminLog(adminID int64, action, detail string) {
+	if err := s.logRepo.Create(&model.SystemLog{UserID: &adminID, Action: action, Detail: detail}); err != nil {
+		slog.Warn("failed to write admin audit log", "admin_id", adminID, "action", action, "err", err)
+	}
 }
 
 // --- Logs ---
@@ -123,7 +135,6 @@ type DashboardStats struct {
 	PendingPosts  int64 `json:"pending_posts"`
 	TotalLikes    int64 `json:"total_likes"`
 	TotalComments int64 `json:"total_comments"`
-	ActiveTopics  int64 `json:"active_topics"`
 	BannedUsers   int64 `json:"banned_users"`
 }
 
@@ -136,7 +147,5 @@ func (s *AdminService) GetDashboardStats() (*DashboardStats, error) {
 	stats.PendingPosts = s.postRepo.CountByStatus(model.StatusPending)
 	stats.TotalLikes = s.likeRepo.CountTotal()
 	stats.TotalComments = s.commentRepo.CountNonDeleted()
-	stats.ActiveTopics = s.topicRepo.CountByStatus(model.TopicStatusActive)
-
 	return stats, nil
 }

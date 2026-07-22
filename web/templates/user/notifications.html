@@ -86,7 +86,7 @@ function notifications() {
                 n.is_read = 1;
                 this.unreadCount = Math.max(0, this.unreadCount - 1);
             }
-            if (n.target_id > 0 && (n.type === 'like' || n.type === 'comment' || n.type === 'repost')) {
+			if (n.target_id > 0 && (n.type === 'like' || n.type === 'comment')) {
                 window.location.href = '/post/' + n.target_id;
             } else if (n.type === 'follow') {
                 window.location.href = '/user/' + n.actor_id;
@@ -94,7 +94,7 @@ function notifications() {
         },
 
         actionText(type) {
-            const m = { like: '赞了你的作品', comment: '评论了你的作品', follow: '关注了你', repost: '转帖了你的作品', review: '审核了你的帖子' };
+			const m = { like: '赞了你的作品', comment: '评论了你的作品', follow: '关注了你', review: '审核了你的帖子' };
             return m[type] || '与你互动';
         },
 

@@ -161,10 +161,6 @@ check "点赞" '"code":0' "$LIKE"
 UNLIKE=$(curl -s -X POST "$BASE/api/v1/posts/$POSTID/like" -b "token=$TOKEN2")
 check "取消点赞" '"code":0' "$UNLIKE"
 
-# Favorite
-FAV=$(curl -s -X POST "$BASE/api/v1/posts/$POSTID/favorite" -b "token=$TOKEN2")
-check "收藏" '"code":0' "$FAV"
-
 # Comment
 COMMENT=$(curl -s -X POST "$BASE/api/v1/posts/$POSTID/comments" -b "token=$TOKEN2" \
   -H 'Content-Type: application/json' \
@@ -227,18 +223,17 @@ check "空搜索" '搜索关键词不能为空' "$EMPTYS"
 FEED2=$(curl -s "$BASE/api/v1/feed?page=-1&page_size=1000")
 check "无效分页参数" '"code":0' "$FEED2"
 
-# Repost
-REPOST=$(curl -s -X POST "$BASE/api/v1/posts/$POSTID/repost" -b "token=$TOKEN2" \
-  -H 'Content-Type: application/json' \
-  -d '{"text":"转帖测试"}')
-check "转帖" '"code":0' "$REPOST"
-REPOSTID=$(echo "$REPOST" | python3 -c "import sys,json;print(json.load(sys.stdin)['data']['id'])" 2>/dev/null)
+# Removed feature routes stay absent.
+FAVORITE_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$BASE/api/v1/posts/$POSTID/favorite" -b "token=$TOKEN2")
+check_code "收藏路由已删除" "404" "$FAVORITE_CODE"
+REPOST_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$BASE/api/v1/posts/$POSTID/repost" -b "token=$TOKEN2")
+check_code "转帖路由已删除" "404" "$REPOST_CODE"
+GROUP_MEMBERS_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$BASE/api/v1/conversations/1/members" -b "token=$TOKEN2")
+check_code "群成员路由已删除" "404" "$GROUP_MEMBERS_CODE"
 
 echo ""
 echo "=== 7. 清理测试数据 ==="
 
-# Delete repost first
-curl -s -X DELETE "$BASE/api/v1/admin/posts/$REPOSTID" -b "token=$ADM_TOKEN" > /dev/null
 curl -s -X DELETE "$BASE/api/v1/admin/posts/$POSTID" -b "token=$ADM_TOKEN" > /dev/null
 green "  PASS: 测试数据已清理"
 PASS=$((PASS+1))

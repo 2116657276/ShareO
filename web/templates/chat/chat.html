@@ -1,359 +1,49 @@
 {{ template "header" . }}
 <style>
 .chat-container { height: calc(100vh - 120px); }
-.conv-list { overflow-y: auto; border-right: 1px solid #dee2e6; }
-.conv-item { cursor: pointer; transition: background 0.15s; }
-.conv-item:hover, .conv-item.active { background: #f0f2f5; }
-.conv-item .online-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
-.conv-item .online-dot.online { background: #22c55e; }
-.conv-item .online-dot.offline { background: #ccc; }
-.msg-area { overflow-y: auto; }
-.msg-bubble { max-width: 70%; word-wrap: break-word; }
-.msg-bubble.mine { background: #0d6efd; color: #fff; border-radius: 18px 18px 4px 18px; }
-.msg-bubble.other { background: #e9ecef; border-radius: 18px 18px 18px 4px; }
+.conv-list { overflow-y:auto; border-right:1px solid #dee2e6; }
+.conv-item { cursor:pointer; }
+.conv-item:hover,.conv-item.active { background:#f0f2f5; }
+.online-dot { width:8px;height:8px;border-radius:50%;display:inline-block;background:#ccc; }
+.online-dot.online { background:#22c55e; }
+.msg-area { overflow-y:auto; }
+.msg-bubble { max-width:70%;word-wrap:break-word; }
+.msg-bubble.mine { background:#0d6efd;color:#fff;border-radius:18px 18px 4px 18px; }
+.msg-bubble.other { background:#e9ecef;border-radius:18px 18px 18px 4px; }
 </style>
 <div class="container-fluid chat-container" x-data="chatApp()" x-init="init()">
     <div class="row h-100">
-        <!-- Conversation List -->
-        <div class="col-md-4 col-lg-3 conv-list p-0" x-show="!mobileMsg || !activeConv">
-            <div class="p-3 border-bottom d-flex justify-content-between align-items-center">
-                <h5 class="mb-0">消息</h5>
-                <button class="btn btn-sm btn-primary" @click="showGroupForm = !showGroupForm"><i class="bi bi-people"></i> 建群</button>
+        <aside class="col-md-4 col-lg-3 conv-list p-0" x-show="!mobileMsg || !activeConv">
+            <div class="p-3 border-bottom"><h5 class="mb-2">私聊</h5>
+                <div class="input-group input-group-sm"><input class="form-control" placeholder="搜索用户" x-model="userQuery" @keydown.enter.prevent="searchUsers"><button class="btn btn-primary" @click="searchUsers">发起私聊</button></div>
+                <template x-for="u in userResults" :key="u.id"><button class="btn btn-light btn-sm w-100 text-start mt-1" @click="startDM(u)" x-text="u.is_bot ? 'AI 助手 · ' + u.username : u.username"></button></template>
             </div>
-            <div class="p-3 border-bottom bg-light" x-show="showGroupForm" x-cloak>
-                <input class="form-control form-control-sm mb-2" maxlength="100" placeholder="群组名称" x-model="groupTitle">
-                <div class="input-group input-group-sm mb-2">
-                    <input class="form-control" placeholder="搜索用户名" x-model="userQuery" @keydown.enter.prevent="searchUsers">
-                    <button class="btn btn-outline-secondary" @click="searchUsers">搜索</button>
-                </div>
-                <template x-for="u in userResults" :key="u.id">
-                    <label class="d-block small py-1"><input type="checkbox" :value="u.id" x-model.number="selectedUsers"> <span x-text="u.username"></span></label>
-                </template>
-                <button class="btn btn-sm btn-success mt-2" :disabled="!groupTitle.trim() || !selectedUsers.length" @click="createGroup">创建群组</button>
+            <template x-if="!loadingConvs && convs.length === 0"><div class="text-center text-muted py-5">暂无消息</div></template>
+            <template x-for="c in convs" :key="c.id"><div class="conv-item p-3 border-bottom d-flex align-items-center" :class="{active:activeConv===c.id}" @click="openConv(c)"><div class="flex-grow-1"><span class="online-dot me-1" :class="{online:c.online}"></span><strong x-text="c.title || '私聊'"></strong><small class="d-block text-muted" x-text="c.last_message?.content?.substring(0,30) || ''"></small></div><span x-show="c.unread_count>0" class="badge bg-danger" x-text="c.unread_count"></span></div></template>
+        </aside>
+        <main class="col-md-8 col-lg-9 d-flex flex-column" x-show="activeConv || !mobileMsg">
+            <div x-show="!activeConv" class="flex-grow-1 d-flex align-items-center justify-content-center text-muted">选择一个私聊会话</div>
+            <div x-show="activeConv" class="d-flex flex-column h-100">
+                <div class="p-3 border-bottom"><button class="btn btn-sm btn-outline-secondary me-2 d-md-none" @click="mobileMsg=false">←</button><strong x-text="activeConvTitle"></strong></div>
+                <div class="flex-grow-1 msg-area p-3" x-ref="msgArea"><button x-show="hasMore" class="btn btn-sm btn-link w-100" @click="loadMore">加载更多</button><template x-for="m in messages" :key="m.id"><div class="mb-2 d-flex" :class="m.sender_id===userId?'justify-content-end':'justify-content-start'"><div class="msg-bubble p-3" :class="m.sender_id===userId?'mine':'other'"><div x-text="m.content"></div></div></div></template></div>
+                <form class="p-3 border-top input-group" @submit.prevent="sendMsg"><input class="form-control" x-model="newMsg" maxlength="2000" placeholder="输入消息…"><button class="btn btn-primary" :disabled="!newMsg.trim()">发送</button></form>
             </div>
-            <template x-if="loadingConvs">
-                <div class="text-center text-muted py-5">加载中...</div>
-            </template>
-            <template x-if="!loadingConvs && convs.length === 0">
-                <div class="text-center text-muted py-5">暂无消息</div>
-            </template>
-            <template x-for="c in convs" :key="c.id">
-                <div class="conv-item p-3 border-bottom d-flex align-items-center"
-                     :class="{ active: activeConv === c.id }"
-                     @click="openConv(c)">
-                    <div class="flex-grow-1">
-                        <div>
-                            <span x-show="c.type === 'dm'" class="online-dot me-1" :class="c.online ? 'online' : 'offline'"></span>
-                            <strong x-text="c.title || '聊天'"></strong>
-                        </div>
-                        <small class="text-muted" x-text="c.last_message ? c.last_message.content.substring(0, 30) : ''"></small>
-                    </div>
-                    <span x-show="c.unread_count > 0" class="badge bg-danger rounded-pill" x-text="c.unread_count"></span>
-                </div>
-            </template>
-        </div>
-
-        <!-- Message Area -->
-        <div class="col-md-8 col-lg-9 d-flex flex-column" x-show="activeConv || !mobileMsg">
-            <template x-if="!activeConv">
-                <div class="flex-grow-1 d-flex align-items-center justify-content-center text-muted">
-                    选择一个会话开始聊天
-                </div>
-            </template>
-            <template x-if="activeConv">
-                <div class="d-flex flex-column h-100">
-                    <!-- Header -->
-                    <div class="p-3 border-bottom d-flex align-items-center">
-                        <button class="btn btn-sm btn-outline-secondary me-2 d-md-none" @click="mobileMsg = false">&larr;</button>
-                        <strong class="flex-grow-1" x-text="activeConvTitle"></strong>
-                        <template x-if="activeConvData?.type === 'group' && activeConvData.owner_id === userId">
-                            <div class="d-flex gap-2">
-                                <button class="btn btn-sm btn-outline-primary" @click="inviteMembers">邀请</button>
-                                <button class="btn btn-sm btn-outline-danger" @click="dissolveGroup">解散</button>
-                            </div>
-                        </template>
-                        <template x-if="activeConvData?.type === 'group' && activeConvData.owner_id !== userId">
-                            <button class="btn btn-sm btn-outline-danger" @click="leaveGroup">退出群组</button>
-                        </template>
-                    </div>
-                    <!-- Messages -->
-                    <div class="flex-grow-1 msg-area p-3" x-ref="msgArea">
-                        <template x-if="loadingMsgs">
-                            <div class="text-center text-muted py-3">加载中...</div>
-                        </template>
-                        <template x-if="!loadingMsgs && hasMore">
-                            <div class="text-center py-2">
-                                <button class="btn btn-sm btn-link" @click="loadMore">加载更多</button>
-                            </div>
-                        </template>
-                        <template x-for="m in messages" :key="m.id">
-                            <div class="mb-2 d-flex" :class="m.sender_id === userId ? 'justify-content-end' : 'justify-content-start'">
-                                <div class="msg-bubble p-3" :class="m.sender_id === userId ? 'mine' : 'other'">
-                                    <div x-text="m.content"></div>
-                                    <small class="d-block mt-1" :class="m.sender_id === userId ? 'text-white-50' : 'text-muted'"
-                                           x-text="m.sender ? m.sender.username + ' · ' : ''"></small>
-                                </div>
-                            </div>
-                        </template>
-                    </div>
-                    <!-- Input -->
-                    <div class="p-3 border-top">
-                        <form @submit.prevent="sendMsg" class="input-group">
-                            <input type="text" class="form-control" x-model="newMsg" placeholder="输入消息..." maxlength="2000">
-                            <button class="btn btn-primary" :disabled="!newMsg.trim()">发送</button>
-                        </form>
-                    </div>
-                </div>
-            </template>
-        </div>
+        </main>
     </div>
 </div>
-
 <script>
-function chatApp() {
-    return {
-        userId: {{ .user_id }},
-        convs: [],
-        activeConv: null,
-        activeConvTitle: '',
-        activeConvData: null,
-        messages: [],
-        newMsg: '',
-        loadingConvs: false,
-        loadingMsgs: false,
-        hasMore: false,
-        mobileMsg: false,
-        ws: null,
-        reconnectDelay: 1000,
-        refreshTimer: null,
-        requestedConv: Number(new URLSearchParams(location.search).get('conv')) || 0,
-        showGroupForm: false,
-        groupTitle: '',
-        userQuery: '',
-        userResults: [],
-        selectedUsers: [],
-
-        init() {
-            this.loadConvs();
-            this.connectWS();
-            this.refreshTimer = setInterval(() => this.loadConvs(false), 30000);
-        },
-
-        // --- Conversations ---
-        async loadConvs(showLoading = true) {
-            if (showLoading) this.loadingConvs = true;
-            try {
-                const r = await fetch('/api/v1/conversations');
-                if (r.ok) {
-                    this.convs = (await r.json()).data || [];
-                    if (this.activeConv) {
-                        this.activeConvData = this.convs.find(c => c.id === this.activeConv) || null;
-                        if (!this.activeConvData) this.closeActiveConversation();
-                    } else if (this.requestedConv) {
-                        const requested = this.convs.find(c => c.id === this.requestedConv);
-                        this.requestedConv = 0;
-                        if (requested) this.openConv(requested);
-                    }
-                }
-            } catch (e) { console.error('loadConvs', e); }
-            this.loadingConvs = false;
-        },
-
-        openConv(c) {
-            this.activeConv = c.id;
-            this.activeConvData = c;
-            this.activeConvTitle = c.title || '聊天';
-            this.messages = [];
-            this.hasMore = false;
-            this.loadMsgs();
-            this.mobileMsg = true;
-            // Mark as read
-            if (c.last_message) this.markRead(c.id, c.last_message.id);
-        },
-
-        async loadMsgs(beforeId = 0) {
-            this.loadingMsgs = true;
-            try {
-                let url = `/api/v1/conversations/${this.activeConv}/messages?limit=30`;
-                if (beforeId > 0) url += `&before_id=${beforeId}`;
-                const r = await fetch(url);
-                if (r.ok) {
-                    const d = await r.json();
-                    const msgs = (d.data?.messages || []).reverse();
-                    if (beforeId > 0) {
-                        this.messages = this.mergeMessages([...msgs, ...this.messages]);
-                    } else {
-                        // A WS push may arrive while the initial request is in
-                        // flight. Merge instead of overwriting that live item.
-                        this.messages = this.mergeMessages([...msgs, ...this.messages]);
-                    }
-                    this.hasMore = d.data?.has_more || false;
-                }
-            } catch (e) { console.error('loadMsgs', e); }
-            this.loadingMsgs = false;
-            // Scroll to bottom
-            this.$nextTick(() => {
-                const el = this.$refs.msgArea;
-                if (el) el.scrollTop = el.scrollHeight;
-            });
-        },
-
-        loadMore() {
-            if (this.messages.length > 0) {
-                this.loadMsgs(this.messages[0].id);
-            }
-        },
-
-        async sendMsg() {
-            const content = this.newMsg.trim();
-            if (!content || !this.activeConv) return;
-            this.newMsg = '';
-            try {
-                const r = await fetch(`/api/v1/conversations/${this.activeConv}/messages`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ content }),
-                });
-                if (r.ok) {
-                    const msg = (await r.json()).data;
-                    this.appendMsg(msg);
-                    this.markRead(this.activeConv, msg.id);
-                }
-            } catch (e) { console.error('sendMsg', e); }
-        },
-
-        async markRead(convId, msgId) {
-            try {
-                await fetch(`/api/v1/conversations/${convId}/read`, {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ message_id: msgId }),
-                });
-            } catch (e) { /* non-critical */ }
-        },
-
-        appendMsg(msg) {
-            if (this.messages.some(existing => existing.id === msg.id)) return;
-            this.messages = this.mergeMessages([...this.messages, msg]);
-            this.$nextTick(() => {
-                const el = this.$refs.msgArea;
-                if (el) el.scrollTop = el.scrollHeight;
-            });
-        },
-
-        mergeMessages(items) {
-            return [...new Map(items.map(item => [item.id, item])).values()].sort((a, b) => a.id - b.id);
-        },
-
-        // --- WebSocket ---
-        connectWS() {
-            const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-            const url = `${proto}//${location.host}/ws`;
-            this.ws = new WebSocket(url);
-            this.ws.onopen = () => {
-                this.reconnectDelay = 1000;
-                this.catchUp();
-                this.loadConvs(false);
-            };
-            this.ws.onmessage = (e) => {
-                try {
-                    const data = JSON.parse(e.data);
-                    if (data.type === 'new_message' && data.data?.message) {
-                        const msg = data.data.message;
-                        // If this convo is open, append; otherwise update unread
-                        if (this.activeConv === msg.conversation_id) {
-                            this.appendMsg(msg);
-                            this.markRead(msg.conversation_id, msg.id);
-                        }
-                        this.loadConvs(false); // refresh conv list for unread count
-                    }
-                } catch (err) { console.error('ws msg parse', err); }
-            };
-            this.ws.onclose = () => {
-                // Exponential backoff reconnection
-                setTimeout(() => this.connectWS(), this.reconnectDelay);
-                this.reconnectDelay = Math.min(this.reconnectDelay * 2, 16000);
-            };
-        },
-
-        async catchUp() {
-            if (!this.activeConv || !this.messages.length) return;
-            const convId = this.activeConv;
-            let afterId = this.messages[this.messages.length - 1].id;
-            for (;;) {
-                const r = await fetch(`/api/v1/conversations/${convId}/messages?after_id=${afterId}&limit=100`);
-                if (!r.ok || convId !== this.activeConv) return;
-                const batch = (await r.json()).data?.messages || [];
-                batch.forEach(msg => this.appendMsg(msg));
-                if (!batch.length) return;
-                afterId = batch[batch.length - 1].id;
-                await this.markRead(convId, afterId);
-                if (batch.length < 100) return;
-            }
-        },
-
-        async searchUsers() {
-            const q = this.userQuery.trim();
-            if (!q) return;
-            const r = await fetch('/api/v1/users/search?q=' + encodeURIComponent(q) + '&limit=20');
-            const d = await r.json();
-            if (r.ok && d.code === 0) this.userResults = d.data || [];
-        },
-
-        async createGroup() {
-            const r = await fetch('/api/v1/conversations', {
-                method: 'POST', headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({title: this.groupTitle, member_ids: this.selectedUsers})
-            });
-            const d = await r.json();
-            if (!r.ok || d.code !== 0) return alert(d.message || '创建失败');
-            this.showGroupForm = false; this.groupTitle = ''; this.selectedUsers = []; this.userResults = [];
-            await this.loadConvs(false);
-            const created = this.convs.find(c => c.id === d.data.id);
-            if (created) this.openConv(created);
-        },
-
-        async inviteMembers() {
-            const names = prompt('输入要邀请的用户名关键字');
-            if (!names) return;
-            const r = await fetch('/api/v1/users/search?q=' + encodeURIComponent(names) + '&limit=20');
-            const d = await r.json();
-            const users = d.data || [];
-            if (!r.ok || !users.length) return alert('没有找到可邀请用户');
-            const choice = prompt(users.map(u => `${u.id}: ${u.username}`).join('\n') + '\n输入用户 ID，多个用逗号分隔');
-            if (!choice) return;
-            const ids = [...new Set(choice.split(',').map(Number).filter(Number.isInteger))];
-            const invite = await fetch(`/api/v1/conversations/${this.activeConv}/members`, {
-                method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({user_ids: ids})
-            });
-            const result = await invite.json();
-            if (!invite.ok || result.code !== 0) return alert(result.message || '邀请失败');
-            await this.loadConvs(false);
-        },
-
-        async leaveGroup() {
-            if (!confirm('确认退出这个群组？')) return;
-            await this.removeActiveConversation(`/api/v1/conversations/${this.activeConv}/members/me`);
-        },
-
-        async dissolveGroup() {
-            if (!confirm('解散后消息不可恢复，确认解散？')) return;
-            await this.removeActiveConversation(`/api/v1/conversations/${this.activeConv}`);
-        },
-
-        async removeActiveConversation(url) {
-            const r = await fetch(url, {method: 'DELETE'});
-            const d = await r.json();
-            if (!r.ok || d.code !== 0) return alert(d.message || '操作失败');
-            this.closeActiveConversation();
-            await this.loadConvs(false);
-        },
-
-        closeActiveConversation() {
-            this.activeConv = null; this.activeConvData = null; this.activeConvTitle = ''; this.messages = []; this.mobileMsg = false;
-            history.replaceState(null, '', '/chat');
-        }
-    };
-}
+function chatApp(){return{userId:{{ .user_id }},convs:[],activeConv:null,activeConvTitle:'',messages:[],newMsg:'',hasMore:false,mobileMsg:false,loadingConvs:false,userQuery:'',userResults:[],ws:null,reconnectDelay:1000,requestedConv:Number(new URLSearchParams(location.search).get('conv'))||0,
+async init(){await this.loadConvs();this.connectWS()},
+async loadConvs(){this.loadingConvs=true;const r=await fetch('/api/v1/conversations');if(r.ok){this.convs=(await r.json()).data||[];if(this.requestedConv){const c=this.convs.find(x=>x.id===this.requestedConv);this.requestedConv=0;if(c)this.openConv(c)}}this.loadingConvs=false},
+openConv(c){this.activeConv=c.id;this.activeConvTitle=c.title||'私聊';this.messages=[];this.mobileMsg=true;this.loadMsgs()},
+async loadMsgs(before=0){let url=`/api/v1/conversations/${this.activeConv}/messages?limit=30`;if(before)url+=`&before_id=${before}`;const r=await fetch(url);if(!r.ok)return;const d=await r.json(),batch=(d.data?.messages||[]).reverse();this.messages=before?[...batch,...this.messages]:batch;this.hasMore=Boolean(d.data?.has_more);this.$nextTick(()=>{if(this.$refs.msgArea)this.$refs.msgArea.scrollTop=this.$refs.msgArea.scrollHeight});if(this.messages.length)this.markRead(this.messages[this.messages.length-1].id)},
+loadMore(){if(this.messages.length)this.loadMsgs(this.messages[0].id)},
+async sendMsg(){const content=this.newMsg.trim();if(!content)return;this.newMsg='';const r=await fetch(`/api/v1/conversations/${this.activeConv}/messages`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({content})});if(r.ok)this.appendMsg((await r.json()).data)},
+appendMsg(m){if(!this.messages.some(x=>x.id===m.id))this.messages.push(m);this.$nextTick(()=>{if(this.$refs.msgArea)this.$refs.msgArea.scrollTop=this.$refs.msgArea.scrollHeight})},
+async markRead(id){await fetch(`/api/v1/conversations/${this.activeConv}/read`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({message_id:id})}).catch(()=>{})},
+async searchUsers(){const q=this.userQuery.trim();if(!q)return;const r=await fetch('/api/v1/users/search?q='+encodeURIComponent(q));if(r.ok)this.userResults=(await r.json()).data||[]},
+async startDM(u){const r=await fetch('/api/v1/conversations',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user_id:u.id})});if(!r.ok)return;const c=(await r.json()).data;await this.loadConvs();this.openConv(this.convs.find(x=>x.id===c.id)||{id:c.id,title:u.username});this.userResults=[];this.userQuery=''},
+connectWS(){const proto=location.protocol==='https:'?'wss:':'ws:';this.ws=new WebSocket(`${proto}//${location.host}/ws`);this.ws.onopen=()=>{this.reconnectDelay=1000};this.ws.onmessage=e=>{const d=JSON.parse(e.data);if(d.type==='new_message'&&d.data?.message){const m=d.data.message;if(m.conversation_id===this.activeConv){this.appendMsg(m);this.markRead(m.id)}this.loadConvs()}};this.ws.onclose=()=>{setTimeout(()=>this.connectWS(),this.reconnectDelay);this.reconnectDelay=Math.min(this.reconnectDelay*2,16000)}}
+}}
 </script>
 {{ template "footer" . }}
