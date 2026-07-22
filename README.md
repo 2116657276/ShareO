@@ -2,7 +2,7 @@
 
 ShareO 是一个面向简历展示的小型全栈项目，核心能力是图文社区、实时私聊、中文语义搜图和带帖子引用的 RAG Bot。项目强调清晰模块边界、可运行演示和可解释的 AI 链路，不追求生产级平台复杂度。
 
-> 当前状态：轻量化重构进行中。范围和实施顺序以 [TASK.md](TASK.md) 与 [docs/plan.md](docs/plan.md) 为准。
+> 当前状态：阶段 6 私聊 Bot 技术链路和 mock LLM E2E 已完成；真实 provider 演示、评测数据、Demo seed 和最终清理属于阶段 7。范围和实施顺序以 [TASK.md](TASK.md) 与 [docs/plan.md](docs/plan.md) 为准。
 
 ## 核心功能
 
@@ -34,8 +34,11 @@ ShareO 是一个面向简历展示的小型全栈项目，核心能力是图文�
 make up
 make demo-seed
 make test-ai-e2e
+make eval-ai
 make down
 ```
+
+其中 `make test-ai-e2e` 使用临时 mock LLM 验证跨服务链路；`make demo-seed` 和 `make eval-ai` 在阶段 7 完成真实演示数据与 provider 评测后启用。
 
 配置模板见 [config.yaml.example](config.yaml.example)，架构说明见 [docs/architecture.md](docs/architecture.md)。
 

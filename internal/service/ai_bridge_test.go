@@ -56,4 +56,15 @@ func TestOnlyMessagesToBotPublishTasksAndFailuresDoNotFailSend(t *testing.T) {
 		t.Fatalf("ordinary DM published bot task=%v", call)
 	case <-time.After(50 * time.Millisecond):
 	}
+
+	otherBot := &model.User{ID: 4, Username: "other_bot", IsBot: 1, Status: model.UserStatusActive}
+	repo.members = []model.ConversationMember{{UserID: otherBot.ID, User: otherBot}, {UserID: bot.ID, User: bot}}
+	if _, err := svc.SendMessage(context.Background(), otherBot.ID, 5, "其他机器人消息"); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case call := <-publisher.calls:
+		t.Fatalf("other bot message published bot task=%v", call)
+	case <-time.After(50 * time.Millisecond):
+	}
 }

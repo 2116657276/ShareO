@@ -122,10 +122,22 @@ func (s *ChatService) SendMessage(ctx context.Context, senderID, convID int64, c
 		memberIDs = append(memberIDs, member.UserID)
 	}
 	s.hub.SendToUsers(memberIDs, WsMessage{Type: "new_message", Data: WsMessageData{Message: message}})
+	senderIsBot := false
 	for _, member := range members {
-		if member.UserID != senderID && member.User != nil && member.User.IsBot != 0 && member.User.Username == model.ShareOBotUsername {
-			s.aiBridge.PublishBotTask(convID, message.ID)
+		if member.UserID == senderID {
+			senderIsBot = member.User != nil && member.User.IsBot != 0
 			break
+		}
+	}
+	if senderIsBot {
+		return message, nil
+	}
+	if len(members) == 2 {
+		for _, member := range members {
+			if member.UserID != senderID && member.User != nil && member.User.IsBot != 0 && member.User.Username == model.ShareOBotUsername {
+				s.aiBridge.PublishBotTask(convID, message.ID)
+				break
+			}
 		}
 	}
 	return message, nil

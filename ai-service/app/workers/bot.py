@@ -14,6 +14,10 @@ FALLBACK_MESSAGE = "AI 当前暂不可用，请稍后重试。"
 MAX_INT64 = 2**63 - 1
 
 
+def is_permanent_http_error(status_code: int) -> bool:
+    return 400 <= status_code < 500
+
+
 def positive_int(fields: dict[str, Any], name: str) -> int:
     raw = fields.get(name)
     if isinstance(raw, bool):
@@ -34,7 +38,7 @@ class BotTaskHandler:
         pipeline: RAGPipeline | None,
         go_base_url: str | None = None,
         internal_token: str | None = None,
-    ) -> bool:
+    ) -> None:
         self.http = http_client
         self.pipeline = pipeline
         self.go_base_url = (go_base_url or settings.go_base_url).rstrip("/")
@@ -53,7 +57,7 @@ class BotTaskHandler:
             f"{self.go_base_url}/internal/bot/tasks/{message_id}",
             headers=self.headers,
         )
-        if response.status_code in {400, 403, 404}:
+        if is_permanent_http_error(response.status_code):
             logger.warning(
                 "dropping invalid bot task message_id=%d status=%d",
                 message_id,
@@ -62,7 +66,12 @@ class BotTaskHandler:
             return None
         response.raise_for_status()
         body = response.json()
-        return body.get("data", body)
+        if not isinstance(body, dict):
+            raise ValueError("bot task response must be a JSON object")
+        task = body.get("data", body)
+        if not isinstance(task, dict):
+            raise ValueError("bot task data must be a JSON object")
+        return task
 
     async def _reply(
         self,
@@ -81,7 +90,7 @@ class BotTaskHandler:
                 "citations": citations,
             },
         )
-        if response.status_code in {400, 403, 404}:
+        if is_permanent_http_error(response.status_code):
             logger.warning(
                 "dropping permanent bot callback failure message_id=%d status=%d",
                 message_id,

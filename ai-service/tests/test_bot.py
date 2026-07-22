@@ -7,7 +7,12 @@ import httpx
 import pytest
 
 from app.rag.pipeline import Citation, RAGAnswer
-from app.workers.bot import FALLBACK_MESSAGE, BotTaskHandler, positive_int
+from app.workers.bot import (
+    FALLBACK_MESSAGE,
+    BotTaskHandler,
+    is_permanent_http_error,
+    positive_int,
+)
 
 
 class FakeProvider:
@@ -59,6 +64,16 @@ def test_positive_int_rejects_noncanonical_values():
     for raw in ("", "0", "01", "+1", "1.0", True, 2**63):
         with pytest.raises(ValueError):
             positive_int({"id": raw}, "id")
+
+
+@pytest.mark.parametrize("status_code", [400, 401, 403, 404, 422, 499])
+def test_all_client_errors_are_permanent_callbacks(status_code: int):
+    assert is_permanent_http_error(status_code)
+
+
+@pytest.mark.parametrize("status_code", [200, 399, 500, 503])
+def test_server_errors_and_successes_are_not_permanent_callbacks(status_code: int):
+    assert not is_permanent_http_error(status_code)
 
 
 @pytest.mark.asyncio
