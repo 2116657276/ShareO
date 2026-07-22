@@ -47,7 +47,7 @@ test-image-e2e:
 	bash scripts/test_image_search_e2e.sh
 
 test-ai-e2e:
-	@test -x scripts/test_ai_e2e.sh || (echo "test-ai-e2e is implemented in stage 7" && exit 2)
+	@test -x scripts/test_ai_e2e.sh
 	bash scripts/test_ai_e2e.sh
 
 eval-ai:

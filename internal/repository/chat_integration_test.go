@@ -78,6 +78,10 @@ func TestLightweightBaselineSchema(t *testing.T) {
 		Count(&botCount).Error; err != nil || botCount != 1 {
 		t.Fatalf("fixed bot count=%d err=%v", botCount, err)
 	}
+	users, err := NewChatRepo(db).SearchActiveUsers(context.Background(), "shareo_bot", 0, 10)
+	if err != nil || len(users) != 1 || users[0].IsBot == 0 {
+		t.Fatalf("bot search result=%v err=%v", users, err)
+	}
 }
 
 func TestBotReplyIsAtomicIdempotentAndFiltersCitations(t *testing.T) {

@@ -1,0 +1,25 @@
+services:
+  mock-llm:
+    build:
+      context: ./ai-service
+    command: ["uvicorn", "app.testing.mock_llm:app", "--host", "0.0.0.0", "--port", "9000"]
+    profiles: ["test"]
+    environment:
+      MOCK_LLM_DELAY_SECONDS: ${SHAREO_MOCK_LLM_DELAY_SECONDS:-2}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:9000/healthz', timeout=2)"]
+      interval: 2s
+      timeout: 2s
+      retries: 20
+
+  ai-service:
+    environment:
+      SHAREO_AI_LLM_BASE_URL: http://mock-llm:9000/v1
+      SHAREO_AI_LLM_API_KEY: shareo-test-key
+      SHAREO_AI_LLM_MODEL: shareo-mock
+      SHAREO_AI_LLM_TIMEOUT_SECONDS: ${SHAREO_MOCK_LLM_TIMEOUT_SECONDS:-1}
+      SHAREO_AI_BOT_RECLAIM_INTERVAL_MS: ${SHAREO_BOT_RECLAIM_INTERVAL_MS:-500}
+      SHAREO_AI_BOT_MIN_IDLE_TIME_MS: ${SHAREO_BOT_MIN_IDLE_TIME_MS:-1000}
+    depends_on:
+      mock-llm:
+        condition: service_healthy

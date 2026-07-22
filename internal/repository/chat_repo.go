@@ -378,7 +378,7 @@ func (r *ChatRepo) GetConversationUnreadCount(ctx context.Context, convID, userI
 func (r *ChatRepo) SearchActiveUsers(ctx context.Context, query string, excludeUserID int64, limit int) ([]model.User, error) {
 	var users []model.User
 	pattern := "%" + strings.NewReplacer("\\", "\\\\", "%", "\\%", "_", "\\_").Replace(query) + "%"
-	err := r.db.WithContext(ctx).Select("id", "username", "avatar_url").
+	err := r.db.WithContext(ctx).Select("id", "username", "avatar_url", "is_bot").
 		Where("status = ? AND id <> ? AND username LIKE ? ESCAPE '\\\\'", model.UserStatusActive, excludeUserID, pattern).
 		Order("username ASC").Limit(limit).Find(&users).Error
 	return users, err
