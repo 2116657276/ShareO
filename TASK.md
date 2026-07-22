@@ -1,6 +1,6 @@
 # TASK.md — 当前任务与证据
 
-> 更新时间: 2026-07-21 | 后端能力线: **Phase 2 进行中** | 发布验收线: **Phase 1 后端候选，页面验收待后**
+> 更新时间: 2026-07-22 | 后端能力线: **Phase 2 进行中** | 发布验收线: **Phase 1 后端候选，页面验收待后**
 >
 > 本文件是当前状态的唯一事实来源；执行顺序见 [docs/plan.md](docs/plan.md)，阶段细节见 [docs/phases/](docs/phases/README.md)。
 
@@ -32,12 +32,14 @@
 ## 阻塞与暂缓
 
 - 远端 CI 结果尚未取得可复核证据；Phase 0 只标记“本地完成”。
-- 当前执行环境的 Docker daemon、Qdrant 和 Homebrew MinIO 未运行；Phase 2 真实闭环不得标记完成。
+- Phase 2 真实闭环必须在 Docker/Qdrant/Homebrew MinIO 均可复核运行时验收；环境依赖本轮已启动，但索引收敛证据仍缺失。
+- 2026-07-22 已启动 Colima、Qdrant 和 MinIO 并修复 E2E 轮询的 503 提前退出；修复后 worker 仍未在 180 秒内完成图片命中，Phase 2 真实索引收敛待定位，Phase 3 暂停。
 - Phase 3 必须等待 Phase 2 评测通过；Phase 4 Agent 是扩展目标，不影响核心完成判定。
 
 ## 当前证据
 
 - [2026-07-21 进度审计](docs/reviews/2026-07-21-progress-audit.md)
+- [2026-07-22 Phase 2 门禁阶段评审](docs/reviews/2026-07-22-phase2-gate-review.md)
 - [Phase 0 详细计划](docs/phases/phase-0-foundation.md)
 - [Phase 1 详细计划](docs/phases/phase-1-im.md)
 - [Phase 2 详细计划](docs/phases/phase-2-image-search.md)

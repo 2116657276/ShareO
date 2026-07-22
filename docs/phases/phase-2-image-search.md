@@ -49,3 +49,7 @@
 ## 暂缓项
 
 搜索页面与浏览器验收必须等待真实闭环和质量评测通过。
+
+## 2026-07-22 门禁复核
+
+本轮已通过 Go/Python/Shell/Markdown 本地门禁，并启动真实 MySQL、Redis、Qdrant 和 MinIO。修复了隔离 E2E 搜索轮询将短暂 503 提前视为失败的问题；修复后 approved 图片仍未在 180 秒内命中，worker 索引收敛和日志证据待继续定位。Phase 2 保持进行中，Phase 3 不启动。详见 [阶段评审](../reviews/2026-07-22-phase2-gate-review.md)。

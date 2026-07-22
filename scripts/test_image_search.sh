@@ -54,8 +54,10 @@ curl --fail --silent -X POST "$BASE/api/v1/admin/posts/$POSTID/approve" \
 
 FOUND=""
 for _ in $(seq 1 180); do
-  FOUND="$(curl --fail --silent --get "$BASE/api/v1/search/images" \
-    --data-urlencode 'q=red square' --data-urlencode 'limit=20')"
+  if ! FOUND="$(curl --fail --silent --get "$BASE/api/v1/search/images" \
+    --data-urlencode 'q=red square' --data-urlencode 'limit=20')"; then
+    FOUND=""
+  fi
   if printf '%s' "$FOUND" | grep -q "\"post_id\":$POSTID"; then
     echo "PASS semantic image search hit post=$POSTID"
     break
@@ -74,8 +76,10 @@ fi
 
 curl --fail --silent -X DELETE "$BASE/api/v1/admin/posts/$POSTID" -b "token=$ADMIN_TOKEN" >/dev/null
 for _ in $(seq 1 10); do
-  FOUND="$(curl --fail --silent --get "$BASE/api/v1/search/images" \
-    --data-urlencode 'q=red square' --data-urlencode 'limit=20')"
+  if ! FOUND="$(curl --fail --silent --get "$BASE/api/v1/search/images" \
+    --data-urlencode 'q=red square' --data-urlencode 'limit=20')"; then
+    FOUND=""
+  fi
   if ! printf '%s' "$FOUND" | grep -q "\"post_id\":$POSTID"; then
     echo "PASS deleted post removed from semantic index post=$POSTID"
     exit 0
