@@ -1,3 +1,5 @@
+name: shareo
+
 services:
   mysql:
     image: mysql:8.0
@@ -6,15 +8,16 @@ services:
       MYSQL_DATABASE: shareo
     volumes:
       - mysql_data:/var/lib/mysql
-      - ../migrations:/migrations:ro
-      - ./mysql-init/001_schema.sh:/docker-entrypoint-initdb.d/001_schema.sh:ro
+      - ./migrations:/migrations:ro
+      - ./deploy/mysql-init/001_schema.sh:/docker-entrypoint-initdb.d/001_schema.sh:ro
     ports:
       - "${SHAREO_MYSQL_PORT:-3306}:3306"
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -p$${MYSQL_ROOT_PASSWORD}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 15s
 
   redis:
     image: redis:7-alpine
@@ -22,9 +25,9 @@ services:
       - "${SHAREO_REDIS_PORT:-6379}:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 3s
-      retries: 5
+      interval: 3s
+      timeout: 2s
+      retries: 20
 
   minio:
     image: minio/minio:RELEASE.2025-09-07T16-13-09Z@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e
@@ -39,9 +42,9 @@ services:
       - "${SHAREO_MINIO_CONSOLE_PORT:-9001}:9001"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
-      interval: 10s
-      timeout: 5s
-      retries: 3
+      interval: 5s
+      timeout: 3s
+      retries: 20
 
   qdrant:
     image: qdrant/qdrant:v1.18.2@sha256:75eab8c4ba42096724fdcfde8b4de0b5713d529dde32f285a1f86fdcb2c9e50c
@@ -51,13 +54,39 @@ services:
     volumes:
       - qdrant_data:/qdrant/storage
 
+  app:
+    build:
+      context: .
+    environment:
+      SHAREO_DB_PASSWORD: ${SHAREO_DB_PASSWORD:-shareo_pass}
+      SHAREO_JWT_SECRET: ${SHAREO_JWT_SECRET:-shareo-compose-development-secret}
+      SHAREO_MINIO_ACCESS_KEY: ${SHAREO_MINIO_ACCESS_KEY:-minioadmin}
+      SHAREO_MINIO_SECRET_KEY: ${SHAREO_MINIO_SECRET_KEY:-minioadmin}
+      SHAREO_INTERNAL_TOKEN: ${SHAREO_INTERNAL_TOKEN:-shareo-dev-internal}
+      SHAREO_AI_BASE_URL: http://ai-service:8000
+    ports:
+      - "${SHAREO_APP_PORT:-8080}:8080"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/healthz"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
   ai-service:
     build:
-      context: ../ai-service
-    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+      context: ./ai-service
     environment:
       SHAREO_AI_REDIS_URL: redis://redis:6379/0
       SHAREO_AI_QDRANT_URL: http://qdrant:6333
+      SHAREO_AI_GO_BASE_URL: http://app:8080
       SHAREO_AI_INTERNAL_TOKEN: ${SHAREO_INTERNAL_TOKEN:-shareo-dev-internal}
       SHAREO_AI_MODEL_CACHE_DIR: /models
       SHAREO_AI_EMBEDDING_REVISION: ${SHAREO_AI_EMBEDDING_REVISION:-36e679e65c2a2fead755ae21162091293ad37834}
@@ -71,34 +100,13 @@ services:
         condition: service_healthy
       qdrant:
         condition: service_started
-    healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/readyz', timeout=2)"]
-      interval: 10s
-      timeout: 3s
-      retries: 10
-    restart: unless-stopped
-
-  ai-worker:
-    build:
-      context: ../ai-service
-    command: ["python", "-m", "app.workers"]
-    environment:
-      SHAREO_AI_REDIS_URL: redis://redis:6379/0
-      SHAREO_AI_QDRANT_URL: http://qdrant:6333
-      SHAREO_AI_INTERNAL_TOKEN: ${SHAREO_INTERNAL_TOKEN:-shareo-dev-internal}
-      SHAREO_AI_GO_BASE_URL: ${SHAREO_AI_GO_BASE_URL:-http://host.docker.internal:8080}
-      SHAREO_AI_MODEL_CACHE_DIR: /models
-      SHAREO_AI_EMBEDDING_REVISION: ${SHAREO_AI_EMBEDDING_REVISION:-36e679e65c2a2fead755ae21162091293ad37834}
-      SHAREO_AI_EMBEDDING_CONCURRENCY: ${SHAREO_AI_EMBEDDING_CONCURRENCY:-1}
-    volumes:
-      - hf_cache:/models
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-    depends_on:
-      redis:
+      app:
         condition: service_healthy
-      qdrant:
-        condition: service_started
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/healthz', timeout=2)"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
     restart: unless-stopped
 
 volumes:

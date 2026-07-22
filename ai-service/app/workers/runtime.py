@@ -1,0 +1,91 @@
+"""Background Redis Stream consumers owned by the FastAPI process."""
+
+import asyncio
+import logging
+import os
+import socket
+from collections.abc import Callable
+from typing import Any
+
+import httpx
+from redis.asyncio import Redis
+
+from app.config import settings
+from app.core.embedding import ImageEmbedder
+from app.core.vectorstore import ImageVectorStore
+from app.workers.consumer import StreamConsumer
+from app.workers.indexer import ImageIndexer
+
+logger = logging.getLogger(__name__)
+
+STREAM_INDEX_POST = "shareo:stream:index_post"
+STREAM_BOT_TASKS = "shareo:stream:bot_tasks"
+CONSUMER_GROUP = "ai-workers"
+
+
+async def handle_bot_task(msg_id: str, fields: dict[str, Any]) -> None:
+    """Keep unexpected early Bot tasks pending until the RAG stage supplies its handler."""
+    raise RuntimeError(f"bot task handler is not enabled yet: id={msg_id} fields={fields!r}")
+
+
+class WorkerRuntime:
+    """Start and stop both consumers with the API process lifecycle."""
+
+    def __init__(
+        self,
+        embedder: ImageEmbedder,
+        vector_store: ImageVectorStore,
+        *,
+        redis: Redis | None = None,
+        http_client: httpx.AsyncClient | None = None,
+        consumer_factory: Callable[..., StreamConsumer] = StreamConsumer,
+    ) -> None:
+        self.redis = redis or Redis.from_url(
+            settings.redis_url,
+            decode_responses=True,
+            socket_timeout=10.0,
+        )
+        self.http = http_client or httpx.AsyncClient(timeout=10.0)
+        self.vector_store = vector_store
+        self.indexer = ImageIndexer(self.http, embedder, vector_store)
+        consumer_name = f"{socket.gethostname()}-{os.getpid()}"
+        self.consumers = [
+            consumer_factory(self.redis, STREAM_INDEX_POST, CONSUMER_GROUP, consumer_name),
+            consumer_factory(
+                self.redis,
+                STREAM_BOT_TASKS,
+                CONSUMER_GROUP,
+                consumer_name,
+                max_retries=None,
+            ),
+        ]
+        self.handlers = {
+            STREAM_INDEX_POST: self.indexer.handle,
+            STREAM_BOT_TASKS: handle_bot_task,
+        }
+        self.tasks: list[asyncio.Task] = []
+
+    async def start(self) -> None:
+        if self.tasks:
+            return
+        self.tasks = [
+            asyncio.create_task(
+                consumer.run(self.handlers[consumer.stream]),
+                name=f"stream-consumer:{consumer.stream}",
+            )
+            for consumer in self.consumers
+        ]
+        logger.info("AI consumers started streams=%s", ",".join(self.handlers))
+
+    async def stop(self) -> None:
+        for consumer in self.consumers:
+            consumer.stop()
+        for task in self.tasks:
+            task.cancel()
+        if self.tasks:
+            await asyncio.gather(*self.tasks, return_exceptions=True)
+        self.tasks.clear()
+        await self.http.aclose()
+        await self.redis.aclose()
+        await self.vector_store.close()
+        logger.info("AI consumers stopped")

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Terminal-only semantic image search smoke test.
-# Requires a running Go server, ai-service/worker, Redis, Qdrant and Homebrew MinIO.
+# Requires the single Docker Compose stack to be running.
 set -euo pipefail
 
 BASE="${SHAREO_BASE_URL:-http://127.0.0.1:8080}"

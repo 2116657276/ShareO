@@ -18,6 +18,14 @@ dependencies = [
 [dependency-groups]
 dev = ["ruff>=0.9", "pytest>=8.3", "pytest-asyncio>=0.25", "httpx>=0.28"]
 
+[tool.uv.sources]
+torch = [{ index = "pytorch-cpu", marker = "sys_platform == 'linux'" }]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
 [tool.ruff]
 line-length = 100
 target-version = "py312"

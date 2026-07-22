@@ -1,0 +1,17 @@
+.git
+.github
+.idea
+.vscode
+.agents
+.codex
+ai-service/.venv
+ai-service/__pycache__
+ai-service/.pytest_cache
+ai-service/.ruff_cache
+bin
+data
+docs
+resources
+screenshots
+*.log
+config.yaml

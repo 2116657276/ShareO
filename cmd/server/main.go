@@ -52,17 +52,17 @@ func main() {
 	slog.SetDefault(slog.New(slogHandler))
 
 	// Init MySQL
-	if err := repository.InitDB(cfg.Database, cfg.Server.Mode); err != nil {
+	if err := initWithRetry("MySQL", func() error { return repository.InitDB(cfg.Database, cfg.Server.Mode) }); err != nil {
 		log.Fatalf("Failed to init MySQL: %v", err)
 	}
 
 	// Init Redis
-	if err := repository.InitRedis(cfg.Redis); err != nil {
+	if err := initWithRetry("Redis", func() error { return repository.InitRedis(cfg.Redis) }); err != nil {
 		log.Fatalf("Failed to init Redis: %v", err)
 	}
 
 	// Init MinIO
-	if err := upload.Init(cfg.MinIO); err != nil {
+	if err := initWithRetry("MinIO", func() error { return upload.Init(cfg.MinIO) }); err != nil {
 		log.Fatalf("Failed to init MinIO: %v", err)
 	}
 
@@ -129,7 +129,7 @@ func main() {
 	fmt.Println("  ShareO - 拍摄与作品管理系统")
 	fmt.Println("========================================")
 	fmt.Printf("  Web:     http://localhost%s\n", addr)
-	fmt.Println("  可选开发管理员：先执行 make seed（启动后请立即改密）")
+	fmt.Println("  开发管理员：由 make demo-seed 创建")
 	fmt.Printf("  用户:    注册后登录\n")
 	fmt.Println("========================================")
 
@@ -156,4 +156,26 @@ func main() {
 		log.Fatalf("Server forced to shutdown: %v", err)
 	}
 	slog.Info("server exited")
+}
+
+func initWithRetry(name string, initialize func() error) error {
+	deadline := time.Now().Add(45 * time.Second)
+	delay := 500 * time.Millisecond
+	var lastErr error
+	for time.Now().Before(deadline) {
+		if err := initialize(); err == nil {
+			return nil
+		} else {
+			lastErr = err
+			slog.Warn("dependency not ready; retrying", "dependency", name, "delay", delay, "err", err)
+		}
+		time.Sleep(delay)
+		if delay < 3*time.Second {
+			delay *= 2
+			if delay > 3*time.Second {
+				delay = 3 * time.Second
+			}
+		}
+	}
+	return fmt.Errorf("%s did not become ready: %w", name, lastErr)
 }

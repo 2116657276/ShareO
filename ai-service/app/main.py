@@ -12,6 +12,7 @@ from redis.asyncio import Redis
 from app.config import settings
 from app.core.embedding import ImageEmbedder
 from app.core.vectorstore import ImageVectorStore
+from app.workers.runtime import WorkerRuntime
 
 logger = logging.getLogger(__name__)
 embedder = ImageEmbedder()
@@ -41,6 +42,9 @@ async def lifespan(app: FastAPI):
         await vector_store.ensure_collection()
     except Exception as exc:
         logger.warning("image collection startup check failed: %s", exc)
+    runtime = WorkerRuntime(embedder, vector_store)
+    app.state.worker_runtime = runtime
+    await runtime.start()
     if settings.embedding_warmup:
         app.state.warmup_task = asyncio.create_task(asyncio.to_thread(embedder.warmup))
 
@@ -63,7 +67,8 @@ async def lifespan(app: FastAPI):
     warmup_task = getattr(app.state, "warmup_task", None)
     if warmup_task is not None and not warmup_task.done():
         warmup_task.cancel()
-    await vector_store.close()
+        await asyncio.gather(warmup_task, return_exceptions=True)
+    await runtime.stop()
     logger.info("ai-service shutting down")
 
 

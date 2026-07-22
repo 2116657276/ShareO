@@ -22,7 +22,7 @@ class StreamConsumer:
         stream: str,
         group: str,
         consumer: str,
-        max_retries: int = 3,
+        max_retries: int | None = 3,
         reclaim_interval_ms: int = 10_000,
         min_idle_time_ms: int = 30_000,
     ):
@@ -57,7 +57,7 @@ class StreamConsumer:
             await handler(msg_id, fields)
         except Exception:
             attempts = await self._delivery_count(msg_id)
-            if attempts >= self.max_retries + 1:
+            if self.max_retries is not None and attempts >= self.max_retries + 1:
                 logger.exception(
                     "dropping message after retries stream=%s id=%s attempts=%d fields=%r",
                     self.stream,

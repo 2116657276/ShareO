@@ -46,6 +46,18 @@ async def test_failed_message_is_acked_after_three_retries():
 
 
 @pytest.mark.asyncio
+async def test_failed_message_with_unlimited_retries_is_never_acked():
+    redis = AsyncMock()
+    redis.xpending_range.return_value = [{"times_delivered": 999}]
+    handler = AsyncMock(side_effect=RuntimeError("not ready"))
+    consumer = make_consumer(redis, max_retries=None)
+
+    await consumer._process_message(handler, "3-unlimited", {"value": "pending"})
+
+    redis.xack.assert_not_awaited()
+
+
+@pytest.mark.asyncio
 async def test_message_gets_four_total_attempts():
     redis = AsyncMock()
     redis.xpending_range.side_effect = [
