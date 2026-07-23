@@ -6,5 +6,6 @@
 |---|---|---|---|---|
 | 2026-07-22 | 语义搜图真实链路 | 2个隔离图文帖；Chinese-CLIP固定revision；CPU；512维 | 审核、命中、重复投递、重启重领、删除通过 | 只证明工程闭环，不是质量评测 |
 | 2026-07-22 | 文本索引真实链路 | 2个隔离正文；BGE small zh；CPU；512维；400/80 | Qdrant写入、检索、删除和双索引事件通过 | 只证明检索工程能力 |
-| 待运行 | 40条搜图质量 | `image_search_v1`；Demo seed待实现 | 待运行 | Phase 7B门禁 |
-| 待运行 | 30条RAG质量 | `rag_qa_v1`；DeepSeek；`rag-v1` | 待运行 | Phase 7B门禁 |
+| 2026-07-23 | RAG Bot 端到端 | DeepSeek V4 Flash；20篇Demo帖；25条标注 | 富士XT5查询正确引用post_id=1 | 真实Provider验证通过 |
+| 待运行 | 40条搜图质量 | `image_search_v1`；待真实图片素材 | 待运行 | Phase 7B门禁（阻塞：无真实图片） |
+| 待运行 | 25条RAG质量 | `rag_qa_v1`；DeepSeek V4 Flash；`rag-v1` | 待运行 | Phase 7B门禁 |

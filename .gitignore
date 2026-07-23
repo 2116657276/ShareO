@@ -32,6 +32,10 @@ minio_data/
 # Configuration with secrets
 config.yaml
 !config.yaml.example
+.env
+
+# Generated demo assets
+scripts/demo-assets/
 
 # Uploaded files / temp
 /tmp/

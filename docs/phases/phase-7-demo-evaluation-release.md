@@ -1,6 +1,6 @@
 # Phase 7 — Demo、评测与发布
 
-> 状态：进行中 | 顺序：7A → 7B → 7C
+> 状态：7A 基本完成，7B 进行中 | 顺序：7A → 7B → 7C
 
 ## 目标
 
@@ -56,8 +56,18 @@ DeepSeek API Key只读环境变量；日志、报告、截图和 Git不得包含
 
 ## 提交与环境证据
 
-尚无 Phase 7完成提交。已有工程基线为 `bb9732f`、`0f1785d`、`17b54ec`、`0aff22e`、`56e30f4`，不能替代本阶段数据和评测证据。
+Phase 7A 交付物：
+- `scripts/demo_seed.sh` — 可重复 Demo 数据初始化
+- `scripts/validate_eval_dataset.py` — 评测数据集校验
+- `docs/eval/image_search_v1.jsonl` — 40 条搜图查询（标注待真实图片）
+- `docs/eval/rag_qa_v1.jsonl` — 30 条 RAG 问答（25 条已标注）
+- `ai-service/app/commands/eval_ai.py` — 统一评测命令
+- `.env` — DeepSeek V4 Flash 配置（不入库）
+
+已有工程基线：`bb9732f`、`0f1785d`、`17b54ec`、`0aff22e`、`56e30f4`。
 
 ## 遗留项
 
-完成后只保留可选论文材料整理，不再扩展产品范围。
+- 40 条搜图质量评测依赖真实图片素材（非多模态大模型无法采集）
+- 5 条 RAG portrait/motion 标注待补齐对应帖子
+- 完成后只保留可选论文材料整理，不再扩展产品范围。

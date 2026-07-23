@@ -1,0 +1,30 @@
+{"question":"富士XT5相机配了什么镜头？","category":"factual","expected_source_post_ids":[1],"reference_answer":"配了一颗35mm f/1.4定焦镜头，复古外观加上胶片模拟模式。","label_status":"complete"}
+{"question":"多肉植物浇水需要注意什么？","category":"factual","expected_source_post_ids":[2],"reference_answer":"多肉最怕浇水太多，一定要等土完全干透再浇，通风也很重要。","label_status":"complete"}
+{"question":"那把Fender Stratocaster是什么颜色的？","category":"factual","expected_source_post_ids":[3],"reference_answer":"日落色渐变琴身，枫木指板，跟了五年。","label_status":"complete"}
+{"question":"用的是什么咖啡豆做手冲咖啡？","category":"factual","expected_source_post_ids":[4],"reference_answer":"使用的是埃塞俄比亚耶加雪菲，柑橘和花香味很明显。","label_status":"complete"}
+{"question":"东极岛的日出是几点看的？","category":"factual","expected_source_post_ids":[5],"reference_answer":"凌晨四点爬起来看日出，海平面从深蓝变成橙红。","label_status":"complete"}
+{"question":"喀纳斯的白桦林是什么颜色的？","category":"factual","expected_source_post_ids":[6],"reference_answer":"金黄的白桦林，喀纳斯像上帝打翻的调色盘。","label_status":"complete"}
+{"question":"外滩对面可以看到什么建筑？","category":"factual","expected_source_post_ids":[7],"reference_answer":"黄浦江对岸的陆家嘴三件套直插云霄。","label_status":"complete"}
+{"question":"北京胡同里的老人在做什么？","category":"factual","expected_source_post_ids":[8],"reference_answer":"老人们在槐树下下象棋，斑驳的灰墙青石板路。","label_status":"complete"}
+{"question":"极简主义摄影的核心特点是什么？","category":"factual","expected_source_post_ids":[13],"reference_answer":"大面积的留白、干净的线条、单一的主体，少即是多。","label_status":"complete"}
+{"question":"黄果树瀑布用了什么减光镜？","category":"factual","expected_source_post_ids":[],"reference_answer":"使用了ND1000减光镜，曝光时间2秒。","label_status":"pending"}
+{"question":"新手买相机有什么推荐？","category":"advice","expected_source_post_ids":[1],"reference_answer":"可以考虑富士XT5，复古外观、胶片模拟模式直出色彩好。","label_status":"complete"}
+{"question":"多肉植物日常怎么养护比较好？","category":"advice","expected_source_post_ids":[2],"reference_answer":"控制浇水频率，等土完全干透再浇，保持良好通风。","label_status":"complete"}
+{"question":"手冲咖啡有什么技巧可以提升风味？","category":"advice","expected_source_post_ids":[4],"reference_answer":"注意研磨度、水温和注水速度，每个变量都会影响风味。","label_status":"complete"}
+{"question":"去看海边日出有什么建议？","category":"advice","expected_source_post_ids":[5],"reference_answer":"建议凌晨出发，提前到达等待日出，海面色彩变化很值得。","label_status":"complete"}
+{"question":"秋天去哪里旅游拍照比较好？","category":"advice","expected_source_post_ids":[6],"reference_answer":"喀纳斯是不错的选择，金黄色白桦林、碧绿湖水、远处雪山。","label_status":"complete"}
+{"question":"在咖啡馆怎么拍好人像照片？","category":"advice","expected_source_post_ids":[],"reference_answer":"用大光圈镜头虚化背景，利用窗边自然光，让模特保持自然放松。","label_status":"pending"}
+{"question":"赛博朋克风格的城市夜景怎么拍摄？","category":"advice","expected_source_post_ids":[15],"reference_answer":"找霓虹灯密集的街区，用大光圈镜头，后期调出青橙色调，雨后街道特别出片。","label_status":"complete"}
+{"question":"怎么拍出瀑布的丝绸效果？","category":"advice","expected_source_post_ids":[],"reference_answer":"用三脚架固定相机，快门速度调到1/4秒或更慢，可使用ND减光镜。","label_status":"pending"}
+{"question":"数码相机和胶片相机拍摄体验有什么不同？","category":"comparison","expected_source_post_ids":[1,16],"reference_answer":"数码相机即时预览方便调整参数，胶片有颗粒感和独特的色彩偏移，充满不确定性。","label_status":"complete"}
+{"question":"黑白摄影和彩色摄影各有什么优势和适用场景？","category":"comparison","expected_source_post_ids":[11,12],"reference_answer":"黑白去掉色彩干扰让观者专注光影和构图，彩色能表现丰富的色调如秋天的金黄火红蔚蓝。","label_status":"complete"}
+{"question":"不同的构图方式各适合什么拍摄场景？","category":"comparison","expected_source_post_ids":[17,18,19,20],"reference_answer":"三分法适合风景和地平线，引导线适合旅行和山路，框架构图适合园林建筑，对称构图适合建筑摄影。","label_status":"complete"}
+{"question":"室内人像的自然光和人工布光各有什么特点？","category":"comparison","expected_source_post_ids":[],"reference_answer":"自然光从窗户侧面照入柔和自然，人工三点布光法可以精确控制光影分离主体和背景。","label_status":"pending"}
+{"question":"极简风格和赛博朋克风格在视觉表现上有哪些不同？","category":"comparison","expected_source_post_ids":[13,15],"reference_answer":"极简风格追求少即是多、大留白、干净线条，赛博朋克风格追求霓虹灯光、青橙色调、高饱和高对比。","label_status":"complete"}
+{"question":"总结一下摄影中最重要的构图和拍摄技巧","category":"multi-source","expected_source_post_ids":[17,18,19,20],"reference_answer":"综合三分法、引导线、框架构图、对称构图等基础构图方式。","label_status":"complete"}
+{"question":"旅行摄影应该注意哪些方面？","category":"multi-source","expected_source_post_ids":[5,6,7,8],"reference_answer":"从海边日出、喀纳斯秋景、外滩夜景、胡同人文四个场景总结，注意取景时间、色彩把握和当地文化元素。","label_status":"complete"}
+{"question":"人像摄影有哪些不同的拍摄方式和风格？","category":"multi-source","expected_source_post_ids":[],"reference_answer":"咖啡馆自然光人像、街头抓拍、体育高速连拍、室内三点布光，分别适合不同的被摄对象和场景。","label_status":"pending"}
+{"question":"关于秋天这个主题有哪些摄影相关的讨论？","category":"multi-source","expected_source_post_ids":[6,12],"reference_answer":"喀纳斯秋景、秋天的暖色调色彩，涵盖了风景和色彩两个角度。","label_status":"complete"}
+{"question":"Python和Go语言应该选哪个学习？","category":"no-answer","expected_source_post_ids":[],"reference_answer":"","expect_no_answer":true,"label_status":"complete"}
+{"question":"推荐一款适合玩3A游戏的显卡？","category":"no-answer","expected_source_post_ids":[],"reference_answer":"","expect_no_answer":true,"label_status":"complete"}
+{"question":"如何从零开始学习机器学习？","category":"no-answer","expected_source_post_ids":[],"reference_answer":"","expect_no_answer":true,"label_status":"complete"}
