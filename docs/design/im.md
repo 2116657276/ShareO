@@ -29,7 +29,7 @@
 | POST | `/api/v1/conversations/:id/messages` | `{"content":"..."}`，trim后1–2000字符 |
 | PUT | `/api/v1/conversations/:id/read` | 只接受本会话真实消息，读标记不能倒退 |
 | GET | `/api/v1/conversations/unread-count` | 全部DM准确未读总数 |
-| GET | `/api/v1/users/search` | 搜索正常、非Bot用户 |
+| GET | `/api/v1/users/search` | 搜索正常用户并排除调用者；固定 `shareo_bot` 也可被搜索 |
 | GET | `/ws` | Cookie或Bearer登录态 |
 
 历史分页向前读取；断线补偿以 `after_id` 按ID升序返回。客户端把REST发送响应和WebSocket回推统一按 message ID去重。

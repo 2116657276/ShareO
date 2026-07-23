@@ -13,7 +13,7 @@
 - 收藏、转帖、话题、群聊、Agent和工具调用从最终范围移除。
 - Python AI API、`index_post` consumer和 `bot_tasks` consumer运行在同一FastAPI进程中。
 - 根目录Compose是唯一完整运行方式，Uvicorn固定单worker。
-- Go写MySQL，Python写Qdrant；AI不持有MySQL或MinIO凭证。
+- Go写运行时业务数据到 MySQL，Python写 Qdrant；初始化脚本只负责 schema 与固定 Bot 引导记录，AI 不持有 MySQL 或 MinIO 凭证。
 
 ## 理由
 

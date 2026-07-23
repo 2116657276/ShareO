@@ -1,38 +1,25 @@
 # ADR-001: 总体架构 —— Go 单体扩展 + Python AI 服务
 
-- 日期: 2026-07-19
-- 状态: 已接受（Python 双进程部分已被 [ADR-006](ADR-006-lightweight-scope-runtime.md) 替代）
+- 日期：2026-07-19
+- 状态：已接受；运行时细节以 [ADR-006](ADR-006-lightweight-scope-runtime.md) 为准
 
-> 历史决定中的 Go/Python 双服务与单写者原则仍有效；“AI API 与 Worker 两个进程”和远期 Agent 规划不再有效。当前运行时以 ADR-006 为准。
+> 本 ADR 的 Go/Python 服务边界和单写者原则仍有效；早期“AI API 与 Worker 分为两个进程”的决定已被 ADR-006 替代。下文把历史取舍和当前仍有效的约束分开记录，避免把历史方案当作实现要求。
 
-## 背景
+## 当前有效决定
 
-v2 要引入 IM、语义搜图、Bot/RAG、远期 Agent。核心矛盾：现有主站是成熟的 Go 单体（分层清晰、58 路由、有审核流），而 AI 生态（PyTorch / transformers / 本地模型部署）在 Python 侧。开发者为 AI 专业本科生，独立开发，此项目为毕业设计。
+- Go 模块化单体承载全部业务，包括认证、审核、社区、私聊和 WebSocket，保持 Handler → Service → Repository 分层。
+- `ai-service/` 使用 Python 3.12、FastAPI 和 uv；API、同时处理图片与正文的 `index_post` consumer、以及 `bot_tasks` consumer 在同一 FastAPI 进程内运行，Uvicorn 固定单 worker。
+- Go 与 Python 通过内部 HTTP/JSON 和 `X-Internal-Token` 通信；AI 服务不对公网暴露。
+- Go 是运行时 MySQL 业务数据的唯一写者（包括 Bot 回复），Python 通过内部接口读取载荷并只写 Qdrant。
 
-## 候选方案
+## 历史取舍
 
-1. 纯 Go，AI 能力全部调云 API
-2. Go 主服务 + Python AI 服务（双服务）
-3. 推倒重写为完整微服务架构
+早期选择 Go 主站 + Python AI 服务，是为了保留本地 embedding、RAG 和模型工程能力，同时让 AI 进程故障不阻塞主站和普通私聊。选择 HTTP/JSON 而不是 gRPC，是为了让跨服务链路便于终端调试和证据复核。
 
-## 决定
+以下决定不再生效：AI API 与 Worker 拆成两个进程，以及把 Agent 作为产品路线。前者由 ADR-006 的单进程方案替代，后者已从最终范围移除。
 
-选方案 2：
+## 后果与验证边界
 
-- Go 单体继续承载**全部业务**（含 IM/WebSocket），按现有 Handler→Service→Repository 分层扩展。
-- 新增 `ai-service/`（Python 3.12 + FastAPI + uv）：一份代码库、两个进程——API 进程（编码/搜索/RAG）与 Worker 进程（消费队列）。
-- 服务间通信：内部 HTTP/JSON + 共享 token（`X-Internal-Token`），ai-service 不对公网暴露。
-- **单写者原则**：MySQL 只由 Go 写（含 Bot 回复落库，Python 经内部接口回调）；Qdrant 只由 Python 写。
-
-## 理由
-
-- AI 专业对口：本地模型、RAG、Agent 的生态与学习价值都在 Python，方案 1 会把毕设的 AI 深度砍掉大半。
-- 稳定性解耦：ai-service 崩溃时主站与 IM 完全可用，搜索/Bot 优雅降级。
-- 方案 3 收益为零：现有单体规模完全健康，重写只烧时间。
-- 通信选 HTTP/JSON 而非 gRPC：可调试性优先，接口面收窄后未来切 gRPC 是小工作量练习（届时新增 ADR）。
-
-## 后果与代价
-
-- 维护两套运行时与依赖 → Phase 0 用 docker-compose 统一编排。
-- 跨服务调试成本 → 接口保持少而稳定，全部列入 architecture.md §7。
-- IM 留在单体意味着单实例扩展上限 → 设计时预留 Redis Pub/Sub 扇出接口，多实例演进作为论文展望。
+- 单进程共享模型和连接，降低本地内存与启动复杂度；多 Uvicorn worker 或水平扩展前必须重新设计 consumer 所有权。
+- AI 服务停止时，社区、全文搜索和普通私聊保持可用，语义搜图和 Bot 按 readiness 与降级矩阵处理。
+- 具体服务拓扑、数据所有权和降级行为以 [架构文档](../architecture.md) 为准。

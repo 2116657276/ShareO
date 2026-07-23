@@ -24,14 +24,14 @@ Compose 启动 MySQL、Redis、MinIO、Qdrant、Go app 和 Python ai-service。U
 
 | 数据 | 唯一写者 | 读取者 | 恢复方式 |
 |---|---|---|---|
-| 业务表、消息、Bot 回复 | Go | Go；Python 经内部 API只读载荷 | MySQL事务与外键 |
+| 业务表、消息、Bot 回复 | Go（运行时） | Go；Python 经内部 API只读载荷 | MySQL事务与外键 |
 | 图片对象 | Go | Go；Python 经 Go 代理读取 | MinIO volume与对象键 |
 | 登录、缓存、在线状态 | Go | Go | TTL、回源 MySQL |
 | `index_post`、`bot_tasks` | Go生产、Python消费 | Go/Python | 四次处理、重领、最终 ACK |
 | `images`、`post_chunks` | Python | Python；Go 获取搜索结果 | 幂等事件、回填、对账 |
 | LLM 回答候选 | Python | Go 回调接收 | 重试或固定兜底 |
 
-MySQL 是业务真相，Qdrant 是可重建派生数据。Redis Stream不承担长期业务事实。
+MySQL 是业务真相；初始化脚本只建立 schema 并写入固定 Bot 引导记录，运行时业务写入由 Go 独占。Qdrant 是可重建派生数据，Redis Stream 不承担长期业务事实。
 
 ## 12 表数据域
 

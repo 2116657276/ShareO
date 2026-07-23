@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import json
 import re
+import subprocess
 import sys
 from collections import Counter
 from pathlib import Path
@@ -108,8 +109,23 @@ def validate_phase_contracts(failures: list[str]) -> None:
         missing = [heading for heading in REQUIRED_PHASE_HEADINGS if heading not in headings]
         if missing:
             failures.append(f"{path.relative_to(ROOT)} missing headings: {', '.join(missing)}")
-        if "> 状态：已完成" in text and not sha_re.search(text):
-            failures.append(f"{path.relative_to(ROOT)} completed phase has no commit SHA")
+        if "> 状态：已完成" in text:
+            shas = sha_re.findall(text)
+            if not shas:
+                failures.append(f"{path.relative_to(ROOT)} completed phase has no commit SHA")
+            for raw_sha in shas:
+                sha = raw_sha.strip("`")
+                result = subprocess.run(
+                    ["git", "cat-file", "-e", f"{sha}^{{commit}}"],
+                    cwd=ROOT,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    check=False,
+                )
+                if result.returncode != 0:
+                    failures.append(
+                        f"{path.relative_to(ROOT)} references unknown commit SHA: {sha}"
+                    )
         if "当前工作区" in text or "待提交" in text:
             failures.append(f"{path.relative_to(ROOT)} uses unverifiable completion wording")
 
