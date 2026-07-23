@@ -1,6 +1,6 @@
 # ShareO 开发规范
 
-> 更新时间: 2026-07-21 | 状态: 生效 | 文档规范另见 [docs/README.md](README.md)
+> 更新时间: 2026-07-23 | 状态: 生效 | 文档规范另见 [docs/README.md](README.md)
 
 规范只写"会被检查的"：能进 `make check` 的进 `make check`，进不了的写成评审清单。
 
@@ -24,7 +24,7 @@ Handler → Service → Repository → DB/Redis
 - **错误处理**: 错误必须处理或显式记录，禁止 `_` 丢弃（评审 SR-06 教训）；包装用 `fmt.Errorf("...: %w", err)`；跨层判定用 sentinel error（`service.ErrPostNotFound` 模式）+ `errors.Is`，不做字符串匹配。
 - **日志**: `log/slog` 结构化输出，键统一 `user_id` / `post_id` / `conv_id` / `err`；禁止在日志里输出 token、密码哈希、完整 SQL。
 - **命名**: 与现有代码保持一致（Repo 后缀、Service 后缀、Handler 后缀；表名蛇形复数）。
-- **数据库**: 涉及"写记录 + 同步计数"的操作必须同一事务（like_repo.Toggle 为标准模板）；新表一律在 migrations/ 递增编号，迁移必须可重复执行（`IF NOT EXISTS` 等）。
+- **数据库**: 涉及"写记录 + 同步计数"的操作必须同一事务。项目尚未发布且采用可清空基线，schema 只维护 `migrations/001_init.sql`；进入不可清空环境后才恢复前向递增迁移，并以 ADR 记录切换。
 
 ## 3. Python 编码规范（ai-service）
 
@@ -51,9 +51,8 @@ Handler → Service → Repository → DB/Redis
 
 ## 6. 测试规范
 
-- 新功能最低要求：Service 层核心逻辑单测 + `scripts/test_*.sh` API 冒烟用例。
-- 后端成熟前，终端 curl/Shell 是正式行为验收方式：使用 `scripts/test_api.sh`、`scripts/test_chat.sh` 覆盖登录、资源写入、IM 权限/未读/恢复等流程；它不能替代发布前的浏览器可用性与双会话验收，但不会被视为低于手工点击的证据。
-- 浏览器与前端验收安排在接口和数据一致性稳定后执行，避免把页面不稳定性混入后端基线；暂缓项必须记录在 `TASK.md` 和对应设计文档，不能被误标为完成。
+- 新功能最低要求：Service 层核心逻辑单测；跨服务能力增加隔离 `scripts/test_*.sh` E2E。
+- 当前行为证据由 Go/Python 单测、真实 MySQL/Redis 集成、`test-image-e2e` 和 `test-ai-e2e` 组成；最终发布再按 `docs/demo.md` 完成页面演示。
 - 涉及并发的代码（ws Hub、队列消费）必须过 `go test -race`。
 - 无外部服务的门禁统一 `make check`；真实 MySQL/Redis 放 `make test-integration`。该目标强制要求 `SHAREO_TEST_MYSQL_DSN`（库名以 `_test` 结尾）与 `SHAREO_TEST_REDIS_URL`，避免把 skip 算作通过。
 - AI 效果不写断言式单测，走 `docs/eval/` 评测集 + 指标（见 [eval/README.md](eval/README.md)）；工程部分（编码维度、upsert 幂等、检索 top-k 形状）写常规单测。
@@ -70,6 +69,10 @@ Handler → Service → Repository → DB/Redis
 - 写操作保持既有限流覆盖；Web 表单与 API 同源同限（SR-05 教训）。
 - 上线部署前检查单：改默认管理员密码、`mode: release`、HTTPS、内部服务不暴露公网。
 
-## 8. 何时写文档（联动 docs/README.md 三条硬规矩）
+## 8. 文档职责
 
-选型 → 先 ADR；Phase 开工 → 先设计文档；功能合入 → 更新 features.md；实验 → 当天记 eval。提交里包含行为变化的，检查 README/features 是否需要同步——文档滞后是 v1 的主要债务来源。
+- 当前状态只写 `TASK.md`，执行顺序只写 `docs/plan.md`。
+- 阶段边界、门禁和证据写 `docs/phases/`；接口与数据流写 design/reference，不在设计文档重复状态。
+- 选型先写 ADR；被替代决定保留历史并明确 successor。
+- 功能合入更新 `docs/features.md`；实验当天追加 `docs/eval/experiments.md`。
+- 完成项必须引用真实提交 SHA 和真实环境证据，禁止使用“当前工作区”或硬编码长期测试/文档数量。

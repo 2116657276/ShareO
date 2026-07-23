@@ -1,7 +1,9 @@
 # ADR-001: 总体架构 —— Go 单体扩展 + Python AI 服务
 
 - 日期: 2026-07-19
-- 状态: 已接受
+- 状态: 已接受（Python 双进程部分已被 [ADR-006](ADR-006-lightweight-scope-runtime.md) 替代）
+
+> 历史决定中的 Go/Python 双服务与单写者原则仍有效；“AI API 与 Worker 两个进程”和远期 Agent 规划不再有效。当前运行时以 ADR-006 为准。
 
 ## 背景
 

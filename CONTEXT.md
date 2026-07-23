@@ -1,0 +1,43 @@
+# ShareO 单上下文
+
+> 更新时间：2026-07-23 | 当前主线：Phase 7 Demo、评测与发布收口
+
+## 项目定位
+
+ShareO 是面向简历展示与毕业答辩的轻量 Go + AI 全栈项目。核心演示链路是：发布图文并审核，异步建立图片和正文向量索引，使用中文语义搜图，最后在一对一私聊中由 `shareo_bot` 基于已审核帖子生成带可访问引用的回答。
+
+项目目标是可复现启动、可解释 AI 链路、可量化评测和五分钟稳定演示，不追求生产级多租户、微服务或平台化能力。
+
+## 最终范围
+
+保留认证、资料、图文帖子、上传、Feed、全文搜索、管理员审核、点赞、关注、评论、通知、一对一私聊、WebSocket、中文语义搜图、正文 RAG 和私聊 Bot。
+
+收藏、转帖、话题、群聊、Agent、工具调用和独立 Bot 页面已经从代码与最终路线图移除，不得作为后续阶段恢复。
+
+## 架构约束
+
+- Go 是 MySQL 唯一写者，负责业务权限、审核状态、聊天消息和 Bot 回复。
+- Python 是 Qdrant 唯一写者，负责 embedding、向量检索和受限回答生成。
+- Python AI API 与两个 Redis Streams consumer 运行在同一 FastAPI 单进程中，Uvicorn 固定单 worker。
+- MinIO 凭证只由 Go 持有；Python 通过 Go 图片代理读取图片。
+- Redis Streams 采用 at-least-once：最多四次处理、`XAUTOCLAIM` 重领、最终记录并 ACK，不引入死信队列。
+- 所有公网帖子与 Bot 引用都必须由 Go 再次验证 `approved AND is_deleted=0`。
+- 默认真实 LLM provider 是 DeepSeek；mock provider 只用于自动化，Ollama 是可选实验。
+
+## 事实来源
+
+1. [TASK.md](TASK.md)：唯一当前任务与阻塞状态。
+2. [docs/plan.md](docs/plan.md)：Phase 7A → 7B → 7C 当前执行顺序。
+3. [docs/roadmap.md](docs/roadmap.md)：Phase 0–7 里程碑和完成状态。
+4. [docs/phases/](docs/phases/README.md)：阶段边界、门禁与提交证据。
+5. [docs/adr/](docs/adr/)：已接受及被替代的技术决策。
+
+状态冲突时按以上顺序处理；路由、schema 和配置细节分别以代码、`migrations/001_init.sql` 和 Compose/config 模板为准。
+
+## 当前主线
+
+- Phase 7A：实现可重复 Demo seed，冻结 40 条搜图和 30 条 RAG 标注。
+- Phase 7B：运行真实 DeepSeek 与质量/性能评测，满足发布阈值。
+- Phase 7C：执行完整门禁、故障降级验证、五分钟演示和发布清理。
+
+Phase 4 的工程闭环已经完成，但只有 Phase 7B 的搜图质量门禁通过后才标记为完全完成。

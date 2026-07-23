@@ -1,7 +1,9 @@
 # ADR-004: 模型推理策略 —— 本地 Embedding + 云 LLM，4060 为部署与对比实验平台
 
 - 日期: 2026-07-19
-- 状态: 已接受
+- 状态: 已接受（强制 4060/多 provider 对比已被 [ADR-007](ADR-007-provider-evaluation.md) 替代）
+
+> 本地 embedding + OpenAI-compatible LLM 的基本方向仍有效；当前发布只强制一次 DeepSeek 真实验收，Ollama 与 4060 对比不阻塞项目完成。
 
 ## 背景
 

@@ -1,11 +1,28 @@
 # ShareO 文档索引
 
-- [当前执行计划](plan.md)
-- [轻量架构](architecture.md)
-- [功能边界](features.md)
-- [路线图](roadmap.md)
-- [阶段文档](phases/README.md)
-- [RAG 技术决策](adr/ADR-005-rag-no-framework.md)
-- [AI 评测](eval/README.md)
+## 事实与执行
 
-`TASK.md` 是实时进度事实源。历史生产级评审和 Agent 文档将在最终清理阶段删除。
+- [单上下文](../CONTEXT.md)
+- [当前任务](../TASK.md)
+- [当前执行计划](plan.md)
+- [交付路线图](roadmap.md)
+- [Phase 0–7](phases/README.md)
+
+## 架构与参考
+
+- [已实现架构](architecture.md)
+- [最终功能矩阵](features.md)
+- [API参考](reference/api.md)
+- [数据模型](reference/data-model.md)
+- [运行手册](operations/runbook.md)
+- [五分钟演示](demo.md)
+
+## 设计、决策与评测
+
+- [一对一私聊](design/im.md)
+- [中文语义搜图](design/image-search.md)
+- [引用式RAG](design/rag.md)
+- [ADR](adr/)
+- [AI评测](eval/README.md)
+
+`TASK.md` 是唯一实时状态源。阶段文档维护边界、门禁和证据；设计文档不维护任务状态；Git历史承担已删除旧评审的追溯职责。
