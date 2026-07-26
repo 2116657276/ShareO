@@ -1,6 +1,6 @@
 # Phase 7 — Demo、评测与发布
 
-> 状态：7A、7B 已完成，7C 进行中 | 顺序：7A → 7B → 7C
+> 状态：已完成 | 顺序：7A → 7B → 7C
 
 ## 目标
 
@@ -8,7 +8,7 @@
 
 ## 当前基线
 
-图片与 Bot 工程 E2E 已通过；Demo seed、40/30 评测数据集、统一评测命令和真实 DeepSeek 质量报告已完成；故障降级、五分钟演示和最终发布证据属于尚未完成的 Phase 7C。
+图片与 Bot 工程 E2E、Demo seed、40/30 评测数据集、统一评测命令、真实 DeepSeek 质量报告、故障降级、五分钟演示和最终发布证据均已完成。
 
 ## 范围与非目标
 
@@ -22,7 +22,7 @@
 
 - 7A：固定 Demo 数据，完成 40 条搜图和 30 条 RAG标注。
 - 7B：真实 DeepSeek、统一评测、人工评分和性能记录。
-- 7C：完整门禁、故障降级、README、运行手册、截图和五分钟演示。
+- 7C：完整门禁、独立 Compose 故障降级、README、运行手册、脱敏证据和五分钟演示。
 
 ## 接口与数据流
 
@@ -70,11 +70,21 @@ Phase 7A/7B 交付物：
 - 六服务 Compose 启动并通过健康检查；图片和 RAG readiness 均为 ready，实际设备为 CPU，图片与正文 Qdrant collection 各有 26 条索引。
 - 两次 `make demo-seed` 收敛到 26 篇 approved 可见帖子、26 个帖子图片和原图/中图/缩略图各 26 个 MinIO 对象；40/30 数据集静态和数据库可见性校验通过。
 - `docs/eval/results/phase7b_final.json` 为最终机器报告，`docs/eval/results/phase7b_human_scoring.md` 为人工评分表；报告不含 API Key、Token、Cookie 或敏感请求头。
-- 评测代码 SHA 为 `aad134cf78ecaa6484f3fb5db21d7dd9cce0a586`；搜图数据集 SHA256 为 `525c871c8f385d1d2bf3822e7edfc2aa9e4fec866cc6999b118671c79b3be8c7`，RAG 数据集 SHA256 为 `19e92621377ba919f1a7c55e0b6253030a27aec630cc91d8cb4e7e91d7d2ea44`；Chinese-CLIP revision 为 `36e679e65c2a2fead755ae21162091293ad37834`，BGE 为 `BAAI/bge-small-zh-v1.5`，检索参数为 top_k 15、最大来源 10、Prompt `rag-v1`，DeepSeek 模型为 `deepseek-v4-flash`。
+- 评测代码 SHA 为 `aad134cf78ecaa6484f3fb5db21d7dd9cce0a586`；搜图数据集 SHA256 为 `525c871c8f385d1d2bf3822e7edfc2aa9e4fec866cc6999b118671c79b3be8c7`，RAG 数据集 SHA256 为 `19e92621377ba919f1a7c55e0b6253030a27aec630cc91d8cb4e7e91d7d2ea44`；Chinese-CLIP revision 记录于机器报告，BGE 为 `BAAI/bge-small-zh-v1.5`，检索参数为 top_k 15、最大来源 10、Prompt `rag-v1`，DeepSeek 模型为 `deepseek-v4-flash`。
 - 质量门禁全部通过：Recall@5 0.8125、MRR 0.7771、RAG 来源命中率 1.0000、引用可访问率 100%、虚假引用 0、失败请求 0、无答案准确率 1.0000、人工平均分 4.8667（26 条 5 分、4 条 4 分）。图片 P50/P95 为 58.3/64.8 ms，RAG 总延迟 P50/P95 为 3102.2/6174.7 ms，超时率为 0/30。
 - 人工复核反馈：回答总体准确；部分回答参数较多、语言不够自然，“是什么”类问题相对简略。该项作为 Phase 7C 的可选 Prompt/表达风格优化记录，不改变本轮质量门禁结论。
 
+本轮 Phase 7C 证据（2026-07-26）：
+
+- `make check`、真实 MySQL/Redis/Qdrant 集成、`go test -race ./...`、图片 E2E 和 Bot E2E 均通过；独立项目 `shareo-degradation` 完成 AI、Qdrant、MinIO、Redis、测试 LLM provider 五类故障注入与恢复，最终基线再次通过。
+- 按运行手册完成一次真实 DeepSeek provider 断开复核：AI health 保持 200，RAG readiness 和请求受控返回 503，普通私聊 HTTP 200，Bot 固定兜底成功；恢复后 readiness 再次为 200。
+- 冷启动完成六服务健康、图片/RAG readiness、两次成功 seed 和对象/索引对账：26 篇帖子、26 个图片记录、78 个 MinIO 对象、`images`/`post_chunks` 各 26 点。
+- 运行时代码仅修复 Redis Stream consumer 在 Redis 重启后收到 `NOGROUP` 时自动重建消费组；因此重新运行完整 40/30 评测。数据集、Prompt、检索参数和模型版本未改变。
+- 复核报告 [`phase7c_revalidated_final.json`](../eval/results/phase7c_revalidated_final.json) 指标为 Recall@5 0.8125、MRR 0.7771、来源命中率 0.9667、引用可访问率 100%、虚假引用 0、失败请求 0、人工平均 5.0；总延迟 P50/P95 为 3095/5195.8 ms。
+- 五分钟演示实际耗时 5.08 秒，Bot 回复含 2 条可访问引用；脱敏证据索引为 [`evidence-matrix.md`](../evidence/phase7c/evidence-matrix.md)，演示记录为 [`demo-run.md`](../evidence/phase7c/demo-run.md)，故障日志为 [`degradation-automated.log`](../evidence/phase7c/degradation-automated.log)。
+- Phase 7B 基线提交为 `a3b02e9e51004ef5cf4bb25f1d33d5bb92298768`；Phase 7C 最终本地提交以交付时 Git 提交记录为准，不推送远程。
+
 ## 遗留项
 
-- Phase 7C：运行完整自动检查、真实集成、race、图片/Bot E2E 和冷启动；验证 AI、Qdrant、MinIO、Redis、DeepSeek 故障时的受控降级；完成五分钟演示和最终证据矩阵。
-- 回答长度与“是什么/为什么/怎么样”风格差异只作为后续 Prompt 优化候选，不扩展产品范围，也不提前宣称 Phase 7C 完成。
+- 当前阶段遗留项：无。阶段门禁、运行时验证、演示和脱敏证据均已收口。
+- 回答长度与“是什么/为什么/怎么样”风格差异只作为后续 Prompt 优化候选，不扩展产品范围，也不影响 Phase 7C 完成结论。

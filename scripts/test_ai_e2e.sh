@@ -8,11 +8,48 @@ APP_PORT="${SHAREO_E2E_APP_PORT:-18091}"
 AI_PORT="${SHAREO_E2E_AI_PORT:-18011}"
 INTERNAL_TOKEN="shareo-ai-e2e-internal"
 ADMIN_HASH='$2a$10$vbn5lSmj3e6arCkbXzKNqutbx5B/iqtnk6tHoYvETGh1qdnG/5Rd2'
+NO_BUILD="${SHAREO_E2E_NO_BUILD:-0}"
+APP_IMAGE="${SHAREO_E2E_APP_IMAGE:-shareo-app:latest}"
+AI_IMAGE="${SHAREO_E2E_AI_IMAGE:-shareo-ai-service:latest}"
 
 if docker compose version >/dev/null 2>&1; then
     compose=(docker compose -p "$PROJECT_NAME" -f compose.yaml -f compose.test.yaml --profile test)
 else
     compose=(docker-compose -p "$PROJECT_NAME" -f compose.yaml -f compose.test.yaml --profile test)
+fi
+MODEL_CACHE_VOLUME="${SHAREO_E2E_MODEL_CACHE_VOLUME:-}"
+COMPOSE_OVERRIDE_FILE=''
+if [ "$NO_BUILD" = "1" ] || [ -n "$MODEL_CACHE_VOLUME" ]; then
+    COMPOSE_OVERRIDE_FILE="$(mktemp -t shareo-ai-e2e-compose)"
+    {
+        printf '%s\n' \
+        'services:' \
+        '  app:' \
+        "    image: $APP_IMAGE" \
+        '    build: null' \
+        '  ai-service:' \
+        "    image: $AI_IMAGE" \
+        '    build: null' \
+        '    environment:' \
+        '      NO_PROXY: app,redis,qdrant,mysql,mock-llm,localhost,127.0.0.1,::1' \
+        '      no_proxy: app,redis,qdrant,mysql,mock-llm,localhost,127.0.0.1,::1' \
+        '  mock-llm:' \
+        "    image: $AI_IMAGE" \
+        '    build: null'
+        if [ -n "$MODEL_CACHE_VOLUME" ]; then
+            printf '%s\n' \
+            '    volumes:' \
+            '      - hf_cache:/models'
+        fi
+        if [ -n "$MODEL_CACHE_VOLUME" ]; then
+            printf '%s\n' \
+            'volumes:' \
+            '  hf_cache:' \
+            '    external: true' \
+            "    name: $MODEL_CACHE_VOLUME"
+        fi
+    } >"$COMPOSE_OVERRIDE_FILE"
+    compose+=(-f "$COMPOSE_OVERRIDE_FILE")
 fi
 
 export SHAREO_MYSQL_PORT="${SHAREO_E2E_MYSQL_PORT:-13317}"
@@ -33,13 +70,20 @@ cleanup() {
         "${compose[@]}" logs --no-color --tail=180 app ai-service mock-llm >&2 || true
     fi
     "${compose[@]}" down -v --remove-orphans >/dev/null 2>&1 || true
+    if [ -n "$COMPOSE_OVERRIDE_FILE" ]; then
+        rm -f -- "$COMPOSE_OVERRIDE_FILE"
+    fi
     exit "$status"
 }
 trap cleanup EXIT INT TERM
 
 cd "$PROJECT_DIR"
 "${compose[@]}" down -v --remove-orphans >/dev/null 2>&1 || true
-"${compose[@]}" up -d --build --wait
+if [ "$NO_BUILD" = "1" ]; then
+    "${compose[@]}" up -d --no-build --wait
+else
+    "${compose[@]}" up -d --build --wait
+fi
 
 "${compose[@]}" exec -T mysql mysql -uroot -pshareo_pass shareo -e \
     "INSERT INTO users (username, password_hash, email, role, status) VALUES ('admin', '$ADMIN_HASH', 'admin-e2e@shareo.local', 'admin', 1);"
@@ -49,7 +93,10 @@ AI_URL="http://127.0.0.1:$AI_PORT"
 QDRANT_URL="http://127.0.0.1:$SHAREO_QDRANT_HTTP_PORT"
 for _ in $(seq 1 900); do
     if curl --noproxy '*' --fail --silent \
-        -H "X-Internal-Token: $INTERNAL_TOKEN" "$AI_URL/readyz/rag" >/dev/null; then
+        -H "X-Internal-Token: $INTERNAL_TOKEN" \
+        -H 'Content-Type: application/json' \
+        -d '{"question":"夜景怎么拍？","history":[],"top_k":8}' \
+        "$AI_URL/v1/rag/answer" >/dev/null; then
         break
     fi
     sleep 1

@@ -7,6 +7,7 @@ from collections.abc import Awaitable, Callable
 from typing import Any
 
 from redis.asyncio import Redis
+from redis.exceptions import ResponseError
 
 logger = logging.getLogger(__name__)
 
@@ -134,6 +135,24 @@ class StreamConsumer:
                 if (now - last_reclaim) * 1000 >= self.reclaim_interval_ms:
                     await self.reclaim_pending(handler)
                     last_reclaim = now
+            except ResponseError as exc:
+                if "NOGROUP" in str(exc):
+                    try:
+                        await self.ensure_group()
+                        logger.warning(
+                            "consumer group recreated after Redis stream reset stream=%s group=%s",
+                            self.stream,
+                            self.group,
+                        )
+                    except Exception as recreate_exc:
+                        logger.error(
+                            "consumer group recreation failed in %s: %s",
+                            self.stream,
+                            recreate_exc,
+                        )
+                else:
+                    logger.error("consumer loop error in %s: %s", self.stream, exc)
+                await asyncio.sleep(1)
             except Exception as exc:
                 logger.error("consumer loop error in %s: %s", self.stream, exc)
                 await asyncio.sleep(1)

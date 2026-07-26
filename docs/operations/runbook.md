@@ -61,10 +61,27 @@ curl -H "X-Internal-Token: $SHAREO_INTERNAL_TOKEN" \
 | `make test-integration` | 真实MySQL/Redis集成，需要显式测试DSN |
 | `make test-image-e2e` | 隔离图片索引E2E |
 | `make test-ai-e2e` | mock LLM跨服务Bot E2E |
+| `make test-degradation` | 独立 Compose 项目验证五类故障和恢复，不打断 Demo 环境 |
 | `make backfill-index` | 投递全部approved帖子 |
 | `make reconcile-index` | 默认dry-run索引对账 |
 | `make demo-seed` | 初始化 Demo 帖子和图片数据 |
 | `make eval-ai` | 运行搜图与 RAG 统一评测 |
+
+## Phase 7C 故障验证
+
+自动验证使用独立项目 `shareo-degradation` 和独立端口，默认结束时删除临时容器、网络和数据卷；不会停止当前 `shareo` Demo 环境。若已有模型缓存，可显式复用已存在的 Docker volume：
+
+```bash
+SHAREO_DEGRADATION_NO_BUILD=1 \
+SHAREO_DEGRADATION_MODEL_CACHE_VOLUME=shareo_hf_cache \
+make test-degradation
+```
+
+脚本按“基线通过 → 注入单项故障 → 验证社区/全文/私聊/搜图/Bot → 恢复服务 → readiness 和业务基线再次通过”执行 AI、Qdrant、MinIO、Redis 和测试 LLM provider 五类场景。结果归档在 [`docs/evidence/phase7c/degradation-automated.log`](../evidence/phase7c/degradation-automated.log)。
+
+真实 DeepSeek 断开只做一次人工复核：在当前终端临时保存原有值，使用临时环境变量覆盖 `SHAREO_AI_LLM_BASE_URL` 或 API Key，使 `/readyz/rag` 进入不可用状态，发送一条 Bot 消息确认固定兜底，再恢复原值并重启/等待 readiness。不要修改 `.env`，不要把变量值、Authorization header 或完整响应写入日志；复核结束前确认普通私聊仍可落库。
+
+如果要保护现有 Demo 数据，先导出 MySQL、MinIO 和 Qdrant 卷到工作区外的临时目录，再执行 `make reset CONFIRM=YES`。恢复时只对明确的目标卷操作，禁止把备份归档进 Git。
 
 ## 模型缓存
 

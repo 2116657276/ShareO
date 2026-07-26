@@ -1,6 +1,6 @@
 # ShareO 最终功能矩阵
 
-> 更新时间：2026-07-26 | 状态：Phase 7C 进行中
+> 更新时间：2026-07-26 | 状态：Phase 0–7 已完成
 
 ## 功能能力
 
@@ -14,9 +14,9 @@
 | 点赞、关注、评论 | 帖子与用户页面 | MySQL事务 | 已完成 | 社交事务测试 |
 | 通知 | `/notifications` | MySQL | 已完成 | 通知单测 |
 | 一对一私聊 | `/chat`、`/ws` | MySQL、Redis、WebSocket | 已完成 | 私聊集成、Hub测试 |
-| 中文语义搜图 | `/api/v1/search/images` | MinIO、Chinese-CLIP、Qdrant | 已完成 | 真实图片 E2E；Phase 7B Recall@5 0.8125、MRR 0.7771 |
+| 中文语义搜图 | `/api/v1/search/images` | MinIO、Chinese-CLIP、Qdrant | 已完成 | 真实图片 E2E；Phase 7C Recall@5 0.8125、MRR 0.7771；AI/Qdrant 故障受控 503 |
 | 正文向量检索 | 内部能力 | FastEmbed、Qdrant | 已完成 | 真实Qdrant round-trip |
-| 私聊 RAG Bot | `/chat` 中 `shareo_bot` | Redis Streams、RAG、LLM | 已完成 | `make test-ai-e2e`；Phase 7B DeepSeek 来源命中率 1.0000、引用可访问率 100% |
+| 私聊 RAG Bot | `/chat` 中 `shareo_bot` | Redis Streams、RAG、LLM | 已完成 | `make test-ai-e2e`；Phase 7C 来源命中率 0.9667、引用可访问率 100%、LLM 失败固定兜底 |
 
 ## 内容可见性
 
@@ -38,6 +38,7 @@
 - Python不持有 MySQL或 MinIO凭证。
 - LLM输出必须经过 chunk白名单和 Go帖子可见性二次校验。
 - mock provider只用于测试；DeepSeek是 Phase 7B默认真实验收 provider。
+- Phase 7C 已验证 AI、Qdrant、MinIO、Redis 和测试 LLM provider 的故障恢复矩阵；详细结果见 [`docs/evidence/phase7c/evidence-matrix.md`](evidence/phase7c/evidence-matrix.md)。
 
 ## 明确排除
 

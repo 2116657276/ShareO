@@ -1,4 +1,4 @@
-.PHONY: up down reset logs check check-go check-python check-shell check-docs test-integration test-image-e2e test-ai-e2e eval-ai demo-seed backfill-index reconcile-index
+.PHONY: up down reset logs check check-go check-python check-shell check-docs test-integration test-image-e2e test-ai-e2e test-degradation eval-ai demo-seed backfill-index reconcile-index
 
 COMPOSE ?= $(shell docker compose version >/dev/null 2>&1 && echo "docker compose" || echo "docker-compose")
 
@@ -49,6 +49,10 @@ test-image-e2e:
 test-ai-e2e:
 	@test -x scripts/test_ai_e2e.sh
 	bash scripts/test_ai_e2e.sh
+
+test-degradation:
+	@test -x scripts/test_degradation.sh
+	bash scripts/test_degradation.sh
 
 eval-ai:
 	@test -f ai-service/app/commands/eval_ai.py || (echo "eval-ai is implemented in stage 7" && exit 2)

@@ -1,6 +1,6 @@
 # ShareO 已实现架构
 
-> 更新时间：2026-07-26 | 状态：Phase 0–6 已完成，Phase 7B 质量通过，Phase 7C 进行中
+> 更新时间：2026-07-26 | 状态：Phase 0–7 已完成，Phase 7C 降级矩阵已验证
 
 ## 六服务拓扑
 
@@ -82,7 +82,17 @@ Liveness 不代表模型或业务能力可用；自动化和运维不得用 `/he
 | Redis停止 | 缓存降级，写业务不回滚 | 消息落库可用，在线/推送受影响 | 旧索引可查，新事件延迟 | 新任务延迟 |
 | DeepSeek不可用 | 正常 | 正常 | 正常 | 重试后固定兜底 |
 
-Phase 7C 必须在真实环境复核此矩阵。
+Phase 7C 已在独立 Compose 项目中复核此矩阵；自动化结果见 [`docs/evidence/phase7c/degradation-automated.log`](evidence/phase7c/degradation-automated.log)。真实 DeepSeek 断开保留为运行手册中的人工复核步骤，自动门禁使用测试 provider，避免将外部网络不确定性混入故障脚本。
+
+### Phase 7C 实测结果
+
+| 场景 | 实测结果 | 恢复结果 |
+|---|---|---|
+| AI service 停止 | 社区和全文搜索 HTTP 200，语义搜图 HTTP 503 | AI 启动后两个 capability readiness 恢复 HTTP 200 |
+| Qdrant 停止 | 社区和全文搜索 HTTP 200，语义搜图/RAG HTTP 503 | Qdrant 启动后 readiness 恢复 |
+| MinIO 停止 | 全文搜索 HTTP 200，图片代理失败且不伪造成功 | MinIO 启动后图片代理 HTTP 200 |
+| Redis 停止 | 社区、全文搜索和普通消息 HTTP 200；推送/异步能力进入降级 | Redis 启动后 consumer 自动重建缺失消费组并恢复 readiness |
+| 测试 LLM provider 停止 | 普通私聊 HTTP 200，Bot 返回固定兜底 | provider 启动后 RAG readiness 恢复 |
 
 ## 模块边界
 

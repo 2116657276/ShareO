@@ -1,6 +1,7 @@
 from unittest.mock import AsyncMock
 
 import pytest
+from redis.exceptions import ResponseError
 
 from app.workers.consumer import StreamConsumer
 
@@ -141,3 +142,28 @@ async def test_restart_reclaims_pending_before_reading_new_messages():
 
     redis.xack.assert_awaited_once_with("events", "workers", "5-0")
     redis.xreadgroup.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_nogroup_recreates_consumer_group_after_redis_reset(monkeypatch):
+    redis = AsyncMock()
+    redis.xautoclaim.return_value = ("0-0", [], [])
+    consumer = make_consumer(redis)
+    sleep = AsyncMock()
+    monkeypatch.setattr("app.workers.consumer.asyncio.sleep", sleep)
+    reads = 0
+
+    async def read_group(*_args, **_kwargs):
+        nonlocal reads
+        reads += 1
+        if reads == 1:
+            raise ResponseError("NOGROUP No such key 'events' or consumer group 'workers'")
+        consumer.stop()
+        return []
+
+    redis.xreadgroup.side_effect = read_group
+
+    await consumer.run(AsyncMock())
+
+    assert redis.xgroup_create.await_count == 2
+    sleep.assert_awaited_once_with(1)

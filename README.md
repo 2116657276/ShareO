@@ -2,7 +2,7 @@
 
 ShareO 是面向简历展示与毕业答辩的轻量全栈项目，完整主线包括图文社区、一对一实时私聊、中文语义搜图和带帖子引用的 RAG Bot。项目强调可复现启动、清晰数据所有权、受控降级和量化评测。
 
-> 当前状态：Phase 0–6 已完成；Phase 7B 质量评测已通过，当前进入 Phase 7C 发布与演示收口。实时状态见 [TASK.md](TASK.md)。
+> 当前状态：Phase 0–7 已完成；Phase 7C 发布与演示收口已完成。实时状态见 [TASK.md](TASK.md)。
 
 ## 核心能力
 
@@ -78,6 +78,18 @@ export SHAREO_INTERNAL_TOKEN='replace-with-a-random-value'
 make up
 docker compose ps
 ```
+
+发布收口的自动门禁和独立故障验证：
+
+```bash
+make check
+make test-integration
+make test-image-e2e
+make test-ai-e2e
+make test-degradation
+```
+
+Phase 7C 的冷启动、故障矩阵、五分钟演示和 40/30 评测复核见 [`docs/evidence/phase7c/evidence-matrix.md`](docs/evidence/phase7c/evidence-matrix.md)。
 
 首次启动会下载 Chinese-CLIP 和 FastEmbed模型。检查基础服务：
 

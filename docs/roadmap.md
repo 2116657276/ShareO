@@ -11,6 +11,6 @@
 | Phase 4 语义搜图 | Chinese-CLIP、图片索引、可见性过滤、真实 E2E | Phase 1、3 | 已完成 |
 | Phase 5 RAG 检索 | 正文分块、FastEmbed、Qdrant、受限引用回答 | Phase 3 | 已完成 |
 | Phase 6 私聊 Bot | 异步触发、幂等回复、引用二次校验、页面与 mock E2E | Phase 2、5 | 已完成 |
-| Phase 7 Demo 与发布 | 固定数据、DeepSeek、40/30 评测、降级与演示 | Phase 4、6 | 7B 已完成，7C 进行中 |
+| Phase 7 Demo 与发布 | 固定数据、DeepSeek、40/30 评测、降级与演示 | Phase 4、6 | 已完成（7A、7B、7C） |
 
-Phase 7 分为 7A 数据、7B 评测、7C 发布。项目完成后不继续规划 Agent、群聊或生产级平台能力。
+Phase 7 分为 7A 数据、7B 评测、7C 发布；最终证据见 [`docs/evidence/phase7c/evidence-matrix.md`](evidence/phase7c/evidence-matrix.md)。项目完成后不继续规划 Agent、群聊或生产级平台能力。

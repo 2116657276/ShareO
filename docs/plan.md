@@ -2,7 +2,7 @@
 
 > 更新时间：2026-07-26 | 状态事实源：[TASK.md](../TASK.md)
 
-当前只执行 Phase 7，顺序固定为 7A → 7B → 7C。7A、7B 已形成自动测试、真实环境证据和文档记录；当前进入 7C，不提前宣称 7C 完成。
+当前只执行 Phase 7，顺序固定为 7A → 7B → 7C。7A、7B、7C 均已形成自动测试、真实环境证据和文档记录；后续只处理明确的新需求或实验。
 
 ## 7A：Demo 数据与冻结评测集
 
@@ -25,13 +25,24 @@
 
 退出门禁：搜图 Recall@5 ≥ 0.70、MRR ≥ 0.55；RAG 来源命中率 ≥ 0.80、引用可访问率 100%、虚假引用 0、人工相关性均分 ≥ 4.0/5。
 
-当前执行状态：7B 已完成。六服务健康、图片和 RAG readiness、两次 seed 幂等、26/26/26 图片对象、两类 26 条索引、40/30 数据库可见性校验和完整评测均已核实；最终报告为 `docs/eval/results/phase7b_final.json`。人工评分 30 条，4 分 4 条、5 分 26 条，平均 4.8667。后续只推进 7C 的自动检查、故障降级、演示和证据收口。
+当前执行状态：7B 已完成。六服务健康、图片和 RAG readiness、两次 seed 幂等、26/26/26 图片对象、两类 26 条索引、40/30 数据库可见性校验和完整评测均已核实；最终报告为 `docs/eval/results/phase7b_final.json`。人工评分 30 条，4 分 4 条、5 分 26 条，平均 4.8667。Phase 7C 复核报告见 `docs/eval/results/phase7c_revalidated_final.json`。
 
 ## 7C：发布与演示收口
 
-1. 运行 `make check`、真实集成、Go race、图片/Bot E2E、评测和全新卷冷启动。
-2. 逐项停止 AI、Qdrant、MinIO、Redis 或断开 DeepSeek，记录主站、普通私聊、搜图和 Bot 的实际降级。
-3. 按 [五分钟演示](demo.md) 完成一次计时演练，保存不含密钥的证据。
-4. 更新 README、运行手册、阶段证据和最终状态，清理无效文件。
+1. 先运行 `make check`、真实集成、Go race、图片/Bot E2E，再进行冷启动和 readiness 复核。
+2. 用独立 Compose 项目 `shareo-degradation` 逐项停止 AI、Qdrant、MinIO、Redis 和测试 LLM provider；每个场景都要求基线通过、注入故障、验证矩阵、恢复服务、基线再次通过。
+3. 真实 DeepSeek 断开只按运行手册使用临时环境变量人工复核，不修改 `.env`，不输出 API Key；自动脚本使用确定性的测试 provider。
+4. 若运行时代码、模型、数据集或 Prompt 变化，重新运行完整 40/30 评测；本次仅修复 Redis consumer 的 `NOGROUP` 恢复语义，因此已完成复核，未修改 Prompt、检索参数和阈值。
+5. 按 [五分钟演示](demo.md) 完成计时演练，归档冷启动、故障、演示和质量报告的脱敏证据。
+6. 更新 README、运行手册、架构、阶段索引、路线图、功能矩阵和实验记录，清理无效文件后创建唯一最终本地提交。
 
-退出门禁：代码、自动测试、真实环境、40/30 评测、降级验证和文档证据全部齐全；此时 Phase 4 与 Phase 7 同时标记完成。
+退出门禁：代码、自动测试、真实环境、40/30 评测、降级验证和文档证据全部齐全；Phase 4 与 Phase 7 同时标记完成。具体证据索引为 [`docs/evidence/phase7c/evidence-matrix.md`](evidence/phase7c/evidence-matrix.md)。
+
+## Phase 7C 已验证结果
+
+- 自动门禁、真实 MySQL/Redis/Qdrant 集成、Go race、图片 E2E、Bot E2E 均通过。
+- 冷启动后六服务健康，图片/RAG readiness 为 HTTP 200；两次成功 seed 收敛为 26 篇帖子、26 个图片记录、78 个 MinIO 对象和两类各 26 条 Qdrant 索引。
+- AI、Qdrant、MinIO、Redis、测试 LLM provider 五类故障均按矩阵验证，恢复后基线再次通过。
+- 真实 DeepSeek provider 断开复核通过：AI health 仍为 200，RAG readiness/请求为 503，普通私聊为 200，Bot 固定兜底成功，恢复后 readiness 为 200。
+- 40/30 复核保持 Recall@5 0.8125、MRR 0.7771、来源命中率 0.9667、引用可访问率 100%、虚假引用 0、失败请求 0、人工平均分 5.0。
+- 五分钟演示实际耗时 5.08 秒，Bot 回复包含 2 条可访问引用。

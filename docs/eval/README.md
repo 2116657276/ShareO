@@ -1,6 +1,6 @@
 # AI 评测规范
 
-> 状态：数据规格、统一评测命令和 Phase 7B 真实质量报告均已收口；Phase 7C 负责发布与演示证据
+> 状态：数据规格、统一评测命令、Phase 7B 基线和 Phase 7C 复核报告均已收口
 
 ## 数据集
 
@@ -86,3 +86,5 @@ make eval-ai \
 评分文件也可以是 `{"scores":[1,2,...]}` JSON；分数必须与报告中的已评测问题数量一致，且每项为 1–5 的整数。
 
 Phase 7B 最终证据：机器报告为 `results/phase7b_final.json`，人工评分表为 `results/phase7b_human_scoring.md`。30 条回答中 26 条为 5 分、4 条为 4 分，平均 4.8667；机器门禁为 Recall@5 0.8125、MRR 0.7771、RAG 来源命中率 1.0000、引用可访问率 100%、虚假引用 0、失败请求 0。
+
+Phase 7C 运行时变更后重新完成 40/30 评测，报告为 [`results/phase7c_revalidated_final.json`](results/phase7c_revalidated_final.json)，人工评分表为 [`results/phase7c_revalidated_human_scoring.md`](results/phase7c_revalidated_human_scoring.md)。本轮 Recall@5 0.8125、MRR 0.7771、来源命中率 0.9667、引用可访问率 100%、虚假引用 0、失败请求 0，30 条人工评分均为 5 分；数据集、Prompt、检索参数和模型版本未改变。
