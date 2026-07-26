@@ -6,12 +6,14 @@ from collections.abc import Callable
 import httpx
 import pytest
 
-from app.rag.pipeline import Citation, RAGAnswer
+from app.rag.pipeline import NO_ANSWER, Citation, RAGAnswer
 from app.workers.bot import (
     FALLBACK_MESSAGE,
+    MAX_CALLBACK_CITATIONS,
     BotTaskHandler,
     is_permanent_http_error,
     positive_int,
+    _safe_answer,
 )
 
 
@@ -30,6 +32,23 @@ class FakePipeline:
         return RAGAnswer(
             "可以使用三脚架。",
             [Citation(post_id=12, chunk_id="12:0", excerpt="三脚架", score=0.9)],
+        )
+
+
+class EmptyAnswerPipeline(FakePipeline):
+    async def answer(self, question: str, history=None):
+        self.calls.append((question, history))
+        return RAGAnswer("", [])
+
+
+class ManyCitationPipeline(FakePipeline):
+    async def answer(self, question: str, history=None):
+        return RAGAnswer(
+            "参考回答。",
+            [
+                Citation(post_id=index, chunk_id=f"{index}:0", excerpt="资料", score=0.9)
+                for index in range(1, MAX_CALLBACK_CITATIONS + 2)
+            ],
         )
 
 
@@ -64,6 +83,15 @@ def test_positive_int_rejects_noncanonical_values():
     for raw in ("", "0", "01", "+1", "1.0", True, 2**63):
         with pytest.raises(ValueError):
             positive_int({"id": raw}, "id")
+
+
+@pytest.mark.parametrize("answer", ["", "   ", None, 42])
+def test_safe_answer_uses_rag_no_answer_for_empty_provider_result(answer):
+    assert _safe_answer(answer) == NO_ANSWER
+
+
+def test_safe_answer_strips_nonempty_provider_result():
+    assert _safe_answer("  可以使用三脚架。 ") == "可以使用三脚架。"
 
 
 @pytest.mark.parametrize("status_code", [400, 401, 403, 404, 422, 499])
@@ -118,6 +146,36 @@ async def test_missing_provider_writes_fixed_fallback_without_rag_call():
 
     assert len(posted) == 1
     assert pipeline.calls == []
+
+
+@pytest.mark.asyncio
+async def test_empty_rag_answer_writes_nonempty_no_answer_callback():
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.method == "GET":
+            return httpx.Response(200, json={"data": task_payload()})
+        assert_callback(request, NO_ANSWER)
+        return httpx.Response(200, json={"code": 0})
+
+    pipeline = EmptyAnswerPipeline()
+    client = transport_for(handler)
+    worker = BotTaskHandler(client, pipeline, "http://go.test", "test-token")
+    await worker("1-0", {"message_id": "9", "conversation_id": "7"})
+    await client.aclose()
+
+
+@pytest.mark.asyncio
+async def test_many_rag_citations_are_capped_to_go_callback_limit():
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.method == "GET":
+            return httpx.Response(200, json={"data": task_payload()})
+        payload = json.loads(request.content)
+        assert len(payload["citations"]) == MAX_CALLBACK_CITATIONS
+        return httpx.Response(200, json={"code": 0})
+
+    client = transport_for(handler)
+    worker = BotTaskHandler(client, ManyCitationPipeline(), "http://go.test", "test-token")
+    await worker("1-0", {"message_id": "9", "conversation_id": "7"})
+    await client.aclose()
 
 
 @pytest.mark.asyncio

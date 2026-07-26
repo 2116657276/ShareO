@@ -12,15 +12,21 @@ Usage:
 """
 
 import argparse
+import hashlib
 import json
 import os
+import platform
 import statistics
+import subprocess
+import sys
 import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 import httpx
+
+from app.config import settings
 
 # ── Reuse image search metrics from the existing eval command ──
 from app.commands.eval_image_search import (
@@ -65,6 +71,7 @@ def evaluate_rag(
     }
     scoring_rows: list[dict] = []
     skipped = 0
+    failed_queries = 0
     no_answer_correct = 0
     no_answer_total = 0
 
@@ -103,14 +110,23 @@ def evaluate_rag(
             started = time.perf_counter()
             source_id = _send_message(client, token, conv_id, question)
             if not source_id:
+                failed_queries += 1
+                elapsed = (time.perf_counter() - started) * 1000
+                metrics["source_hit"].append(0.0)
+                metrics["citation_accessible"].append(0.0)
+                metrics["hallucinated_count"].append(0.0)
+                metrics["source_count"].append(0.0)
+                metrics["total_latency_ms"].append(elapsed)
                 scoring_rows.append(
                     {
                         "question": question,
                         "category": category,
                         "expected_answer": item.get("reference_answer", ""),
+                        "expected_source_post_ids": sorted(expected_ids),
                         "bot_answer": "SEND_FAILED",
                         "citations": [],
                         "citation_post_ids": [],
+                        "citation_details": [],
                         "relevance_score": "",
                     }
                 )
@@ -122,14 +138,21 @@ def evaluate_rag(
             metrics["total_latency_ms"].append(elapsed)
 
             if not bot_message:
+                failed_queries += 1
+                metrics["source_hit"].append(0.0)
+                metrics["citation_accessible"].append(0.0)
+                metrics["hallucinated_count"].append(0.0)
+                metrics["source_count"].append(0.0)
                 scoring_rows.append(
                     {
                         "question": question,
                         "category": category,
                         "expected_answer": item.get("reference_answer", ""),
+                        "expected_source_post_ids": sorted(expected_ids),
                         "bot_answer": "NO_REPLY",
                         "citations": [],
                         "citation_post_ids": [],
+                        "citation_details": [],
                         "relevance_score": "",
                     }
                 )
@@ -147,12 +170,12 @@ def evaluate_rag(
             # Source hit rate
             if expect_no_answer:
                 no_answer_total += 1
-                if not citation_post_ids and not bot_content.strip():
+                if not citation_post_ids:
                     no_answer_correct += 1
                 hits = 1.0 if not citation_post_ids else 0.0
             elif expected_ids:
                 hit_ids = set(citation_post_ids) & expected_ids
-                hits = len(hit_ids) / len(expected_ids) if expected_ids else 1.0
+                hits = 1.0 if hit_ids else 0.0
             else:
                 hits = 0.0
             metrics["source_hit"].append(hits)
@@ -179,8 +202,10 @@ def evaluate_rag(
                     "question": question,
                     "category": category,
                     "expected_answer": item.get("reference_answer", ""),
+                    "expected_source_post_ids": sorted(expected_ids),
                     "bot_answer": bot_content[:500],
-                    "citations": [c.get("post_id") for c in citations],
+                    "citations": citation_post_ids,
+                    "citation_post_ids": citation_post_ids,
                     "citation_details": citations,
                     "source_hit_rate": round(hits, 3),
                     "accessible": accessible_ratio >= 1.0,
@@ -196,6 +221,7 @@ def evaluate_rag(
     report = {
         "total_queries": total,
         "skipped": skipped,
+        "failed_queries": failed_queries,
         "source_hit_rate": round(statistics.fmean(metrics["source_hit"]), 4)
         if metrics["source_hit"]
         else 0,
@@ -403,6 +429,8 @@ def _export_rag_metrics(rag_result: dict) -> dict:
         "latency_p95_ms": report.get("latency_p95_ms", 0),
         "total_queries": report.get("total_queries", 0),
         "skipped": report.get("skipped", 0),
+        "failed_queries": report.get("failed_queries", 0),
+        "no_answer_accuracy": report.get("no_answer_accuracy"),
     }
 
 
@@ -416,28 +444,204 @@ def check_quality_gates(
 ) -> dict[str, bool | str]:
     gates: dict[str, bool | str] = {}
     sem = image_report.get("semantic", {})
+    image_available = bool(image_report.get("queries", 0)) and not image_report.get("error")
+    rag_available = bool(rag_metrics.get("total_queries", 0)) and not rag_metrics.get("error")
 
     # Image search gates
-    gates["recall_5 >= 0.70"] = sem.get("recall_5", 0) >= 0.70
-    gates["mrr >= 0.55"] = sem.get("mrr", 0) >= 0.55
-    gates["no duplicate posts"] = image_report.get("semantic_duplicate_queries", 0) == 0
+    gates["recall_5 >= 0.70"] = image_available and sem.get("recall_5", 0) >= 0.70
+    gates["mrr >= 0.55"] = image_available and sem.get("mrr", 0) >= 0.55
+    gates["no duplicate posts"] = (
+        image_available and image_report.get("semantic_duplicate_queries", 0) == 0
+    )
 
     # RAG gates
-    gates["source_hit_rate >= 0.80"] = rag_metrics.get("source_hit_rate", 0) >= 0.80
-    gates["citation_accessible 100%"] = rag_metrics.get("citation_accessible_rate", 0) >= 1.0
-    gates["hallucinated citations 0"] = rag_metrics.get("total_hallucinated", 0) == 0
+    gates["all labeled RAG queries evaluated"] = (
+        rag_available
+        and rag_metrics.get("skipped", 0) == 0
+        and rag_metrics.get("failed_queries", 0) == 0
+    )
+    gates["source_hit_rate >= 0.80"] = (
+        rag_available and rag_metrics.get("source_hit_rate", 0) >= 0.80
+    )
+    gates["citation_accessible 100%"] = (
+        rag_available and rag_metrics.get("citation_accessible_rate", 0) >= 1.0
+    )
+    gates["hallucinated citations 0"] = (
+        rag_available and rag_metrics.get("total_hallucinated", 0) == 0
+    )
 
     # Human scoring
-    if human_avg_score is not None:
-        gates["human_relevance_avg >= 4.0"] = human_avg_score >= 4.0
+    gates["human_relevance_avg >= 4.0"] = (
+        human_avg_score >= 4.0 if human_avg_score is not None else "PENDING"
+    )
 
     return gates
+
+
+def _dataset_sha256(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def _safe_error(exc: Exception) -> str:
+    return f"{type(exc).__name__}: request failed"
+
+
+def _split_markdown_row(line: str) -> list[str]:
+    cells: list[str] = []
+    current: list[str] = []
+    escaped = False
+    content = line.strip()
+    if content.startswith("|"):
+        content = content[1:]
+    if content.endswith("|"):
+        content = content[:-1]
+    for char in content:
+        if char == "|" and not escaped:
+            cells.append("".join(current).strip())
+            current = []
+            continue
+        if char == "\\" and not escaped:
+            escaped = True
+            continue
+        current.append(char)
+        escaped = False
+    cells.append("".join(current).strip())
+    return cells
+
+
+def _load_human_scores(path: Path, expected_count: int) -> tuple[list[int], float]:
+    raw = path.read_text(encoding="utf-8")
+    scores: list[Any]
+    try:
+        payload = json.loads(raw)
+        if isinstance(payload, dict):
+            scores = payload.get("scores", [])
+        elif isinstance(payload, list):
+            scores = payload
+        else:
+            scores = []
+    except json.JSONDecodeError:
+        scores = []
+        for line in raw.splitlines():
+            if not line.lstrip().startswith("|"):
+                continue
+            cells = _split_markdown_row(line)
+            if not cells or not cells[0].isdigit() or len(cells) < 2:
+                continue
+            scores.append(cells[-1])
+
+    if len(scores) != expected_count:
+        raise ValueError(f"expected {expected_count} human scores, got {len(scores)}")
+
+    normalized: list[int] = []
+    for index, score in enumerate(scores, 1):
+        if isinstance(score, bool):
+            raise ValueError(f"score {index} must be an integer from 1 to 5")
+        try:
+            value = int(score)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"score {index} must be an integer from 1 to 5") from exc
+        if value < 1 or value > 5 or str(score).strip() != str(value):
+            raise ValueError(f"score {index} must be an integer from 1 to 5")
+        normalized.append(value)
+    return normalized, round(statistics.fmean(normalized), 4)
+
+
+def _write_report(path: Path, results: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    output_data = {key: value for key, value in results.items()}
+    if "rag" in output_data and "scoring_template" in output_data["rag"]:
+        del output_data["rag"]["scoring_template"]
+    path.write_text(json.dumps(output_data, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def _print_quality_gates(gates: dict[str, bool | str]) -> bool:
+    print("── Quality Gates ──")
+    all_passed = True
+    for gate_name, passed in gates.items():
+        status = "PASS" if passed is True else str(passed)
+        print(f"  [{status}] {gate_name}")
+        if passed is not True:
+            all_passed = False
+    print()
+    return all_passed
 
 
 # ── Main command ──
 
 
-def main() -> None:
+def _build_report_environment(args: argparse.Namespace) -> dict[str, Any]:
+    repo_root = Path(__file__).resolve().parents[3]
+    environment: dict[str, Any] = {
+        "date": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
+        "base_url": args.base_url,
+        "image_dataset": str(args.image_dataset),
+        "rag_dataset": str(args.rag_dataset),
+        "image_dataset_sha256": _dataset_sha256(args.image_dataset)
+        if args.image_dataset.exists()
+        else "missing",
+        "rag_dataset_sha256": _dataset_sha256(args.rag_dataset)
+        if args.rag_dataset.exists()
+        else "missing",
+        "python_version": sys.version.split()[0],
+        "platform": platform.platform(),
+        "embedding_model": settings.embedding_model,
+        "embedding_revision": settings.embedding_revision,
+        "embedding_device": settings.embedding_device,
+        "text_embedding_model": settings.text_embedding_model,
+        "rag_top_k": settings.rag_top_k,
+        "rag_max_sources": settings.rag_max_sources,
+        "rag_prompt_version": settings.rag_prompt_version,
+        "llm_model": settings.llm_model,
+        "network_environment": os.environ.get("SHAREO_EVAL_NETWORK", "unspecified"),
+    }
+    try:
+        environment["git_sha"] = subprocess.check_output(
+            ["git", "rev-parse", "HEAD"], cwd=repo_root, text=True
+        ).strip()
+        environment["git_dirty"] = bool(
+            subprocess.check_output(
+                ["git", "status", "--porcelain"], cwd=repo_root, text=True
+            ).strip()
+        )
+    except Exception:
+        environment["git_sha"] = "unknown"
+        environment["git_dirty"] = True
+    return environment
+
+
+def _apply_human_scoring(
+    results: dict[str, Any], scoring_input: Path | None
+) -> tuple[dict[str, bool | str], bool]:
+    image_report = results.get("image_search", {}).get("report", {})
+    rag_metrics = results.get("rag", {}).get("metrics", {})
+    human_avg_score: float | None = None
+    if scoring_input is None:
+        results["human_scoring"] = {"status": "PENDING"}
+    else:
+        expected_count = int(rag_metrics.get("total_queries", 0))
+        try:
+            scores, human_avg_score = _load_human_scores(scoring_input, expected_count)
+            results["human_scoring"] = {
+                "status": "complete",
+                "input": str(scoring_input),
+                "count": len(scores),
+                "average": human_avg_score,
+            }
+        except (OSError, ValueError) as exc:
+            results["human_scoring"] = {
+                "status": "FAIL",
+                "input": str(scoring_input),
+                "error": str(exc),
+            }
+
+    gates = check_quality_gates(image_report, rag_metrics, human_avg_score)
+    results["quality_gates"] = gates
+    results["quality_gate_passed"] = all(value is True for value in gates.values())
+    return gates, results["quality_gate_passed"]
+
+
+def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--base-url", default=os.environ.get("SHAREO_BASE_URL", "http://127.0.0.1:8080")
@@ -497,31 +701,45 @@ def main() -> None:
         "--scoring-output",
         type=Path,
         default=None,
-        help="Write human scoring template to file (default: eval_ai_human_scoring.md in cwd)",
+        help="Write human scoring template to file",
+    )
+    parser.add_argument(
+        "--scoring-input",
+        type=Path,
+        default=None,
+        help="Read completed Markdown or JSON human scores",
+    )
+    parser.add_argument(
+        "--report-input",
+        type=Path,
+        default=None,
+        help="Reuse a previous JSON report and only re-evaluate quality gates",
     )
     args = parser.parse_args()
+
+    if args.report_input and not args.output:
+        parser.error("--output is required with --report-input")
+
+    if args.report_input:
+        try:
+            results = json.loads(args.report_input.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            print(f"Failed to load report: {type(exc).__name__}", file=sys.stderr)
+            return 1
+        try:
+            gates, all_gates_passed = _apply_human_scoring(results, args.scoring_input)
+        except Exception as exc:
+            print(f"Failed to finalize report: {_safe_error(exc)}", file=sys.stderr)
+            return 1
+        _print_quality_gates(gates)
+        _write_report(args.output, results)
+        print(f"  Final report written to {args.output}")
+        return 0 if all_gates_passed else 1
 
     run_image = not args.rag_only
     run_rag = not args.image_only
 
-    # Environment info
-    report_env = {
-        "date": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
-        "base_url": args.base_url,
-        "image_dataset": str(args.image_dataset),
-        "rag_dataset": str(args.rag_dataset),
-        "python_version": os.environ.get("PYTHON_VERSION", ""),
-    }
-
-    # Collect git info if available
-    import subprocess
-
-    try:
-        report_env["git_sha"] = subprocess.check_output(
-            ["git", "rev-parse", "HEAD"], text=True
-        ).strip()
-    except Exception:
-        report_env["git_sha"] = "unknown"
+    report_env = _build_report_environment(args)
 
     print("=" * 60)
     print("  ShareO AI Evaluation — Phase 7B")
@@ -532,55 +750,49 @@ def main() -> None:
     print()
 
     results: dict[str, Any] = {"environment": report_env}
-    all_gates_passed = True
+    all_gates_passed = False
 
     # ── Image search evaluation ──
     if run_image:
         print("── Image Search Evaluation ──")
-        image_queries = load_image_queries(args.image_dataset)
-        print(f"  Loaded {len(image_queries)} queries")
-        image_report = evaluate_image_search(args.base_url, image_queries)
-        image_metrics = _export_image_metrics(image_report)
-        results["image_search"] = {
-            "report": image_report,
-            "metrics": image_metrics,
-        }
-
-        print(f"  Recall@5:      {image_metrics['recall_5']:.4f}  (target ≥ 0.70)")
-        print(f"  Recall@10:     {image_metrics['recall_10']:.4f}")
-        print(f"  MRR:           {image_metrics['mrr']:.4f}  (target ≥ 0.55)")
-        print(f"  Duplicates:    {image_metrics['duplicate_queries']}  (target 0)")
-        print(f"  Latency P50:   {image_metrics['latency_p50_ms']:.0f} ms")
-        print(f"  Latency P95:   {image_metrics['latency_p95_ms']:.0f} ms")
+        try:
+            image_queries = load_image_queries(args.image_dataset)
+            print(f"  Loaded {len(image_queries)} queries")
+            image_report = evaluate_image_search(args.base_url, image_queries)
+            image_metrics = _export_image_metrics(image_report)
+            results["image_search"] = {"report": image_report, "metrics": image_metrics}
+            print(f"  Recall@5:      {image_metrics['recall_5']:.4f}  (target ≥ 0.70)")
+            print(f"  Recall@10:     {image_metrics['recall_10']:.4f}")
+            print(f"  MRR:           {image_metrics['mrr']:.4f}  (target ≥ 0.55)")
+            print(f"  Duplicates:    {image_metrics['duplicate_queries']}  (target 0)")
+            print(f"  Latency P50:   {image_metrics['latency_p50_ms']:.0f} ms")
+            print(f"  Latency P95:   {image_metrics['latency_p95_ms']:.0f} ms")
+        except Exception as exc:
+            results["image_search"] = {"error": _safe_error(exc), "report": {}}
+            print(f"  FAIL: image search evaluation ({type(exc).__name__})")
         print()
 
     # ── RAG evaluation ──
     if run_rag:
         print("── RAG Bot Evaluation ──")
-        if not args.rag_dataset.exists():
-            print(f"  SKIP: dataset not found at {args.rag_dataset}")
-            results["rag"] = {"error": "dataset not found"}
-        else:
+        try:
             rag_queries = load_rag_queries(args.rag_dataset)
             labeled = [q for q in rag_queries if q.get("label_status") != "pending"]
             print(
                 f"  Loaded {len(rag_queries)} questions ({len(labeled)} labeled, {len(rag_queries) - len(labeled)} pending)"
             )
-
             rag_result = evaluate_rag(
                 args.base_url,
                 rag_queries,
                 test_username=args.test_username,
                 test_password=args.test_password,
             )
-
             rag_metrics = _export_rag_metrics(rag_result)
             results["rag"] = {
                 "report": rag_result.get("report", {}),
                 "metrics": rag_metrics,
                 "scoring_template": rag_result.get("scoring_template", []),
             }
-
             print(
                 f"  Source Hit Rate:    {rag_metrics.get('source_hit_rate', 0):.4f}  (target ≥ 0.80)"
             )
@@ -588,24 +800,24 @@ def main() -> None:
                 f"  Citation Access:    {rag_metrics.get('citation_accessible_rate', 0):.1%}  (target 100%)"
             )
             print(f"  Hallucinated Cites: {rag_metrics.get('total_hallucinated', 0)}  (target 0)")
+            print(f"  Failed Queries:     {rag_metrics.get('failed_queries', 0)}  (target 0)")
             print(f"  Avg Sources/Answer: {rag_metrics.get('avg_sources_per_answer', 0):.1f}")
             print(f"  Latency P50:        {rag_metrics.get('latency_p50_ms', 0):.0f} ms")
             print(f"  Latency P95:        {rag_metrics.get('latency_p95_ms', 0):.0f} ms")
-            print()
+        except Exception as exc:
+            results["rag"] = {"error": _safe_error(exc), "report": {}, "metrics": {}}
+            print(f"  FAIL: RAG evaluation ({type(exc).__name__})")
+        print()
 
     # ── Quality gates ──
-    if run_image and run_rag and "error" not in results.get("rag", {}):
-        rag_m = results.get("rag", {}).get("metrics", {})
-        img_r = results.get("image_search", {}).get("report", {})
-        gates = check_quality_gates(img_r, rag_m)
-        results["quality_gates"] = gates
-
+    if run_image and run_rag:
+        gates, all_gates_passed = _apply_human_scoring(results, args.scoring_input)
+        _print_quality_gates(gates)
+    else:
+        results["quality_gates"] = {"full evaluation required": False}
+        results["quality_gate_passed"] = False
         print("── Quality Gates ──")
-        for gate_name, passed in gates.items():
-            status = "PASS" if passed else "FAIL"
-            print(f"  [{status}] {gate_name}")
-            if not passed:
-                all_gates_passed = False
+        print("  [FAIL] full evaluation required")
         print()
 
     # ── Human scoring template ──
@@ -615,20 +827,19 @@ def main() -> None:
             scoring_path = args.scoring_output or Path("eval_ai_human_scoring.md")
             _write_scoring_template(scoring_path, scoring_rows, report_env)
             print(f"  Human scoring template written to {scoring_path}")
-            print("  Please score each answer 1-5 and update relevance_score.")
+            print(
+                "  Please score each answer 1-5, then rerun with --report-input and --scoring-input."
+            )
 
     # ── Write output ──
     if args.output:
-        # Strip scoring template for the JSON output (too verbose)
-        output_data = {k: v for k, v in results.items()}
-        if "rag" in output_data and "scoring_template" in output_data["rag"]:
-            del output_data["rag"]["scoring_template"]
-        args.output.write_text(json.dumps(output_data, ensure_ascii=False, indent=2))
+        _write_report(args.output, results)
         print(f"  Full report written to {args.output}")
 
     # ── Summary ──
     print()
     print("=" * 60)
+    return 0 if all_gates_passed else 1
     if all_gates_passed:
         print("  ALL QUALITY GATES PASSED")
     else:
@@ -650,19 +861,27 @@ def _write_scoring_template(path: Path, rows: list[dict], env: dict) -> None:
         "- 2: Marginally relevant, major errors",
         "- 1: Completely irrelevant or fabricated",
         "",
-        "| # | Question | Expected | Bot Answer | Citations | Hit Rate | Score |",
-        "|---|---|---|---|---|---|---|",
+        "| # | Question | Expected | Expected Source IDs | Bot Answer | Citation Post IDs | Citation Details | Hit Rate | Score |",
+        "|---|---|---|---|---|---|---|---|---|",
     ]
 
     for i, row in enumerate(rows, 1):
-        question = row["question"][:60]
-        expected = row.get("expected_answer", "")[:80]
-        bot_answer = row.get("bot_answer", "")[:100].replace("\n", " ").replace("|", "\\|")
-        citations = ", ".join(str(c) for c in row.get("citation_post_ids", []))
+
+        def cell(value: Any, limit: int) -> str:
+            return str(value)[:limit].replace("\n", " ").replace("|", "\\|")
+
+        question = cell(row["question"], 60)
+        expected = cell(row.get("expected_answer", ""), 80)
+        expected_ids = cell(row.get("expected_source_post_ids", []), 40)
+        bot_answer = cell(row.get("bot_answer", ""), 120)
+        citations = cell(row.get("citation_post_ids", []), 40)
+        citation_details = cell(
+            json.dumps(row.get("citation_details", []), ensure_ascii=False), 180
+        )
         hit_rate = row.get("source_hit_rate", "")
         score = row.get("relevance_score", "")
         lines.append(
-            f"| {i} | {question} | {expected} | {bot_answer} | {citations} | {hit_rate} | {score} |"
+            f"| {i} | {question} | {expected} | {expected_ids} | {bot_answer} | {citations} | {citation_details} | {hit_rate} | {score} |"
         )
 
     lines.extend(
@@ -674,8 +893,9 @@ def _write_scoring_template(path: Path, rows: list[dict], env: dict) -> None:
         ]
     )
 
-    path.write_text("\n".join(lines))
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("\n".join(lines), encoding="utf-8")
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

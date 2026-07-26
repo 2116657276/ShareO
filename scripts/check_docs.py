@@ -44,11 +44,10 @@ REQUIRED_PHASE_HEADINGS = (
 )
 IMAGE_DISTRIBUTION = {
     "object": 8,
-    "scene": 8,
-    "color": 6,
+    "scene": 10,
+    "color": 8,
     "style": 6,
     "composition": 4,
-    "portrait": 4,
     "motion": 2,
     "no-match": 2,
 }
@@ -132,11 +131,13 @@ def validate_phase_contracts(failures: list[str]) -> None:
 
 def validate_status(failures: list[str]) -> None:
     expectations = {
-        ROOT / "TASK.md": "当前阶段：Phase 7 进行中",
-        ROOT / "README.md": "Phase 7 Demo、评测与发布收口进行中",
+        ROOT / "README.md": "Phase 7B 质量评测已通过，当前进入 Phase 7C 发布与演示收口",
         ROOT / "docs" / "roadmap.md": "| Phase 7 Demo 与发布 |",
         PHASE_DIR / "README.md": "Phase 7 — Demo、评测与发布",
     }
+    task_status = (ROOT / "TASK.md").read_text(encoding="utf-8")
+    if not re.search(r"当前阶段：Phase 7(?:[ABC])? 进行中", task_status):
+        failures.append("TASK.md missing canonical Phase 7 in-progress status")
     for path, expected in expectations.items():
         if expected not in path.read_text(encoding="utf-8"):
             failures.append(f"{path.relative_to(ROOT)} missing canonical status: {expected}")
@@ -183,7 +184,10 @@ def validate_distribution(
 def validate_evaluation_data(failures: list[str]) -> list[str]:
     pending: list[str] = []
     task = (ROOT / "TASK.md").read_text(encoding="utf-8")
-    phase_7a_complete = "- [x] 完成 40 条搜图标注" in task
+    phase_7a_complete = (
+        "- [x] 接入 26 张真实 JPEG 照片" in task
+        and "40 条搜图与 30 条 RAG 标注集" in task
+    )
 
     image_path = ROOT / "docs" / "eval" / "image_search_v1.jsonl"
     image_rows = load_jsonl(image_path, failures)

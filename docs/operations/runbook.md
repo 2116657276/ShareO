@@ -2,7 +2,15 @@
 
 ## 环境与配置
 
-需要 Go 1.25.1+、Python 3.12、uv 和 Docker Compose。复制 `config.yaml.example` 为 `config.yaml`；密钥优先通过环境变量覆盖。
+需要 Go 1.25.1+、Python 3.12、uv 和 Docker Compose（或 Colima）。复制 `config.yaml.example` 为 `config.yaml`；密钥优先通过环境变量覆盖。
+
+Docker 运行时至少需要 **3GB 内存**。Colima 用户启动前确认：
+
+```bash
+colima start --cpu 2 --memory 3 --disk 40
+```
+
+`compose.yaml` 已为六服务配置内存上限（详见文末资源预算表），关闭了 AI 模型启动预热以降低空闲内存占用。
 
 必需的内部一致配置：
 
@@ -55,8 +63,8 @@ curl -H "X-Internal-Token: $SHAREO_INTERNAL_TOKEN" \
 | `make test-ai-e2e` | mock LLM跨服务Bot E2E |
 | `make backfill-index` | 投递全部approved帖子 |
 | `make reconcile-index` | 默认dry-run索引对账 |
-
-`make demo-seed` 和 `make eval-ai` 是 Phase 7交付；在对应实现存在前不得作为已可用命令宣传。
+| `make demo-seed` | 初始化 Demo 帖子和图片数据 |
+| `make eval-ai` | 运行搜图与 RAG 统一评测 |
 
 ## 模型缓存
 
@@ -86,3 +94,32 @@ docker compose logs --tail=100 redis qdrant minio mysql
 ## 数据重置
 
 只使用 `make reset CONFIRM=YES` 重建完整Compose数据。执行前确认当前目录、Compose项目名和目标volume；不要直接删除MinIO内部目录或复用历史Homebrew数据路径。
+
+## 容器重建
+
+修改 `compose.yaml`（包括内存限制、启动参数、环境变量）后，需要重建容器使变更生效：
+
+```bash
+docker compose down          # 停止但不删数据卷
+docker compose up -d --build --wait   # 重建镜像并启动
+```
+
+仅重启容器（`docker compose restart`）不会应用 `mem_limit`、`command` 或 `build` 变更。
+
+`make up` 已包含 `--build`，首次启动或修改 compose 后直接用 `make up` 即可。
+
+## 资源预算
+
+compose.yaml 为六个服务设置了内存硬上限，基于 Colima 3GB 分配，目标日常 ~1.1GB、200 倍 demo 数据量峰值 ~2.3GB：
+
+| 服务 | mem_limit | 优化措施 |
+|------|-----------|---------|
+| MySQL | 400m | buffer-pool 128M、perf-schema OFF、skip-log-bin |
+| Redis | 80m | maxmemory 48mb、allkeys-lru、关闭 RDB |
+| MinIO | 300m | — |
+| Qdrant | 400m | — |
+| Go App | 256m | — |
+| AI Service | 1.2g | embedding_warmup=false（模型延迟加载） |
+| **合计** | **2.64g** | |
+
+AI Service 的内存大头是两个固定大小的 embedding 模型（Chinese-CLIP ~400MB + BGE-small ~100MB），不随帖子数量增长。MySQL buffer pool 和 Qdrant 索引在 5,200 帖规模内不会成为瓶颈。

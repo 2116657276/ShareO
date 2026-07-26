@@ -1,6 +1,6 @@
 # Phase 4 — 中文语义搜图
 
-> 状态：工程闭环完成，质量评测待 Phase 7B
+> 状态：已完成（工程闭环与 Phase 7B 质量门禁通过）
 
 ## 目标
 
@@ -8,7 +8,7 @@
 
 ## 当前基线
 
-Chinese-CLIP 固定 revision、图片代理、Qdrant `images`、索引 consumer、公开搜索、可见性过滤和真实 E2E 已完成。
+Chinese-CLIP 固定 revision、图片代理、Qdrant `images`、索引 consumer、公开搜索、可见性过滤和真实 E2E 已完成。Phase 7B 使用 40 条冻结查询验证 Recall@5 0.8125、MRR 0.7771，重复帖子数为 0，预热后 CPU 搜图 P95 为 64.8 ms。
 
 ## 范围与非目标
 
@@ -56,8 +56,9 @@ revision、设备、维度、归一化、schema 拒绝覆盖、payload index、�
 
 - `bb9732f`：完成真实语义搜图工程闭环及 Transformers 兼容修复。
 - `make test-image-e2e` 已通过真实 Chinese-CLIP、MySQL、Redis、MinIO 和 Qdrant 链路。
-- 质量和性能报告尚未生成，因此本阶段不标记完全完成。
+- `docs/eval/results/phase7b_final.json` 记录了真实质量报告；评测代码 SHA 为 `aad134cf78ecaa6484f3fb5db21d7dd9cce0a586`，数据集 hash、模型 revision、CPU 设备和延迟均已归档。
+- Compose 中图片索引 collection 为 26 条，MySQL 可见 approved 帖子为 26 篇，MinIO 原图/中图/缩略图对象各 26 个。
 
 ## 遗留项
 
-Phase 7A 完成标签，Phase 7B执行质量/性能门禁，Phase 7C归档最终证据。
+本阶段无遗留质量门禁；Phase 7C 继续负责故障降级、五分钟演示和最终发布证据。

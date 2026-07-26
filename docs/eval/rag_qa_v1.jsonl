@@ -1,30 +1,30 @@
-{"question":"富士XT5相机配了什么镜头？","category":"factual","expected_source_post_ids":[1],"reference_answer":"配了一颗35mm f/1.4定焦镜头，复古外观加上胶片模拟模式。","label_status":"complete"}
-{"question":"多肉植物浇水需要注意什么？","category":"factual","expected_source_post_ids":[2],"reference_answer":"多肉最怕浇水太多，一定要等土完全干透再浇，通风也很重要。","label_status":"complete"}
-{"question":"那把Fender Stratocaster是什么颜色的？","category":"factual","expected_source_post_ids":[3],"reference_answer":"日落色渐变琴身，枫木指板，跟了五年。","label_status":"complete"}
-{"question":"用的是什么咖啡豆做手冲咖啡？","category":"factual","expected_source_post_ids":[4],"reference_answer":"使用的是埃塞俄比亚耶加雪菲，柑橘和花香味很明显。","label_status":"complete"}
-{"question":"东极岛的日出是几点看的？","category":"factual","expected_source_post_ids":[5],"reference_answer":"凌晨四点爬起来看日出，海平面从深蓝变成橙红。","label_status":"complete"}
-{"question":"喀纳斯的白桦林是什么颜色的？","category":"factual","expected_source_post_ids":[6],"reference_answer":"金黄的白桦林，喀纳斯像上帝打翻的调色盘。","label_status":"complete"}
-{"question":"外滩对面可以看到什么建筑？","category":"factual","expected_source_post_ids":[7],"reference_answer":"黄浦江对岸的陆家嘴三件套直插云霄。","label_status":"complete"}
-{"question":"北京胡同里的老人在做什么？","category":"factual","expected_source_post_ids":[8],"reference_answer":"老人们在槐树下下象棋，斑驳的灰墙青石板路。","label_status":"complete"}
-{"question":"极简主义摄影的核心特点是什么？","category":"factual","expected_source_post_ids":[13],"reference_answer":"大面积的留白、干净的线条、单一的主体，少即是多。","label_status":"complete"}
-{"question":"黄果树瀑布用了什么减光镜？","category":"factual","expected_source_post_ids":[],"reference_answer":"使用了ND1000减光镜，曝光时间2秒。","label_status":"pending"}
-{"question":"新手买相机有什么推荐？","category":"advice","expected_source_post_ids":[1],"reference_answer":"可以考虑富士XT5，复古外观、胶片模拟模式直出色彩好。","label_status":"complete"}
-{"question":"多肉植物日常怎么养护比较好？","category":"advice","expected_source_post_ids":[2],"reference_answer":"控制浇水频率，等土完全干透再浇，保持良好通风。","label_status":"complete"}
-{"question":"手冲咖啡有什么技巧可以提升风味？","category":"advice","expected_source_post_ids":[4],"reference_answer":"注意研磨度、水温和注水速度，每个变量都会影响风味。","label_status":"complete"}
-{"question":"去看海边日出有什么建议？","category":"advice","expected_source_post_ids":[5],"reference_answer":"建议凌晨出发，提前到达等待日出，海面色彩变化很值得。","label_status":"complete"}
-{"question":"秋天去哪里旅游拍照比较好？","category":"advice","expected_source_post_ids":[6],"reference_answer":"喀纳斯是不错的选择，金黄色白桦林、碧绿湖水、远处雪山。","label_status":"complete"}
-{"question":"在咖啡馆怎么拍好人像照片？","category":"advice","expected_source_post_ids":[],"reference_answer":"用大光圈镜头虚化背景，利用窗边自然光，让模特保持自然放松。","label_status":"pending"}
-{"question":"赛博朋克风格的城市夜景怎么拍摄？","category":"advice","expected_source_post_ids":[15],"reference_answer":"找霓虹灯密集的街区，用大光圈镜头，后期调出青橙色调，雨后街道特别出片。","label_status":"complete"}
-{"question":"怎么拍出瀑布的丝绸效果？","category":"advice","expected_source_post_ids":[],"reference_answer":"用三脚架固定相机，快门速度调到1/4秒或更慢，可使用ND减光镜。","label_status":"pending"}
-{"question":"数码相机和胶片相机拍摄体验有什么不同？","category":"comparison","expected_source_post_ids":[1,16],"reference_answer":"数码相机即时预览方便调整参数，胶片有颗粒感和独特的色彩偏移，充满不确定性。","label_status":"complete"}
-{"question":"黑白摄影和彩色摄影各有什么优势和适用场景？","category":"comparison","expected_source_post_ids":[11,12],"reference_answer":"黑白去掉色彩干扰让观者专注光影和构图，彩色能表现丰富的色调如秋天的金黄火红蔚蓝。","label_status":"complete"}
-{"question":"不同的构图方式各适合什么拍摄场景？","category":"comparison","expected_source_post_ids":[17,18,19,20],"reference_answer":"三分法适合风景和地平线，引导线适合旅行和山路，框架构图适合园林建筑，对称构图适合建筑摄影。","label_status":"complete"}
-{"question":"室内人像的自然光和人工布光各有什么特点？","category":"comparison","expected_source_post_ids":[],"reference_answer":"自然光从窗户侧面照入柔和自然，人工三点布光法可以精确控制光影分离主体和背景。","label_status":"pending"}
-{"question":"极简风格和赛博朋克风格在视觉表现上有哪些不同？","category":"comparison","expected_source_post_ids":[13,15],"reference_answer":"极简风格追求少即是多、大留白、干净线条，赛博朋克风格追求霓虹灯光、青橙色调、高饱和高对比。","label_status":"complete"}
-{"question":"总结一下摄影中最重要的构图和拍摄技巧","category":"multi-source","expected_source_post_ids":[17,18,19,20],"reference_answer":"综合三分法、引导线、框架构图、对称构图等基础构图方式。","label_status":"complete"}
-{"question":"旅行摄影应该注意哪些方面？","category":"multi-source","expected_source_post_ids":[5,6,7,8],"reference_answer":"从海边日出、喀纳斯秋景、外滩夜景、胡同人文四个场景总结，注意取景时间、色彩把握和当地文化元素。","label_status":"complete"}
-{"question":"人像摄影有哪些不同的拍摄方式和风格？","category":"multi-source","expected_source_post_ids":[],"reference_answer":"咖啡馆自然光人像、街头抓拍、体育高速连拍、室内三点布光，分别适合不同的被摄对象和场景。","label_status":"pending"}
-{"question":"关于秋天这个主题有哪些摄影相关的讨论？","category":"multi-source","expected_source_post_ids":[6,12],"reference_answer":"喀纳斯秋景、秋天的暖色调色彩，涵盖了风景和色彩两个角度。","label_status":"complete"}
-{"question":"Python和Go语言应该选哪个学习？","category":"no-answer","expected_source_post_ids":[],"reference_answer":"","expect_no_answer":true,"label_status":"complete"}
-{"question":"推荐一款适合玩3A游戏的显卡？","category":"no-answer","expected_source_post_ids":[],"reference_answer":"","expect_no_answer":true,"label_status":"complete"}
-{"question":"如何从零开始学习机器学习？","category":"no-answer","expected_source_post_ids":[],"reference_answer":"","expect_no_answer":true,"label_status":"complete"}
+{"question": "春天的桃花是什么颜色的？用了什么镜头拍摄？", "category": "factual", "expected_source_post_ids": [1], "reference_answer": "桃花是粉色的，使用了微距镜头捕捉特写，浅景深把背景虚化得很柔和。", "label_status": "complete"}
+{"question": "欧式城堡建筑的塔楼是什么材质的？", "category": "factual", "expected_source_post_ids": [2], "reference_answer": "是石头塔楼，仰拍视角显得古堡格外雄伟，复古拱窗和石雕很有历史感。", "label_status": "complete"}
+{"question": "紫色矢车菊插在什么样子的花瓶里？", "category": "factual", "expected_source_post_ids": [4], "reference_answer": "插在白瓷花瓶里，放在桌角作为室内静物。", "label_status": "complete"}
+{"question": "西湖黄昏的帖子中远端能看到什么建筑？", "category": "factual", "expected_source_post_ids": [11], "reference_answer": "能看到雷峰塔，黄昏的夕阳余晖映照在水面。", "label_status": "complete"}
+{"question": "西湖夜景岸边的柳树被什么颜色的灯光照亮？", "category": "factual", "expected_source_post_ids": [14], "reference_answer": "被金黄色的灯光照亮，水面倒影成趣。", "label_status": "complete"}
+{"question": "火烧云天空是什么颜色的？", "category": "factual", "expected_source_post_ids": [23], "reference_answer": "整个天空被染成了橙红色，树木与山峦化作剪影。", "label_status": "complete"}
+{"question": "公园花坛里盛开的是什么颜色的花？", "category": "factual", "expected_source_post_ids": [21], "reference_answer": "盛开的是鲜艳的红色花朵，与绿色枝叶相映成趣。", "label_status": "complete"}
+{"question": "校园雪景里有什么颜色的雕塑？", "category": "factual", "expected_source_post_ids": [26], "reference_answer": "有鲜艳的红色抽象雕塑，洁白雪地与红色雕塑对比鲜明。", "label_status": "complete"}
+{"question": "小三花猫蹲在什么地方晒太阳？", "category": "factual", "expected_source_post_ids": [25], "reference_answer": "蹲在树根旁晒太阳，闭目养神很治愈。", "label_status": "complete"}
+{"question": "在海面上飞翔的是什么鸟类？", "category": "factual", "expected_source_post_ids": [20], "reference_answer": "是成群飞翔的海鸥，在大海上空盘旋翱翔。", "label_status": "complete"}
+{"question": "怎么拍出柔和的花朵特写效果？", "category": "advice", "expected_source_post_ids": [1], "reference_answer": "建议使用微距镜头和大光圈浅景深，选择顺光或柔和阳光，突出花瓣纹理并虚化背景。", "label_status": "complete"}
+{"question": "拍摄高耸的城堡或塔楼建筑有什么角度建议？", "category": "advice", "expected_source_post_ids": [2], "reference_answer": "建议采用仰拍视角展现雄伟气势，或者在夜间利用灯光与深色夜空形成对比。", "label_status": "complete"}
+{"question": "去西湖赏荷花有什么风景推荐？", "category": "advice", "expected_source_post_ids": [7, 9], "reference_answer": "夏日西湖荷花池碧绿一片，荷花塘边有古色古香的木制凉亭，蓝天白云下十分惬意。", "label_status": "complete"}
+{"question": "怎么拍摄令人震撼的晚霞火烧云？", "category": "advice", "expected_source_post_ids": [23], "reference_answer": "在傍晚选择视野开阔处，利用树木山峦作为前黑剪影，能极大增强橙红/紫蓝色晚霞的色彩冲击力。", "label_status": "complete"}
+{"question": "如何利用自然框架提升风景摄影的构图层次感？", "category": "advice", "expected_source_post_ids": [13], "reference_answer": "可以透过湖边的树枝、门框等前景框住远处的雷峰塔或落日，天然框景能增加画面的深度。", "label_status": "complete"}
+{"question": "在大海边如何抓拍水鸟运动画面？", "category": "advice", "expected_source_post_ids": [19], "reference_answer": "趁海风吹过海鸥盘旋时抓拍，张开的翅膀与平静水面形成鲜明对比，展现生命动感。", "label_status": "complete"}
+{"question": "冬天下雪天气怎么拍出好看的雪景大片？", "category": "advice", "expected_source_post_ids": [26], "reference_answer": "寻找洁白雪地中具有高对比鲜艳颜色的主体（如红色雕塑），色彩强烈碰撞最出片。", "label_status": "complete"}
+{"question": "室内静物花卉摄影有什么布景调色建议？", "category": "advice", "expected_source_post_ids": [4], "reference_answer": "搭配简约的白瓷花瓶，置于阳光洒入的窗台桌角，自然光下高雅浪漫。", "label_status": "complete"}
+{"question": "西湖在白天和夜晚的景观各有什么特色？", "category": "comparison", "expected_source_post_ids": [11, 14], "reference_answer": "白天荷花满塘水光潋滟清秀典雅，夜晚岸边柳树被黄光照亮，雷峰塔灯火通明倒影璀璨。", "label_status": "complete"}
+{"question": "春天桃花和冬天雪景在色彩表达上有何不同？", "category": "comparison", "expected_source_post_ids": [1, 26], "reference_answer": "春天桃花追求通透柔和的粉绿春意，冬日雪景则利用大片纯白与鲜红雕塑形成强烈视觉对比。", "label_status": "complete"}
+{"question": "拍猫咪和抓拍飞鸟在动态与静止表达上有哪些区别？", "category": "comparison", "expected_source_post_ids": [25, 20], "reference_answer": "树下晒太阳的三花猫侧重惬意治愈的静止神态，飞翔的海鸥鸟群则突出张翅翱翔的生命动感。", "label_status": "complete"}
+{"question": "傍晚西湖夕阳和夜幕下的雷峰塔在构图与色彩上有何差异？", "category": "comparison", "expected_source_post_ids": [11, 15], "reference_answer": "夕阳时呈现金黄温暖的湖面余晖，夜幕下则是深蓝夜空与金黄塔身灯光的冷暖对比。", "label_status": "complete"}
+{"question": "俯瞰城市建筑与湖泊水景的视野体验有何不同？", "category": "comparison", "expected_source_post_ids": [3, 7], "reference_answer": "城市俯瞰呈现密集的红瓦屋顶与城市天际线，湖泊水景则带来水天一色碧波荡漾的广阔舒畅感。", "label_status": "complete"}
+{"question": "总结一下社区中关于西湖风物（荷花、夕阳、夜景、雷峰塔）的摄影讨论", "category": "multi-source", "expected_source_post_ids": [7, 10, 11, 14, 15], "reference_answer": "涵盖夏日荷花塘、傍晚黄昏夕阳余晖、树枝框景雷峰塔以及夜幕下灯火通明的雷峰塔与柳树倒影等多角度景观。", "label_status": "complete"}
+{"question": "社区里有哪些关于各种花卉（桃花、矢车菊、栀子花、红花）的记录？", "category": "multi-source", "expected_source_post_ids": [1, 4, 5, 21], "reference_answer": "包括粉色桃花特写、白瓷花瓶中的紫色矢车菊、白色栀子花以及公园花坛盛开的鲜艳红花。", "label_status": "complete"}
+{"question": "社区帖子里有哪些鸟类与动物的摄影作品？", "category": "multi-source", "expected_source_post_ids": [8, 19, 20, 22, 25], "reference_answer": "包括西湖游动的野鸭、海面飞翔的鸟群海鸥、枝头敏捷的小鸟以及树根旁晒太阳的三花猫。", "label_status": "complete"}
+{"question": "关于晚霞、夕阳与火烧云等天空色彩有哪些讨论？", "category": "multi-source", "expected_source_post_ids": [10, 12, 17, 23], "reference_answer": "包括西湖傍晚金黄余晖、月升晚霞、紫蓝色夜空霞光以及极具冲击力的橙红色火烧云剪影。", "label_status": "complete"}
+{"question": "Python和Go语言应该选哪个学习？", "category": "no-answer", "expected_source_post_ids": [], "reference_answer": "", "expect_no_answer": true, "label_status": "complete"}
+{"question": "推荐一款适合玩3A游戏的显卡？", "category": "no-answer", "expected_source_post_ids": [], "reference_answer": "", "expect_no_answer": true, "label_status": "complete"}
+{"question": "如何从零开始学习机器学习？", "category": "no-answer", "expected_source_post_ids": [], "reference_answer": "", "expect_no_answer": true, "label_status": "complete"}

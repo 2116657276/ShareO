@@ -6,12 +6,13 @@ from typing import Any
 import httpx
 
 from app.config import settings
-from app.rag.pipeline import RAGPipeline
+from app.rag.pipeline import NO_ANSWER, RAGPipeline
 from app.rag.provider import LLMConfigurationError, LLMResponseError
 
 logger = logging.getLogger(__name__)
 FALLBACK_MESSAGE = "AI 当前暂不可用，请稍后重试。"
 MAX_INT64 = 2**63 - 1
+MAX_CALLBACK_CITATIONS = 5
 
 
 def is_permanent_http_error(status_code: int) -> bool:
@@ -147,6 +148,16 @@ class BotTaskHandler:
         await self._reply(
             message_id,
             conversation_id,
-            result.answer,
-            [{"post_id": item.post_id, "chunk_id": item.chunk_id} for item in result.citations],
+            _safe_answer(result.answer),
+            [
+                {"post_id": item.post_id, "chunk_id": item.chunk_id}
+                for item in result.citations[:MAX_CALLBACK_CITATIONS]
+            ],
         )
+
+
+def _safe_answer(answer: Any) -> str:
+    """Keep the Go callback payload valid when a provider returns an empty answer."""
+    if not isinstance(answer, str) or not answer.strip():
+        return NO_ANSWER
+    return answer.strip()

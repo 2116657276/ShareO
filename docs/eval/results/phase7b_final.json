@@ -1,0 +1,97 @@
+{
+  "environment": {
+    "date": "2026-07-26",
+    "base_url": "http://127.0.0.1:8080",
+    "image_dataset": "/Users/zhoujianlin/GoLandProjects/ShareO/docs/eval/image_search_v1.jsonl",
+    "rag_dataset": "/Users/zhoujianlin/GoLandProjects/ShareO/docs/eval/rag_qa_v1.jsonl",
+    "image_dataset_sha256": "525c871c8f385d1d2bf3822e7edfc2aa9e4fec866cc6999b118671c79b3be8c7",
+    "rag_dataset_sha256": "19e92621377ba919f1a7c55e0b6253030a27aec630cc91d8cb4e7e91d7d2ea44",
+    "python_version": "3.12.13",
+    "platform": "macOS-15.7.7-arm64-arm-64bit",
+    "embedding_model": "OFA-Sys/chinese-clip-vit-base-patch16",
+    "embedding_revision": "36e679e65c2a2fead755ae21162091293ad37834",
+    "embedding_device": "auto",
+    "text_embedding_model": "BAAI/bge-small-zh-v1.5",
+    "rag_top_k": 15,
+    "rag_max_sources": 10,
+    "rag_prompt_version": "rag-v1",
+    "llm_model": "deepseek-v4-flash",
+    "network_environment": "unspecified",
+    "git_sha": "aad134cf78ecaa6484f3fb5db21d7dd9cce0a586",
+    "git_dirty": true
+  },
+  "image_search": {
+    "report": {
+      "queries": 40,
+      "semantic_duplicate_queries": 0,
+      "semantic": {
+        "recall_5": 0.8125,
+        "recall_10": 0.8125,
+        "mrr": 0.7770833333333333,
+        "manual_relevance_at_10": 0.085,
+        "latency_p50_ms": 58.265750005375594,
+        "latency_p95_ms": 64.82954100647476
+      },
+      "keyword": {
+        "recall_5": 0.0875,
+        "recall_10": 0.0875,
+        "mrr": 0.1,
+        "manual_relevance_at_10": 0.1,
+        "latency_p50_ms": 5.204708009841852,
+        "latency_p95_ms": 7.0543750043725595
+      },
+      "quality_gate_passed": true
+    },
+    "metrics": {
+      "recall_5": 0.8125,
+      "recall_10": 0.8125,
+      "mrr": 0.7770833333333333,
+      "duplicate_queries": 0,
+      "latency_p50_ms": 58.265750005375594,
+      "latency_p95_ms": 64.82954100647476
+    }
+  },
+  "rag": {
+    "report": {
+      "total_queries": 30,
+      "skipped": 0,
+      "failed_queries": 0,
+      "source_hit_rate": 1.0,
+      "citation_accessible_rate": 1.0,
+      "total_hallucinated": 0,
+      "avg_sources_per_answer": 2.13,
+      "latency_p50_ms": 3102.2,
+      "latency_p95_ms": 6174.7,
+      "no_answer_accuracy": 1.0
+    },
+    "metrics": {
+      "source_hit_rate": 1.0,
+      "citation_accessible_rate": 1.0,
+      "total_hallucinated": 0,
+      "avg_sources_per_answer": 2.13,
+      "latency_p50_ms": 3102.2,
+      "latency_p95_ms": 6174.7,
+      "total_queries": 30,
+      "skipped": 0,
+      "failed_queries": 0,
+      "no_answer_accuracy": 1.0
+    }
+  },
+  "human_scoring": {
+    "status": "complete",
+    "input": "/Users/zhoujianlin/GoLandProjects/ShareO/docs/eval/results/phase7b_human_scoring.md",
+    "count": 30,
+    "average": 4.8667
+  },
+  "quality_gates": {
+    "recall_5 >= 0.70": true,
+    "mrr >= 0.55": true,
+    "no duplicate posts": true,
+    "all labeled RAG queries evaluated": true,
+    "source_hit_rate >= 0.80": true,
+    "citation_accessible 100%": true,
+    "hallucinated citations 0": true,
+    "human_relevance_avg >= 4.0": true
+  },
+  "quality_gate_passed": true
+}

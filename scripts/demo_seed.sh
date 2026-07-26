@@ -8,6 +8,8 @@ set -euo pipefail
 
 PROJECT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 BASE_URL="${SHAREO_BASE_URL:-http://127.0.0.1:8080}"
+INTERNAL_TOKEN="${SHAREO_INTERNAL_TOKEN:-}"
+DB_PASSWORD="${SHAREO_DB_PASSWORD:-shareo_pass}"
 
 # Disable system proxy for local API calls
 unset http_proxy HTTP_PROXY https_proxy HTTPS_PROXY all_proxy ALL_PROXY
@@ -23,33 +25,44 @@ DEMO_USERS=("demo_alice:alice2024" "demo_bob:bob2024")
 # Demo post contents — diverse categories for image search eval
 # Format: "category|content"
 POSTS=(
-  "object|刚入手的富士XT5相机，配了一颗35mm f/1.4定焦镜头。复古外观加上胶片模拟模式，直出色彩非常讨喜。今天带去公园试拍了一组，对焦速度和画质都超出预期。"
-  "object|窗台上的多肉植物全家福。静夜、桃蛋、熊童子，每一盆都养了大半年。多肉最怕浇水太多，一定要等土完全干透再浇，通风也很重要。"
-  "object|这把Fender Stratocaster跟了我五年，日落色渐变琴身，枫木指板。清音通透，过载温暖，弹布鲁斯和摇滚都合适。最近刚换了套弦。"
-  "object|最近迷上了手工咖啡，入手了一套V60手冲壶。研磨度、水温、注水速度，每个变量都会影响风味。今天用埃塞俄比亚耶加雪菲，柑橘和花香味很明显。"
-  "scene|周末去了舟山东极岛，凌晨四点爬起来看日出。海平面从深蓝变成橙红，太阳跳出海面的那一瞬间，所有的等待都值得了。面朝大海，心旷神怡。"
-  "scene|秋天的喀纳斯，像是上帝打翻的调色盘。金黄的白桦林、碧绿的湖水、远处的雪山，每一帧都是壁纸。徒步三天，相机快门按个不停。"
-  "scene|夜晚的外滩，万国建筑群灯火辉煌。黄浦江对岸的陆家嘴三件套直插云霄，游船在江面缓缓驶过。城市的天际线在夜色下格外迷人，适合用长曝光拍摄。"
-  "scene|北京的胡同深处，老人们在槐树下下象棋。斑驳的灰墙、青石板路、挂在门前的鸟笼，时间在这里仿佛慢了下来。走街串巷才能感受到真正的老北京味道。"
-  "color|夏天就该穿明亮的颜色！牛油果绿的连衣裙配柠檬黄的手提包，走在街上回头率超高。绿色系穿搭今年特别火，从薄荷绿到橄榄绿，不同饱和度适合不同肤色。"
-  "color|分享一组以红色为主题的生活摄影。红色的邮筒、红色的砖墙、红色的雨伞。红色是最有冲击力的颜色，在画面中总是第一个抓住眼球。后期稍微提高饱和度就很有感觉。"
-  "color|极简黑白摄影的魅力在于去掉色彩的干扰，让观者专注于光影和构图。这组街拍全部用黑白胶片拍摄，高对比度的影调让平凡的街景变得有故事感。"
-  "color|秋天的色彩真的太丰富了！银杏的金黄、枫叶的火红、天空的蔚蓝，构成了一幅天然的三色画卷。每年这个时候都要去公园拍照，同一个角度拍了五年，每年都不一样。"
-  "style|探索极简主义摄影：少即是多。大面积的留白、干净的线条、单一的主体。这张在美术馆拍的照片，白墙前只有一把椅子，光影勾勒出椅子的轮廓，安静而有力量。"
-  "style|日系小清新风格的调色思路分享。低对比度、低饱和度、偏青色调、略微过曝。拍摄时选择柔和的自然光，背景尽量简洁。这组照片是在镰仓的海边拍的，满满的青春气息。"
-  "style|赛博朋克风格的城市夜景怎么拍？找霓虹灯密集的街区，用大光圈镜头，后期调出青橙色调。雨后的街道特别出片，积水倒映着霓虹灯的色彩，氛围感拉满。"
-  "style|胶片摄影的魅力：颗粒感、色彩偏移、不确定性。最近用一台1970年代的宾得Spotmatic拍了一卷Kodak Portra 400，出来的颜色温暖柔和，数码后期很难完全模拟。"
-  "composition|三分法构图的实战分享。把画面用两条横线和两条竖线分成九等份，把主体放在交叉点上。这张日落的照片把地平线放在下三分之一处，天空的云彩占据了上方三分之二的空间。"
-  "composition|引导线构图是在旅行摄影中最实用的技巧之一。公路、栏杆、河流、建筑物边缘，都可以作为引导线，把观众的目光引向画面深处。这张在张家界拍的照片用栈道作为引导线，终点是远处的山峰。"
-  "composition|框架构图：用门框、窗户、树枝等自然框架把主体框起来。在苏州园林拍的这张，透过圆形的月洞门看到远处的亭子，层次感十足。框架增加了画面的深度和趣味性。"
-  "composition|对称构图在建筑摄影中大有用武之地。这张在故宫拍的，太和殿的中轴线完美对称。对称能带来庄重、平衡的视觉感受，适合表现建筑的宏伟气势。"
-  "portrait|给朋友在咖啡馆拍了一组人像。大光圈镜头虚化背景，窗边的自然光线从侧面照在脸上，眼神光很漂亮。模特放松自然的状态是最出片的，不用刻意摆姿势。"
-  "portrait|街头人像抓拍：在菜市场拍到一位卖菜的老奶奶，满脸的皱纹是岁月的痕迹，笑容却像孩子一样纯真。黑白处理更能突出人物的情感和质感，彩色反而会分散注意力。"
-  "portrait|体育摄影中的人像：拍摄了一场业余足球比赛，球员在进球后欢呼庆祝的瞬间。用高速连拍抓到了最精彩的表情和肢体动作。背景虚化让主体从混乱的球场中凸显出来。"
-  "portrait|室内人像的布光心得：一盏主灯从45度角打过来，一盏辅助灯在对面补光，背后再加一盏轮廓灯把人物和背景分离开。这套三点布光法简单实用，适合各种室内场景。"
-  "motion|慢门拍摄瀑布的技巧：用三脚架固定相机，快门速度调到1/4秒或更慢，水流就会变成丝绸一样的质感。这张在黄果树瀑布拍的照片使用了ND1000减光镜，曝光时间2秒。"
-  "motion|追焦拍摄骑行中的自行车：相机跟着被摄体移动，保持主体清晰而背景拉出运动模糊的线条。这个技巧需要多练习，快门速度1/30秒左右，对焦模式选连续自动对焦。"
+  "object|春天的桃花盛开了，粉色花瓣在阳光下特别通透。用微距镜头捕捉花朵特写，浅景深把背景虚化得非常柔和，春意盎然的感觉。"
+  "object|这栋欧式城堡建筑太震撼了，石头塔楼直指蓝天。仰拍视角让古堡显得格外雄伟，复古的拱窗和石雕细节充满了历史沉淀感。"
+  "scene|站在山顶俯瞰整座城市，红瓦屋顶层层叠叠延伸到远方。远处的天际线与大片红屋顶构成了一幅充满异国风情的城市画卷。"
+  "object|在花店买了一束紫色矢车菊和雏菊，插在白瓷花瓶里。放在桌角作为室内静物，阳光透过窗户洒在花瓣上，优雅又浪漫。"
+  "object|绿叶簇拥下的白色栀子花特写，花瓣洁白如雪，带着淡淡的花香。特写镜头把花瓣的纹理和绿叶的光泽表现得淋漓尽致。"
+  "scene|蓝天白云下的红砖钟楼大门，矗立在晴空之下。古朴的钟楼建筑与湛蓝的天空形成强烈对比，让人感受到岁月沉淀的庄重。"
+  "scene|盛开的西湖荷花塘与水上凉亭，一片碧绿的荷叶连到天边。夏日的西湖粉荷绿叶，远处的木制凉亭在荷塘映衬下古色古香。"
+  "motion|西湖水面上泛起阵阵涟漪，一行野鸭正在清澈的水面上游动。清澈见底的湖水与游动的水鸟构成了一幅和谐的自然画面。"
+  "scene|蓝天白云下广阔的西湖荷花池，美不胜收的夏日景色。阳光洒在满池的荷叶上，波光粼粼，让人流连忘返。"
+  "color|夕阳照射下的西湖水面与远山，水面波光粼粼。傍晚的金黄余晖撒在湖面上，远山如黛，呈现出温暖惬意的色调。"
+  "composition|西湖黄昏与雷峰塔远景，夕阳余晖映照在水面。将雷峰塔放在画面远端，黄昏的光影把西湖的秀美展现得淋漓尽致。"
+  "color|傍晚西湖金黄色晚霞与升起的月亮，天空色彩丰富。深蓝色的云彩与金黄色的夕阳在空中交织，日月同辉的景色令人惊叹。"
+  "composition|透过湖边的树枝看过去，远处的雷峰塔和落日余晖构成了一幅天然框景。树枝形成的框景构图增加了画面的层次感。"
+  "scene|西湖夜景，岸边的柳树被金黄色灯光照亮，水面倒影成趣。华灯初上，静谧的湖面倒映着绚丽的夜景灯光。"
+  "style|夜幕深蓝色天空下的雷峰塔灯火通明，高耸璀璨。夜景模式下塔身的黄金灯光与深邃的夜空形成鲜明对比，壮观无比。"
+  "composition|湖面游船与蓝天白云的清晰倒影，水天一色。游船划过平静的湖面，水中的倒影随着波浪荡漾，富有流动美感。"
+  "color|傍晚紫蓝色天空与远山霞光，深邃唯美。天空中绚丽的紫色与蓝色过渡自然，落日沉入山峦之后余温尚存。"
+  "scene|绿树成荫的纪念公园与蓝天白云，环境优雅清静。阳光穿过浓密的树冠在草地上洒下斑驳光影，给人安详宁静的感觉。"
+  "motion|飞跃在大海水面上的鸟群与远山，展翅高飞。抓拍鸟群飞过海面的瞬间，翅膀张开的动态与平静的海面形成鲜明对比。"
+  "motion|海面上空成群飞翔的海鸥，画面充满动感。海风吹过，海鸥在空中盘旋翱翔，自由自在，展现出生命的活力。"
+  "color|公园花坛里盛开的鲜艳红花与绿色枝叶相映成趣。高饱和度的红色花朵在绿叶衬托下极为夺目，给画面增添了浓郁色彩。"
+  "motion|树丛枝头抓拍的小鸟，神态敏捷可爱。小鸟栖息在密林枝桠间，小巧玲珑，大光圈虚化背景让主体更加突出。"
+  "color|今天的火烧云太壮观了！整个天空被染成了橙红色，树木与山峦在强烈的霞光下化作剪影，视觉冲击力极强。"
+  "motion|大海上空成群飞翔与栖息的海鸥，壮阔的海景。蔚蓝的海水与翻飞的海鸥相呼应，构成了一幅宏大的海洋风光摄影作品。"
+  "object|阳光下蹲在树根旁的小三花猫，闭目养神。花猫毛色分明，惬意地趴在温暖的泥地上晒太阳，画面十分治愈。"
+  "scene|大雪纷飞后的校园雪景与鲜艳的红色抽象雕塑。洁白的雪地与醒目的红色雕塑形成鲜明色彩对比，冬日氛围拉满。"
 )
+
+PHOTOS=(
+  "IMG_0102.jpeg" "IMG_0285.jpeg" "IMG_0330.jpeg" "IMG_0805.jpeg"
+  "IMG_0806.jpeg" "IMG_0856.jpeg" "IMG_1200.jpeg" "IMG_1203.jpeg"
+  "IMG_1207.jpeg" "IMG_1210.jpeg" "IMG_1216.jpeg" "IMG_1219.jpeg"
+  "IMG_1222.jpeg" "IMG_1226.jpeg" "IMG_1230.jpeg" "IMG_1238.jpeg"
+  "IMG_1254.jpeg" "IMG_1480.jpeg" "IMG_2197.jpeg" "IMG_2198.jpeg"
+  "IMG_4176.jpeg" "IMG_4991.jpeg" "IMG_6122.jpeg" "IMG_7640.jpeg"
+  "IMG_8045.jpeg" "IMG_9007.jpeg"
+)
+PHOTO_SRC_DIR="$PROJECT_DIR/resources/static/pictures"
 
 # Generate a simple colored PNG image using Python (no Pillow dependency)
 generate_image() {
@@ -109,6 +122,24 @@ api_call() {
         args+=(-d "$data")
     fi
     curl --noproxy '*' "${args[@]}" 2>/dev/null
+}
+
+find_existing_post_id() {
+    local content="$1"
+    python3 - "$EXISTING_INDEX_FILE" "$content" <<'PYEOF'
+import json
+import pathlib
+import sys
+
+payload = json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))
+target = sys.argv[2]
+items = payload.get("data", {}).get("items", [])
+matches = [item for item in items if item.get("content") == target and item.get("images")]
+if len(matches) > 1:
+    print("DUPLICATE")
+elif matches:
+    print(matches[0]["post_id"])
+PYEOF
 }
 
 parse_json_field() {
@@ -273,11 +304,11 @@ echo "=== Step 1: 创建管理员 ==="
 
 # Create admin via docker-compose or direct API
 if docker-compose version >/dev/null 2>&1; then
-    docker-compose exec -T mysql mysql -uroot -pshareo_pass shareo -e \
+    docker-compose exec -T mysql mysql -uroot -p"$DB_PASSWORD" shareo -e \
         "INSERT INTO users (username, password_hash, email, role, status) VALUES ('$ADMIN_USER', '$ADMIN_HASH', '$ADMIN_EMAIL', 'admin', 1) ON DUPLICATE KEY UPDATE role='admin', status=1;" 2>/dev/null || true
     yellow "  → 管理员 $ADMIN_USER 已就绪"
 elif docker compose version >/dev/null 2>&1; then
-    docker compose exec -T mysql mysql -uroot -pshareo_pass shareo -e \
+    docker compose exec -T mysql mysql -uroot -p"$DB_PASSWORD" shareo -e \
         "INSERT INTO users (username, password_hash, email, role, status) VALUES ('$ADMIN_USER', '$ADMIN_HASH', '$ADMIN_EMAIL', 'admin', 1) ON DUPLICATE KEY UPDATE role='admin', status=1;" 2>/dev/null || true
     yellow "  → 管理员 $ADMIN_USER 已就绪"
 else
@@ -319,6 +350,45 @@ mkdir -p "$DEMO_IMG_DIR"
 TOTAL_POSTS=${#POSTS[@]}
 POST_COUNT=0
 POST_MAP_FILE="$DEMO_IMG_DIR/post_id_map.txt"
+EXISTING_INDEX_FILE="$(mktemp /tmp/shareo-demo-index.XXXXXX)"
+trap 'rm -f "$EXISTING_INDEX_FILE"' EXIT
+
+if [ -z "$INTERNAL_TOKEN" ]; then
+    red "SHAREO_INTERNAL_TOKEN 未设置，无法验证 Demo seed 幂等性"
+    exit 1
+fi
+
+if ! curl --noproxy '*' --fail --silent \
+    -H "X-Internal-Token: $INTERNAL_TOKEN" \
+    "$BASE_URL/internal/posts/index-payloads?after_id=0&limit=200" \
+    -o "$EXISTING_INDEX_FILE"; then
+    red "读取现有 Demo 帖子索引载荷失败"
+    exit 1
+fi
+if ! python3 - "$EXISTING_INDEX_FILE" <<'PYEOF'
+import json
+import pathlib
+import sys
+
+payload = json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))
+if payload.get("code") != 0:
+    raise SystemExit(1)
+PYEOF
+then
+    red "Go 返回的索引载荷无效"
+    exit 1
+fi
+
+if [ "${#PHOTOS[@]}" -ne "$TOTAL_POSTS" ]; then
+    red "真实照片数量 ${#PHOTOS[@]} 与 Demo 帖子数量 $TOTAL_POSTS 不一致"
+    exit 1
+fi
+for photo_file in "${PHOTOS[@]}"; do
+    if [ ! -f "$PHOTO_SRC_DIR/$photo_file" ]; then
+        red "缺少真实 Demo 照片: $PHOTO_SRC_DIR/$photo_file"
+        exit 1
+    fi
+done
 
 # Clean up old demo images and map
 rm -f "$DEMO_IMG_DIR"/demo_img_*.png "$POST_MAP_FILE"
@@ -328,17 +398,21 @@ for i in "${!POSTS[@]}"; do
     category="${post%%|*}"
     content="${post#*|}"
 
-    # Generate a colored image based on category
-    case "$category" in
-        object)   generate_image "$DEMO_IMG_DIR/demo_img_${i}.png" 100 150 200 "object photo $i" ;;
-        scene)    generate_image "$DEMO_IMG_DIR/demo_img_${i}.png" 180 200 100 "scene landscape $i" ;;
-        color)    generate_image "$DEMO_IMG_DIR/demo_img_${i}.png" 230 80 80 "color palette $i" ;;
-        style)    generate_image "$DEMO_IMG_DIR/demo_img_${i}.png" 80 180 200 "artistic style $i" ;;
-        composition) generate_image "$DEMO_IMG_DIR/demo_img_${i}.png" 150 100 180 "composition rule $i" ;;
-        portrait) generate_image "$DEMO_IMG_DIR/demo_img_${i}.png" 200 150 120 "portrait photo $i" ;;
-        motion)   generate_image "$DEMO_IMG_DIR/demo_img_${i}.png" 120 120 220 "motion blur $i" ;;
-        *)        generate_image "$DEMO_IMG_DIR/demo_img_${i}.png" 100 100 100 "demo image $i" ;;
-    esac
+    existing_post_id="$(find_existing_post_id "$content")"
+    if [ "$existing_post_id" = "DUPLICATE" ]; then
+        red "发现多个相同正文的 approved Demo 帖子，拒绝继续以免评测 ID 漂移"
+        exit 1
+    fi
+    if [ -n "$existing_post_id" ]; then
+        POST_COUNT=$((POST_COUNT + 1))
+        echo "$i|$category|$existing_post_id" >> "$POST_MAP_FILE"
+        yellow "  → 复用已有 Demo 帖子 #$existing_post_id"
+        continue
+    fi
+
+    photo_file="${PHOTOS[$i]:-}"
+    real_img_path="$PHOTO_SRC_DIR/$photo_file"
+    IMG_FILE="$real_img_path"
 
     # Alternate users for variety
     if [ $((i % 2)) -eq 0 ]; then
@@ -348,7 +422,7 @@ for i in "${!POSTS[@]}"; do
     fi
 
     # Upload image
-    IMG_URL="$(upload_image "$DEMO_IMG_DIR/demo_img_${i}.png" "$TOKEN")"
+    IMG_URL="$(upload_image "$IMG_FILE" "$TOKEN")"
     if [ -z "$IMG_URL" ]; then
         red "  ✗ 跳过帖子 #$i (上传失败)"
         continue
@@ -373,7 +447,6 @@ green "  ✓ 共创建 $POST_COUNT / $TOTAL_POSTS 篇帖子"
 echo ""
 echo "=== Step 4: 等待图文索引完成 ==="
 AI_URL="${SHAREO_AI_BASE_URL:-http://127.0.0.1:8000}"
-INTERNAL_TOKEN="${SHAREO_INTERNAL_TOKEN:-}"
 
 if [ -z "$INTERNAL_TOKEN" ]; then
     yellow "  → SHAREO_INTERNAL_TOKEN 未设置，跳过索引等待"
@@ -394,14 +467,15 @@ echo ""
 echo "=== Step 5: 生成 manifest ==="
 
 GENERATED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-python3 - "$DEMO_IMG_DIR" "$POST_MAP_FILE" "$POST_COUNT" "$GENERATED_AT" <<'PYEOF'
+python3 - "$DEMO_IMG_DIR" "$PHOTO_SRC_DIR" "$POST_MAP_FILE" "$POST_COUNT" "$GENERATED_AT" <<'PYEOF'
 import json, sys, pathlib
 from datetime import datetime
 
 img_dir = pathlib.Path(sys.argv[1])
-post_map_file = pathlib.Path(sys.argv[2])
-post_count = int(sys.argv[3])
-generated_at = sys.argv[4]
+photo_dir = pathlib.Path(sys.argv[2])
+post_map_file = pathlib.Path(sys.argv[3])
+post_count = int(sys.argv[4])
+generated_at = sys.argv[5]
 
 posts = []
 if post_map_file.exists():
@@ -418,7 +492,8 @@ manifest = {
     "bot_user": "shareo_bot",
     "total_posts": post_count,
     "posts": sorted(posts, key=lambda p: p["index"]),
-    "images": sorted([p.name for p in img_dir.glob("demo_img_*.png")])
+    "images": sorted([p.name for p in img_dir.glob("demo_img_*.png")]),
+    "source_photos": sorted(p.name for p in photo_dir.glob("*.jpeg")),
 }
 print(json.dumps(manifest, ensure_ascii=False, indent=2))
 PYEOF

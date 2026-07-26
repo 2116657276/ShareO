@@ -52,7 +52,12 @@ test-ai-e2e:
 
 eval-ai:
 	@test -f ai-service/app/commands/eval_ai.py || (echo "eval-ai is implemented in stage 7" && exit 2)
-	cd ai-service && uv run --frozen python -m app.commands.eval_ai
+	cd ai-service && uv run --frozen python -m app.commands.eval_ai \
+		$(if $(BASE_URL),--base-url $(BASE_URL),) \
+		$(if $(OUTPUT),--output $(abspath $(OUTPUT)),) \
+		$(if $(SCORING_OUTPUT),--scoring-output $(abspath $(SCORING_OUTPUT)),) \
+		$(if $(SCORING_INPUT),--scoring-input $(abspath $(SCORING_INPUT)),) \
+		$(if $(REPORT_INPUT),--report-input $(abspath $(REPORT_INPUT)),)
 
 demo-seed:
 	@test -x scripts/demo_seed.sh || (echo "demo-seed is implemented in stage 7" && exit 2)

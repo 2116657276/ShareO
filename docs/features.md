@@ -1,6 +1,6 @@
 # ShareO 最终功能矩阵
 
-> 更新时间：2026-07-23 | 状态：Phase 7 发布收口中
+> 更新时间：2026-07-26 | 状态：Phase 7C 进行中
 
 ## 功能能力
 
@@ -14,9 +14,9 @@
 | 点赞、关注、评论 | 帖子与用户页面 | MySQL事务 | 已完成 | 社交事务测试 |
 | 通知 | `/notifications` | MySQL | 已完成 | 通知单测 |
 | 一对一私聊 | `/chat`、`/ws` | MySQL、Redis、WebSocket | 已完成 | 私聊集成、Hub测试 |
-| 中文语义搜图 | `/api/v1/search/images` | MinIO、Chinese-CLIP、Qdrant | 工程完成 | 真实图片E2E；质量待7B |
+| 中文语义搜图 | `/api/v1/search/images` | MinIO、Chinese-CLIP、Qdrant | 已完成 | 真实图片 E2E；Phase 7B Recall@5 0.8125、MRR 0.7771 |
 | 正文向量检索 | 内部能力 | FastEmbed、Qdrant | 已完成 | 真实Qdrant round-trip |
-| 私聊 RAG Bot | `/chat` 中 `shareo_bot` | Redis Streams、RAG、LLM | mock闭环完成 | `make test-ai-e2e`；真实DeepSeek待7B |
+| 私聊 RAG Bot | `/chat` 中 `shareo_bot` | Redis Streams、RAG、LLM | 已完成 | `make test-ai-e2e`；Phase 7B DeepSeek 来源命中率 1.0000、引用可访问率 100% |
 
 ## 内容可见性
 

@@ -1,6 +1,6 @@
 # Phase 7 — Demo、评测与发布
 
-> 状态：7A 基本完成，7B 进行中 | 顺序：7A → 7B → 7C
+> 状态：7A、7B 已完成，7C 进行中 | 顺序：7A → 7B → 7C
 
 ## 目标
 
@@ -8,7 +8,7 @@
 
 ## 当前基线
 
-图片与 Bot 工程 E2E 已通过；Demo seed、30 条 RAG 数据、统一评测命令、真实 DeepSeek报告和最终降级证据尚未完成。
+图片与 Bot 工程 E2E 已通过；Demo seed、40/30 评测数据集、统一评测命令和真实 DeepSeek 质量报告已完成；故障降级、五分钟演示和最终发布证据属于尚未完成的 Phase 7C。
 
 ## 范围与非目标
 
@@ -43,7 +43,7 @@ DeepSeek API Key只读环境变量；日志、报告、截图和 Git不得包含
 ## 测试矩阵
 
 - 7A：幂等 seed、类别分布、标签存在性与可见性。
-- 7B：40 条搜图、30 条 RAG、真实 provider、人工评分和本地 P95。
+- 7B：全新 Compose 数据卷初始化、两次幂等 seed、40 条搜图、30 条 RAG、真实 provider、人工评分、引用验证和本地 P95。
 - 7C：检查、集成、race、两套 E2E、冷启动、五类故障和演示计时。
 
 ## 退出标准
@@ -56,18 +56,25 @@ DeepSeek API Key只读环境变量；日志、报告、截图和 Git不得包含
 
 ## 提交与环境证据
 
-Phase 7A 交付物：
-- `scripts/demo_seed.sh` — 可重复 Demo 数据初始化
+Phase 7A/7B 交付物：
+- `scripts/demo_seed.sh` — 可重复 Demo 数据初始化（支持 26 张真实照片素材）
 - `scripts/validate_eval_dataset.py` — 评测数据集校验
-- `docs/eval/image_search_v1.jsonl` — 40 条搜图查询（标注待真实图片）
-- `docs/eval/rag_qa_v1.jsonl` — 30 条 RAG 问答（25 条已标注）
+- `docs/eval/image_search_v1.jsonl` — 40 条搜图查询（基于 26 张真实照片全量标注）
+- `docs/eval/rag_qa_v1.jsonl` — 30 条 RAG 问答（基于 26 张真实照片全量标注）
 - `ai-service/app/commands/eval_ai.py` — 统一评测命令
 - `.env` — DeepSeek V4 Flash 配置（不入库）
 
-已有工程基线：`bb9732f`、`0f1785d`、`17b54ec`、`0aff22e`、`56e30f4`。
+已有工程基线：`bb9732f`、`0f1785d`、`17b54ec`、`0aff22e`、`56e30f4`、`aad134c`。
+
+本轮 7B 证据（2026-07-26）：
+- 六服务 Compose 启动并通过健康检查；图片和 RAG readiness 均为 ready，实际设备为 CPU，图片与正文 Qdrant collection 各有 26 条索引。
+- 两次 `make demo-seed` 收敛到 26 篇 approved 可见帖子、26 个帖子图片和原图/中图/缩略图各 26 个 MinIO 对象；40/30 数据集静态和数据库可见性校验通过。
+- `docs/eval/results/phase7b_final.json` 为最终机器报告，`docs/eval/results/phase7b_human_scoring.md` 为人工评分表；报告不含 API Key、Token、Cookie 或敏感请求头。
+- 评测代码 SHA 为 `aad134cf78ecaa6484f3fb5db21d7dd9cce0a586`；搜图数据集 SHA256 为 `525c871c8f385d1d2bf3822e7edfc2aa9e4fec866cc6999b118671c79b3be8c7`，RAG 数据集 SHA256 为 `19e92621377ba919f1a7c55e0b6253030a27aec630cc91d8cb4e7e91d7d2ea44`；Chinese-CLIP revision 为 `36e679e65c2a2fead755ae21162091293ad37834`，BGE 为 `BAAI/bge-small-zh-v1.5`，检索参数为 top_k 15、最大来源 10、Prompt `rag-v1`，DeepSeek 模型为 `deepseek-v4-flash`。
+- 质量门禁全部通过：Recall@5 0.8125、MRR 0.7771、RAG 来源命中率 1.0000、引用可访问率 100%、虚假引用 0、失败请求 0、无答案准确率 1.0000、人工平均分 4.8667（26 条 5 分、4 条 4 分）。图片 P50/P95 为 58.3/64.8 ms，RAG 总延迟 P50/P95 为 3102.2/6174.7 ms，超时率为 0/30。
+- 人工复核反馈：回答总体准确；部分回答参数较多、语言不够自然，“是什么”类问题相对简略。该项作为 Phase 7C 的可选 Prompt/表达风格优化记录，不改变本轮质量门禁结论。
 
 ## 遗留项
 
-- 40 条搜图质量评测依赖真实图片素材（非多模态大模型无法采集）
-- 5 条 RAG portrait/motion 标注待补齐对应帖子
-- 完成后只保留可选论文材料整理，不再扩展产品范围。
+- Phase 7C：运行完整自动检查、真实集成、race、图片/Bot E2E 和冷启动；验证 AI、Qdrant、MinIO、Redis、DeepSeek 故障时的受控降级；完成五分钟演示和最终证据矩阵。
+- 回答长度与“是什么/为什么/怎么样”风格差异只作为后续 Prompt 优化候选，不扩展产品范围，也不提前宣称 Phase 7C 完成。

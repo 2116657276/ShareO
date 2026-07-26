@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+from __future__ import annotations
 """Validate evaluation datasets for Phase 7A.
 
 Checks:
@@ -26,11 +27,10 @@ from typing import Any
 
 IMAGE_SEARCH_SPEC = {
     "object": 8,
-    "scene": 8,
-    "color": 6,
+    "scene": 10,
+    "color": 8,
     "style": 6,
     "composition": 4,
-    "portrait": 4,
     "motion": 2,
     "no-match": 2,
 }

@@ -21,8 +21,8 @@ class Settings(BaseSettings):
     text_collection: str = "post_chunks"
     chunk_size: int = 400
     chunk_overlap: int = 80
-    rag_top_k: int = 8
-    rag_max_sources: int = 5
+    rag_top_k: int = 15
+    rag_max_sources: int = 10
     llm_base_url: str = ""
     llm_api_key: str = ""
     llm_model: str = "deepseek-chat"

@@ -3,6 +3,13 @@ name: shareo
 services:
   mysql:
     image: mysql:8.0
+    command: >
+      --innodb-buffer-pool-size=128M
+      --innodb-log-buffer-size=16M
+      --innodb-flush-log-at-trx-commit=2
+      --performance-schema=OFF
+      --skip-log-bin
+      --max-connections=30
     environment:
       MYSQL_ROOT_PASSWORD: ${SHAREO_DB_PASSWORD:-shareo_pass}
       MYSQL_DATABASE: shareo
@@ -12,6 +19,7 @@ services:
       - ./deploy/mysql-init/001_schema.sh:/docker-entrypoint-initdb.d/001_schema.sh:ro
     ports:
       - "${SHAREO_MYSQL_PORT:-3306}:3306"
+    mem_limit: 400m
     healthcheck:
       test: ["CMD-SHELL", "mysqladmin ping -h localhost -p$${MYSQL_ROOT_PASSWORD}"]
       interval: 5s
@@ -21,8 +29,10 @@ services:
 
   redis:
     image: redis:7-alpine
+    command: redis-server --maxmemory 48mb --maxmemory-policy allkeys-lru --save ""
     ports:
       - "${SHAREO_REDIS_PORT:-6379}:6379"
+    mem_limit: 80m
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 3s
@@ -40,6 +50,7 @@ services:
     ports:
       - "${SHAREO_MINIO_PORT:-9000}:9000"
       - "${SHAREO_MINIO_CONSOLE_PORT:-9001}:9001"
+    mem_limit: 300m
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
       interval: 5s
@@ -53,6 +64,7 @@ services:
       - "${SHAREO_QDRANT_GRPC_PORT:-6334}:6334"
     volumes:
       - qdrant_data:/qdrant/storage
+    mem_limit: 400m
 
   app:
     build:
@@ -66,6 +78,7 @@ services:
       SHAREO_AI_BASE_URL: http://ai-service:8000
     ports:
       - "${SHAREO_APP_PORT:-8080}:8080"
+    mem_limit: 256m
     depends_on:
       mysql:
         condition: service_healthy
@@ -95,10 +108,12 @@ services:
       SHAREO_AI_LLM_API_KEY: ${SHAREO_AI_LLM_API_KEY:-}
       SHAREO_AI_LLM_MODEL: ${SHAREO_AI_LLM_MODEL:-deepseek-chat}
       SHAREO_AI_LLM_TIMEOUT_SECONDS: ${SHAREO_AI_LLM_TIMEOUT_SECONDS:-30}
+      SHAREO_AI_EMBEDDING_WARMUP: "false"
     volumes:
       - ${SHAREO_AI_MODEL_CACHE_SOURCE:-hf_cache}:/models
     ports:
       - "${SHAREO_AI_PORT:-8000}:8000"
+    mem_limit: 1.2g
     depends_on:
       redis:
         condition: service_healthy

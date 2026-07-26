@@ -1,6 +1,6 @@
 # AI 评测规范
 
-> 状态：数据规格已冻结，标注和统一评测命令待 Phase 7A/7B
+> 状态：数据规格、统一评测命令和 Phase 7B 真实质量报告均已收口；Phase 7C 负责发布与演示证据
 
 ## 数据集
 
@@ -11,11 +11,10 @@
 | 类别 | 数量 |
 |---|---:|
 | object | 8 |
-| scene | 8 |
-| color | 6 |
+| scene | 10 |
+| color | 8 |
 | style | 6 |
 | composition | 4 |
-| portrait | 4 |
 | motion | 2 |
 | no-match | 2 |
 
@@ -64,3 +63,26 @@ Phase 7A创建30条：
 每次评测记录提交SHA、数据集版本、Demo seed版本、模型/revision、Prompt版本、设备、DeepSeek模型、日期和网络环境。原始结果和汇总追加到 [实验记录](experiments.md)，不得包含API Key或敏感请求头。
 
 mock provider只证明协议和幂等，不计入真实质量指标。修改查询、标签、Demo数据、模型、检索参数或Prompt时必须升版或新增实验记录。
+
+## 评测命令
+
+首次运行同时生成机器报告和人工评分模板；人工评分未完成时该次命令预期返回非零状态：
+
+```bash
+make eval-ai \
+  OUTPUT=docs/eval/results/phase7b_raw.json \
+  SCORING_OUTPUT=docs/eval/results/phase7b_human_scoring.md
+```
+
+填写 30 条评分后，只复用机器报告并复核全部质量门禁，不重复调用服务：
+
+```bash
+make eval-ai \
+  REPORT_INPUT=docs/eval/results/phase7b_raw.json \
+  SCORING_INPUT=docs/eval/results/phase7b_human_scoring.md \
+  OUTPUT=docs/eval/results/phase7b_final.json
+```
+
+评分文件也可以是 `{"scores":[1,2,...]}` JSON；分数必须与报告中的已评测问题数量一致，且每项为 1–5 的整数。
+
+Phase 7B 最终证据：机器报告为 `results/phase7b_final.json`，人工评分表为 `results/phase7b_human_scoring.md`。30 条回答中 26 条为 5 分、4 条为 4 分，平均 4.8667；机器门禁为 Recall@5 0.8125、MRR 0.7771、RAG 来源命中率 1.0000、引用可访问率 100%、虚假引用 0、失败请求 0。
