@@ -82,7 +82,7 @@ Liveness 不代表模型或业务能力可用；自动化和运维不得用 `/he
 | Redis停止 | 缓存降级，写业务不回滚 | 消息落库可用，在线/推送受影响 | 旧索引可查，新事件延迟 | 新任务延迟 |
 | DeepSeek不可用 | 正常 | 正常 | 正常 | 重试后固定兜底 |
 
-Phase 7C 已在独立 Compose 项目中复核此矩阵；自动化结果见 [`docs/evidence/phase7c/degradation-automated.log`](evidence/phase7c/degradation-automated.log)。真实 DeepSeek 断开保留为运行手册中的人工复核步骤，自动门禁使用测试 provider，避免将外部网络不确定性混入故障脚本。
+Phase 7C 已在独立 Compose 项目中复核此矩阵；脱敏结果见 [`docs/evidence/phase7c/evidence-matrix.md`](evidence/phase7c/evidence-matrix.md)。真实 DeepSeek 断开保留为运行手册中的人工复核步骤，自动门禁使用测试 provider，避免将外部网络不确定性混入故障脚本。
 
 ### Phase 7C 实测结果
 

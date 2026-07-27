@@ -77,7 +77,7 @@ SHAREO_DEGRADATION_MODEL_CACHE_VOLUME=shareo_hf_cache \
 make test-degradation
 ```
 
-脚本按“基线通过 → 注入单项故障 → 验证社区/全文/私聊/搜图/Bot → 恢复服务 → readiness 和业务基线再次通过”执行 AI、Qdrant、MinIO、Redis 和测试 LLM provider 五类场景。结果归档在 [`docs/evidence/phase7c/degradation-automated.log`](../evidence/phase7c/degradation-automated.log)。
+脚本按“基线通过 → 注入单项故障 → 验证社区/全文/私聊/搜图/Bot → 恢复服务 → readiness 和业务基线再次通过”执行 AI、Qdrant、MinIO、Redis 和测试 LLM provider 五类场景。脱敏结果归档在 [`docs/evidence/phase7c/evidence-matrix.md`](../evidence/phase7c/evidence-matrix.md)。
 
 真实 DeepSeek 断开只做一次人工复核：在当前终端临时保存原有值，使用临时环境变量覆盖 `SHAREO_AI_LLM_BASE_URL` 或 API Key，使 `/readyz/rag` 进入不可用状态，发送一条 Bot 消息确认固定兜底，再恢复原值并重启/等待 readiness。不要修改 `.env`，不要把变量值、Authorization header 或完整响应写入日志；复核结束前确认普通私聊仍可落库。
 

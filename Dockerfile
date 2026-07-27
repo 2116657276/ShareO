@@ -1,8 +1,14 @@
 FROM golang:1.25.1-alpine AS builder
 
+ARG HTTP_PROXY
+ARG HTTPS_PROXY
+ARG ALL_PROXY
+ARG NO_PROXY
+
 WORKDIR /src
 COPY go.mod go.sum ./
-RUN go mod download
+RUN export HTTP_PROXY="$HTTP_PROXY" HTTPS_PROXY="$HTTPS_PROXY" ALL_PROXY="$ALL_PROXY" NO_PROXY="$NO_PROXY" \
+    && go mod download
 COPY . .
 RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -o /out/shareo ./cmd/server
 
