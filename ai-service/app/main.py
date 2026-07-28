@@ -1,9 +1,11 @@
 import asyncio
 import logging
+import os
 import time
 from contextlib import asynccontextmanager
 from typing import Literal
 
+import httpx
 from fastapi import FastAPI, Header, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, field_validator
@@ -11,7 +13,10 @@ from qdrant_client import AsyncQdrantClient
 from redis.asyncio import Redis
 
 from app.config import settings
+from app.agent.graph import AgentRunner
+from app.agent.tools import AgentToolRuntime
 from app.core.embedding import ImageEmbedder
+from app.core.source_fingerprint import PROCESS_SOURCE_FINGERPRINT, PROCESS_STARTED_AT
 from app.core.vectorstore import ImageVectorStore
 from app.rag.embedding import TextEmbedder
 from app.rag.pipeline import RAGPipeline
@@ -31,6 +36,14 @@ llm_provider = OpenAICompatibleProvider(
     settings.llm_timeout_seconds,
 )
 rag_pipeline = RAGPipeline(text_embedder, text_vector_store, llm_provider)
+agent_tool_runtime = AgentToolRuntime(
+    httpx.AsyncClient(timeout=10.0),
+    text_embedder,
+    text_vector_store,
+    embedder,
+    vector_store,
+)
+agent_runner = AgentRunner(llm_provider, agent_tool_runtime)
 
 
 class ImageSearchRequest(BaseModel):
@@ -90,6 +103,7 @@ async def lifespan(app: FastAPI):
         text_embedder=text_embedder,
         text_vector_store=text_vector_store,
         rag_pipeline=rag_pipeline,
+        agent_runner=agent_runner,
     )
     app.state.worker_runtime = runtime
     await runtime.start()
@@ -118,6 +132,7 @@ async def lifespan(app: FastAPI):
     if warmup_tasks:
         await asyncio.gather(*warmup_tasks, return_exceptions=True)
     await llm_provider.close()
+    await agent_tool_runtime.http.aclose()
     await runtime.stop()
     logger.info("ai-service shutting down")
 
@@ -237,6 +252,11 @@ async def rag_readyz(x_internal_token: str | None = Header(default=None)):
         "model": text_embedder.metadata(),
         "consumer": consumers.get(STREAM_INDEX_POST, "stopped"),
         "llm": "configured" if llm_provider.configured else "missing_configuration",
+        "llm_model": settings.llm_model,
+        "text_embedding_model": settings.text_embedding_model,
+        "text_embedding_revision": os.environ.get(
+            "SHAREO_AI_TEXT_EMBEDDING_REVISION", "unresolved"
+        ),
     }
     if not text_embedder.loaded or status["consumer"] != "running" or not llm_provider.configured:
         return JSONResponse({"status": "degraded", **status}, status_code=503)
@@ -249,6 +269,40 @@ async def rag_readyz(x_internal_token: str | None = Header(default=None)):
         }
     except Exception as exc:
         logger.warning("rag readiness failed: %s", exc)
+        return JSONResponse(
+            {"status": "degraded", **status, "vector_store": "unavailable"},
+            status_code=503,
+        )
+
+
+@app.get("/readyz/agent")
+async def agent_readyz(x_internal_token: str | None = Header(default=None)):
+    require_internal_token(x_internal_token)
+    runtime = getattr(app.state, "worker_runtime", None)
+    consumers = runtime.status() if runtime is not None else {}
+    status = {
+        "enabled": settings.agent_enabled,
+        "llm": "configured" if llm_provider.configured else "missing_configuration",
+        "llm_model": settings.llm_model,
+        "model": text_embedder.metadata(),
+        "image_model": embedder.metadata(),
+        "text_embedding_model": settings.text_embedding_model,
+        "text_embedding_revision": os.environ.get(
+            "SHAREO_AI_TEXT_EMBEDDING_REVISION", "unresolved"
+        ),
+        "rag_consumer": consumers.get(STREAM_INDEX_POST, "stopped"),
+        "prompt_version": settings.agent_prompt_version,
+        "trace_version": settings.agent_trace_version,
+        "source_fingerprint": PROCESS_SOURCE_FINGERPRINT,
+        "process_started_at": PROCESS_STARTED_AT,
+    }
+    if not settings.agent_enabled or not llm_provider.configured:
+        return JSONResponse({"status": "degraded", **status}, status_code=503)
+    try:
+        vector_meta = await text_vector_store.metadata()
+        return {"status": "ready", **status, "vector_store": vector_meta}
+    except Exception as exc:
+        logger.warning("agent readiness failed: %s", exc)
         return JSONResponse(
             {"status": "degraded", **status, "vector_store": "unavailable"},
             status_code=503,

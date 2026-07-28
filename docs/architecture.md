@@ -1,6 +1,6 @@
 # ShareO 已实现架构
 
-> 更新时间：2026-07-26 | 状态：Phase 0–7 已完成，Phase 7C 降级矩阵已验证
+> 更新时间：2026-07-28 | 本文维护稳定架构和历史验证边界；当前阶段状态见 [`TASK.md`](../TASK.md)
 
 ## 六服务拓扑
 
@@ -14,6 +14,7 @@ Go 模块化单体 ───────► MySQL（12 表，业务真相）
   └─内部 HTTP/token─► Python FastAPI 单进程
                         ├─API + index_post consumer + bot_tasks consumer
                         ├─Chinese-CLIP / FastEmbed
+                        ├─RAG pipeline + Phase 8 LangGraph Agent（已实现）
                         ├────────────────► Qdrant（images / post_chunks）
                         └────────────────► DeepSeek/OpenAI-compatible LLM
 ```
@@ -69,6 +70,7 @@ MySQL 是业务真相；初始化脚本只建立 schema 并写入固定 Bot 引�
 | AI `/readyz` | Redis 和 Qdrant 基础连接 |
 | AI `/readyz/image-search` | 图片模型、`images` 和 `index_post` consumer 可用 |
 | AI `/readyz/rag` | 文本模型、`post_chunks`、consumer 和 LLM配置可用 |
+| AI `/readyz/agent` | Agent 工具、状态图、模型和 LLM 配置可用 |
 
 Liveness 不代表模型或业务能力可用；自动化和运维不得用 `/healthz` 替代 capability readiness。
 
@@ -82,7 +84,7 @@ Liveness 不代表模型或业务能力可用；自动化和运维不得用 `/he
 | Redis停止 | 缓存降级，写业务不回滚 | 消息落库可用，在线/推送受影响 | 旧索引可查，新事件延迟 | 新任务延迟 |
 | DeepSeek不可用 | 正常 | 正常 | 正常 | 重试后固定兜底 |
 
-Phase 7C 已在独立 Compose 项目中复核此矩阵；脱敏结果见 [`docs/evidence/phase7c/evidence-matrix.md`](evidence/phase7c/evidence-matrix.md)。真实 DeepSeek 断开保留为运行手册中的人工复核步骤，自动门禁使用测试 provider，避免将外部网络不确定性混入故障脚本。
+该矩阵已有独立 Compose 历史复核，脱敏结果见 [`docs/evidence/phase7c/evidence-matrix.md`](evidence/phase7c/evidence-matrix.md) 和 [`docs/evidence/phase7c/degradation-automated.log`](evidence/phase7c/degradation-automated.log)。当前日常开发优先使用本机服务；Docker/Compose 故障矩阵属于人工验收通过后的最终打包复核，不在当前本机阶段宣称重新验证。真实 DeepSeek 断开保留为运行手册中的人工复核步骤，自动门禁使用测试 provider。
 
 ### Phase 7C 实测结果
 
@@ -94,6 +96,22 @@ Phase 7C 已在独立 Compose 项目中复核此矩阵；脱敏结果见 [`docs/
 | Redis 停止 | 社区、全文搜索和普通消息 HTTP 200；推送/异步能力进入降级 | Redis 启动后 consumer 自动重建缺失消费组并恢复 readiness |
 | 测试 LLM provider 停止 | 普通私聊 HTTP 200，Bot 返回固定兜底 | provider 启动后 RAG readiness 恢复 |
 
+Phase 8 Agent 的自动化故障矩阵复用上述依赖边界，测试 Provider、Qdrant、Redis、Go 内部接口和重复投递恢复已有历史验证。真实 DeepSeek 机器报告和人工评分也保留为历史证据；当前机器门禁是否通过只由 [`TASK.md`](../TASK.md) 和最新报告决定。Phase 7C 源码冷启动、浏览器演示和最终 Docker 打包仍待后续阶段完成。
+
 ## 模块边界
 
-Go 保持 Handler → Service → Repository 分层，AI桥接只负责事件和内部 HTTP。Python显式分为 image search、RAG 和 worker runtime，不引入 LangChain、LlamaIndex、Agent或多 provider路由。
+Go 保持 Handler → Service → Repository 分层，AI桥接只负责事件和内部 HTTP。Python 代码显式分为 image search、RAG、隔离的 `agent/` 模块和 worker runtime。默认 RAG Bot 的控制流由代码固定；显式 Agent 模式才使用规划器和工具调用。Agent 只读调用受保护的 Go 内部帖子接口，不获得 MySQL、MinIO 或 Qdrant 写权限。
+
+## Phase 8 实现中的 Agent 数据流
+
+```text
+用户发送 ai_mode=agent → bot_tasks
+  → LangGraph StateGraph
+  → semantic_search / keyword_search / read_posts / search_images
+  → Go 可见性复核后的观察结果
+  → 继续调用或最终总结
+  → 结构化引用 + 脱敏 agent_trace
+  → Go 事务写 Bot 消息 → WebSocket
+```
+
+默认 `ai_mode=rag` 不进入该路径。Agent 不保存 checkpoint，不暴露思维链，不执行写工具；Redis Streams、MySQL `bot_replies` 和消息 `meta` 负责现有任务耐久性与幂等。

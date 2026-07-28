@@ -58,4 +58,4 @@ WebSocket 失败不影响 REST 落库；重连后通过 `after_id` 补齐；Redi
 
 ## 遗留项
 
-Phase 7C 只做演示复核，不增加新消息类型。
+本阶段功能无遗留；Phase 7C 的人工浏览器演示仍需复核 WebSocket 实时下行，不增加新消息类型。

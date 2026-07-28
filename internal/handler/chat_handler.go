@@ -13,6 +13,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
 	"github.com/zhoujianlin/ShareO/internal/middleware"
+	"github.com/zhoujianlin/ShareO/internal/model"
 	"github.com/zhoujianlin/ShareO/internal/pkg/response"
 	"github.com/zhoujianlin/ShareO/internal/service"
 	"github.com/zhoujianlin/ShareO/internal/ws"
@@ -148,14 +149,15 @@ func (h *ChatHandler) GetMessages(c *gin.Context) {
 
 func (h *ChatHandler) SendMessage(c *gin.Context) {
 	var req struct {
-		Content string `json:"content" binding:"required"`
+		Content string       `json:"content" binding:"required"`
+		AIMode  model.AIMode `json:"ai_mode"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.BadRequest(c, "消息内容不能为空")
 		return
 	}
 	message, err := h.chatSvc.SendMessage(
-		c.Request.Context(), c.GetInt64("user_id"), getInt64Param(c, "id"), req.Content,
+		c.Request.Context(), c.GetInt64("user_id"), getInt64Param(c, "id"), req.Content, req.AIMode,
 	)
 	if err != nil {
 		handleChatError(c, err)

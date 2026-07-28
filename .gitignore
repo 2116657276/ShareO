@@ -33,6 +33,14 @@ minio_data/
 config.yaml
 !config.yaml.example
 .env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.sqlite
+*.sqlite3
+*.db
 
 # Generated demo assets
 scripts/demo-assets/
@@ -48,6 +56,16 @@ ai-service/.pytest_cache/
 ai-service/.ruff_cache/
 __pycache__/
 *.py[cod]
+
+# Local native runtime and model/cache data
+qdrant/
+.cache/shareo/
+.local/shareo/
+hf_cache/
+models/
+shareo-*.pid
+shareo-*.log
+shareo-*.json
 
 # Local test material (personal photos etc.) — not part of the repo
 resources/

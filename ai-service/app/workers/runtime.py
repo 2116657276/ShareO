@@ -16,6 +16,7 @@ from app.rag.embedding import TextEmbedder
 from app.rag.indexer import TextIndexer
 from app.rag.pipeline import RAGPipeline
 from app.rag.vectorstore import TextVectorStore
+from app.agent.graph import AgentRunner
 from app.workers.bot import BotTaskHandler
 from app.workers.consumer import StreamConsumer
 from app.workers.indexer import ImageIndexer
@@ -38,6 +39,7 @@ class WorkerRuntime:
         text_embedder: TextEmbedder | None = None,
         text_vector_store: TextVectorStore | None = None,
         rag_pipeline: RAGPipeline | None = None,
+        agent_runner: AgentRunner | None = None,
         redis: Redis | None = None,
         http_client: httpx.AsyncClient | None = None,
         consumer_factory: Callable[..., StreamConsumer] = StreamConsumer,
@@ -56,7 +58,7 @@ class WorkerRuntime:
             else None
         )
         self.indexer = ImageIndexer(self.http, embedder, vector_store, text_indexer)
-        self.bot_handler = BotTaskHandler(self.http, rag_pipeline)
+        self.bot_handler = BotTaskHandler(self.http, rag_pipeline, agent_runner=agent_runner)
         consumer_name = f"{socket.gethostname()}-{os.getpid()}"
         self.consumers = [
             consumer_factory(self.redis, STREAM_INDEX_POST, CONSUMER_GROUP, consumer_name),

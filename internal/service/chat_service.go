@@ -46,6 +46,10 @@ type ChatRepository interface {
 	SearchActiveUsers(context.Context, string, int64, int) ([]model.User, error)
 }
 
+type BotReplyMetaRepository interface {
+	CreateBotReplyWithMeta(context.Context, int64, int64, string, []model.BotCitation, model.BotReplyMeta) (*model.Message, bool, error)
+}
+
 type PresenceStore interface {
 	SetOnline(context.Context, int64, time.Duration) error
 	SetOffline(context.Context, int64) error
@@ -97,15 +101,40 @@ type WsMessageData struct {
 	Message *model.Message `json:"message"`
 }
 
-func (s *ChatService) SendMessage(ctx context.Context, senderID, convID int64, content string) (*model.Message, error) {
+func (s *ChatService) SendMessage(ctx context.Context, senderID, convID int64, content string, modes ...model.AIMode) (*model.Message, error) {
 	content = strings.TrimSpace(content)
 	if content == "" || len([]rune(content)) > MaxMessageLength {
 		return nil, chatError(ErrChatInvalid, "消息长度必须为 1-2000 个字符")
+	}
+	mode := model.AIModeRAG
+	if len(modes) > 1 {
+		return nil, chatError(ErrChatInvalid, "AI 模式参数无效")
+	}
+	if len(modes) == 1 && modes[0] != "" {
+		mode = modes[0]
+	}
+	if mode != model.AIModeRAG && mode != model.AIModeAgent {
+		return nil, chatError(ErrChatInvalid, "AI 模式参数无效")
 	}
 	if err := s.requireMember(ctx, convID, senderID); err != nil {
 		return nil, err
 	}
 	message := &model.Message{ConversationID: convID, SenderID: senderID, Content: content}
+	if mode == model.AIModeAgent {
+		members, err := s.repo.GetMembers(ctx, convID)
+		if err != nil {
+			return nil, err
+		}
+		if !validBotConversation(members, senderID) {
+			return nil, chatError(ErrChatInvalid, "深度分析仅支持 shareo_bot 私聊")
+		}
+		metaBytes, err := json.Marshal(model.MessageMeta{Mode: mode})
+		if err != nil {
+			return nil, err
+		}
+		meta := string(metaBytes)
+		message.Meta = &meta
+	}
 	if err := s.repo.CreateMessage(ctx, message); err != nil {
 		return nil, err
 	}
@@ -308,6 +337,17 @@ type BotTask struct {
 }
 
 func (s *ChatService) GetBotTask(ctx context.Context, messageID int64) (*BotTask, error) {
+	return s.getBotTask(ctx, messageID, true)
+}
+
+// GetBotTaskWithoutHistory is reserved for authenticated internal evaluation
+// calls. It keeps each evaluation question independent without changing the
+// normal Bot conversation history semantics.
+func (s *ChatService) GetBotTaskWithoutHistory(ctx context.Context, messageID int64) (*BotTask, error) {
+	return s.getBotTask(ctx, messageID, false)
+}
+
+func (s *ChatService) getBotTask(ctx context.Context, messageID int64, includeHistory bool) (*BotTask, error) {
 	if messageID <= 0 {
 		return nil, chatError(ErrChatInvalid, "消息 ID 无效")
 	}
@@ -348,12 +388,15 @@ func (s *ChatService) GetBotTask(ctx context.Context, messageID int64) (*BotTask
 	if bot == nil || bot.ID == message.SenderID || !senderIsMember {
 		return nil, chatError(ErrChatForbidden, "不是有效的 Bot 私聊")
 	}
-	history, err := s.repo.GetRecentMessages(ctx, conversation.ID, 20)
-	if err != nil {
-		return nil, err
-	}
-	for left, right := 0, len(history)-1; left < right; left, right = left+1, right-1 {
-		history[left], history[right] = history[right], history[left]
+	history := make([]model.Message, 0)
+	if includeHistory {
+		history, err = s.repo.GetRecentMessages(ctx, conversation.ID, 20)
+		if err != nil {
+			return nil, err
+		}
+		for left, right := 0, len(history)-1; left < right; left, right = left+1, right-1 {
+			history[left], history[right] = history[right], history[left]
+		}
 	}
 	return &BotTask{Message: message, History: history, Bot: bot, Conversation: conversation}, nil
 }
@@ -363,6 +406,7 @@ func (s *ChatService) ReplyAsBot(
 	sourceMessageID, conversationID int64,
 	content string,
 	citations []model.BotCitation,
+	metadata ...model.BotReplyMeta,
 ) (*model.Message, error) {
 	content = strings.TrimSpace(content)
 	if sourceMessageID <= 0 || conversationID <= 0 || content == "" || len([]rune(content)) > MaxMessageLength {
@@ -371,9 +415,35 @@ func (s *ChatService) ReplyAsBot(
 	if len(citations) > 5 {
 		return nil, chatError(ErrChatInvalid, "引用数量不能超过 5")
 	}
-	message, created, err := s.repo.CreateBotReply(
-		ctx, sourceMessageID, conversationID, content, citations,
-	)
+	meta := model.BotReplyMeta{Mode: model.AIModeRAG}
+	if len(metadata) > 1 {
+		return nil, chatError(ErrChatInvalid, "Bot 元数据参数无效")
+	}
+	if len(metadata) == 1 {
+		meta = metadata[0]
+		if meta.Mode == "" {
+			meta.Mode = model.AIModeRAG
+		}
+	}
+	if err := validateBotReplyMeta(meta); err != nil {
+		return nil, err
+	}
+	var message *model.Message
+	var created bool
+	var err error
+	if meta.Mode != model.AIModeRAG || meta.Trace != nil {
+		metadataRepo, ok := s.repo.(BotReplyMetaRepository)
+		if !ok {
+			return nil, chatError(ErrChatInvalid, "Bot 元数据暂不支持")
+		}
+		message, created, err = metadataRepo.CreateBotReplyWithMeta(
+			ctx, sourceMessageID, conversationID, content, citations, meta,
+		)
+	} else {
+		message, created, err = s.repo.CreateBotReply(
+			ctx, sourceMessageID, conversationID, content, citations,
+		)
+	}
 	if errors.Is(err, repository.ErrInvalidBotConversation) || errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, chatError(ErrChatForbidden, "不是有效的 Bot 私聊")
 	}
@@ -400,6 +470,88 @@ func (s *ChatService) ReplyAsBot(
 	}
 	s.hub.SendToUsers(memberIDs, WsMessage{Type: "new_message", Data: WsMessageData{Message: message}})
 	return message, nil
+}
+
+func validBotConversation(members []model.ConversationMember, senderID int64) bool {
+	if len(members) != 2 {
+		return false
+	}
+	botFound := false
+	userFound := false
+	for _, member := range members {
+		if member.User == nil || member.User.Status != model.UserStatusActive {
+			return false
+		}
+		if member.User.IsBot != 0 && member.User.Username == model.ShareOBotUsername {
+			botFound = true
+		}
+		if member.UserID == senderID && member.User.IsBot == 0 {
+			userFound = true
+		}
+	}
+	return botFound && userFound
+}
+
+func validateBotReplyMeta(meta model.BotReplyMeta) error {
+	if meta.Mode != model.AIModeRAG && meta.Mode != model.AIModeAgent {
+		return chatError(ErrChatInvalid, "Bot AI 模式无效")
+	}
+	if meta.Trace == nil {
+		if meta.Mode == model.AIModeAgent {
+			return chatError(ErrChatInvalid, "Agent 回复缺少执行轨迹")
+		}
+		return nil
+	}
+	if meta.Trace.Version == "" || meta.Trace.Status == "" || meta.Trace.StopReason == "" {
+		return chatError(ErrChatInvalid, "Agent 执行轨迹缺少版本或状态")
+	}
+	if meta.Trace.Status != "completed" && meta.Trace.Status != "failed" {
+		return chatError(ErrChatInvalid, "Agent 执行轨迹状态无效")
+	}
+	if meta.Trace.FailureCategory != "" {
+		allowedCategories := map[string]struct{}{
+			"configuration":        {},
+			"provider":             {},
+			"provider_error":       {},
+			"provider_unavailable": {},
+			"request":              {},
+			"timeout":              {},
+			"transport":            {},
+			"rate_limit":           {},
+			"server":               {},
+			"response":             {},
+			"structured_output":    {},
+			"agent_disabled":       {},
+		}
+		if _, ok := allowedCategories[meta.Trace.FailureCategory]; !ok {
+			return chatError(ErrChatInvalid, "Agent 失败类别无效")
+		}
+	}
+	if meta.Trace.ProviderAttempts < 0 || meta.Trace.ProviderAttempts > 10 ||
+		meta.Trace.ProviderRetries < 0 || meta.Trace.ProviderRetries > meta.Trace.ProviderAttempts {
+		return chatError(ErrChatInvalid, "Agent Provider 计数无效")
+	}
+	if meta.Trace.RejectedToolCalls < 0 || meta.Trace.RejectedToolCalls > 128 {
+		return chatError(ErrChatInvalid, "Agent 拒绝工具计数无效")
+	}
+	if len(meta.Trace.Steps) > 6 || meta.Trace.TotalDurationMS < 0 || meta.Trace.TotalDurationMS > 120_000 {
+		return chatError(ErrChatInvalid, "Agent 执行轨迹超出限制")
+	}
+	allowedTools := map[string]struct{}{
+		"semantic_search_posts": {},
+		"keyword_search_posts":  {},
+		"read_posts":            {},
+		"search_images":         {},
+	}
+	for index, step := range meta.Trace.Steps {
+		if step.Index != index || step.Tool == "" || step.Status == "" || step.ResultCount < 0 || step.ResultCount > 10 || step.DurationMS < 0 || step.DurationMS > 60_000 {
+			return chatError(ErrChatInvalid, "Agent 执行轨迹格式无效")
+		}
+		if _, ok := allowedTools[step.Tool]; !ok {
+			return chatError(ErrChatInvalid, "Agent 工具不在白名单")
+		}
+	}
+	return nil
 }
 
 func (s *ChatService) sanitizeMessageCitations(ctx context.Context, messages []model.Message) error {

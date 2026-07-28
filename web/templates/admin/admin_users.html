@@ -1,7 +1,10 @@
 {{ template "header" . }}
-<h3 class="mb-4"><i class="bi bi-people"></i> 用户管理</h3>
-<a href="/admin" class="btn btn-outline-secondary btn-sm mb-3">← 返回仪表盘</a>
-<div class="table-responsive">
+<div class="page-header">
+    <div><div class="eyebrow">USER MANAGEMENT</div><h1>用户管理</h1><p>查看账号状态并执行必要的封禁或解封操作。</p></div>
+    <div class="page-actions"><a href="/admin" class="btn btn-outline-secondary">返回仪表盘</a></div>
+</div>
+<div id="admin-users-error" class="alert alert-danger" role="alert" hidden></div>
+<div class="table-card surface-card table-responsive">
     <table class="table table-hover align-middle">
         <thead class="table-light"><tr><th>ID</th><th>用户名</th><th>邮箱</th><th>角色</th><th>状态</th><th>注册时间</th><th>操作</th></tr></thead>
         <tbody>
@@ -19,5 +22,5 @@
         </tbody>
     </table>
 </div>
-<script>function toggleUser(id,s){if(!confirm('确认'+(s===0?'封禁':'解封')+'该用户?'))return;fetch('/api/v1/admin/users/'+id+'/status',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({status:s})}).then(r=>r.json()).then(d=>{if(d.code===0)location.reload();else alert(d.message)})}</script>
+<script>function toggleUser(id,s){if(!confirm('确认'+(s===0?'封禁':'解封')+'该用户?'))return;fetch('/api/v1/admin/users/'+id+'/status',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({status:s})}).then(async r=>{const d=await r.json().catch(()=>({}));if(!r.ok||d.code!==0)throw new Error(d.message||'账号状态更新失败');location.reload()}).catch(e=>{const box=document.getElementById('admin-users-error');box.textContent=e.message||'账号状态更新失败';box.hidden=false})}</script>
 {{ template "footer" . }}

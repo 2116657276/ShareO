@@ -61,7 +61,41 @@ type BotCitation struct {
 	ChunkID string `json:"chunk_id"`
 }
 
+type AIMode string
+
+const (
+	AIModeRAG   AIMode = "rag"
+	AIModeAgent AIMode = "agent"
+)
+
+type AgentTraceStep struct {
+	Index       int    `json:"index"`
+	Tool        string `json:"tool"`
+	Status      string `json:"status"`
+	ResultCount int    `json:"result_count"`
+	DurationMS  int64  `json:"duration_ms"`
+}
+
+type AgentTrace struct {
+	Version           string           `json:"version"`
+	Status            string           `json:"status"`
+	StopReason        string           `json:"stop_reason"`
+	FailureCategory   string           `json:"failure_category,omitempty"`
+	ProviderAttempts  int              `json:"provider_attempts"`
+	ProviderRetries   int              `json:"provider_retries"`
+	RejectedToolCalls int              `json:"rejected_tool_calls"`
+	TotalDurationMS   int64            `json:"total_duration_ms"`
+	Steps             []AgentTraceStep `json:"steps"`
+}
+
+type BotReplyMeta struct {
+	Mode  AIMode      `json:"ai_mode,omitempty"`
+	Trace *AgentTrace `json:"agent_trace,omitempty"`
+}
+
 type MessageMeta struct {
 	SourceMessageID int64         `json:"source_message_id,omitempty"`
 	Citations       []BotCitation `json:"citations,omitempty"`
+	Mode            AIMode        `json:"ai_mode,omitempty"`
+	AgentTrace      *AgentTrace   `json:"agent_trace,omitempty"`
 }

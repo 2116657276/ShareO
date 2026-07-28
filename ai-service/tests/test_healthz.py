@@ -195,3 +195,40 @@ async def test_rag_answer_rejects_missing_provider_before_retrieval(monkeypatch)
         )
     assert resp.status_code == 503
     pipeline.answer.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_agent_readyz_reports_versions_and_requires_provider(monkeypatch):
+    monkeypatch.setattr(main.settings, "internal_token", "secret")
+    monkeypatch.setattr(main.settings, "agent_enabled", True)
+    monkeypatch.setattr(main.llm_provider, "base_url", "http://llm/v1")
+    monkeypatch.setattr(main.llm_provider, "api_key", "secret")
+    monkeypatch.setattr(
+        main.app.state,
+        "worker_runtime",
+        SimpleNamespace(status=lambda: {main.STREAM_INDEX_POST: "running"}),
+        raising=False,
+    )
+    store = AsyncMock()
+    store.metadata.return_value = {"collection": "post_chunks"}
+    monkeypatch.setattr(main, "text_vector_store", store)
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        resp = await client.get("/readyz/agent", headers={"X-Internal-Token": "secret"})
+    assert resp.status_code == 200
+    assert resp.json()["status"] == "ready"
+    assert resp.json()["trace_version"] == main.settings.agent_trace_version
+    assert resp.json()["image_model"]["model"] == main.embedder.model_name
+    assert len(resp.json()["source_fingerprint"]) == 64
+    assert resp.json()["process_started_at"].endswith("+00:00")
+
+
+@pytest.mark.asyncio
+async def test_agent_readyz_degrades_when_disabled(monkeypatch):
+    monkeypatch.setattr(main.settings, "internal_token", "secret")
+    monkeypatch.setattr(main.settings, "agent_enabled", False)
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        resp = await client.get("/readyz/agent", headers={"X-Internal-Token": "secret"})
+    assert resp.status_code == 503
+    assert resp.json()["status"] == "degraded"

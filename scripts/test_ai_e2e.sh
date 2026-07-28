@@ -33,14 +33,16 @@ if [ "$NO_BUILD" = "1" ] || [ -n "$MODEL_CACHE_VOLUME" ]; then
         '    environment:' \
         '      NO_PROXY: app,redis,qdrant,mysql,mock-llm,localhost,127.0.0.1,::1' \
         '      no_proxy: app,redis,qdrant,mysql,mock-llm,localhost,127.0.0.1,::1' \
+        '      HF_HUB_OFFLINE: "1"' \
+        '      TRANSFORMERS_OFFLINE: "1"' \
+        '    volumes:' \
+        '      - ./ai-service/app:/app/app:ro' \
+        '      - hf_cache:/models' \
         '  mock-llm:' \
         "    image: $AI_IMAGE" \
-        '    build: null'
-        if [ -n "$MODEL_CACHE_VOLUME" ]; then
-            printf '%s\n' \
-            '    volumes:' \
-            '      - hf_cache:/models'
-        fi
+        '    build: null' \
+        '    volumes:' \
+        '      - ./ai-service/app:/app/app:ro'
         if [ -n "$MODEL_CACHE_VOLUME" ]; then
             printf '%s\n' \
             'volumes:' \

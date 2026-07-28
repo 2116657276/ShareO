@@ -39,6 +39,14 @@ type ImageSearchHandler struct {
 	token     string
 }
 
+// ImageSearchPage renders the authenticated shell for semantic image search.
+// The browser calls the existing public API; no AI credentials cross this boundary.
+func (h *ImageSearchHandler) ImageSearchPage(c *gin.Context) {
+	c.HTML(http.StatusOK, "image_search.html", userData(c, gin.H{
+		"title": "语义搜图 - ShareO",
+	}))
+}
+
 func NewImageSearchHandler(postRepo imageSearchPostReader) *ImageSearchHandler {
 	if postRepo == nil {
 		postRepo = repository.NewPostRepo()

@@ -478,12 +478,68 @@ def check_quality_gates(
     return gates
 
 
+def _machine_quality_gates(image_report: dict, rag_metrics: dict) -> dict[str, bool]:
+    return {
+        name: value
+        for name, value in check_quality_gates(image_report, rag_metrics).items()
+        if name != "human_relevance_avg >= 4.0"
+    }
+
+
 def _dataset_sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
 def _safe_error(exc: Exception) -> str:
     return f"{type(exc).__name__}: request failed"
+
+
+def _read_local_env(name: str, default: str = "") -> str:
+    """Read one simple .env value without sourcing or printing the file."""
+    path = Path(__file__).resolve().parents[3] / ".env"
+    try:
+        for line in path.read_text(encoding="utf-8").splitlines():
+            if not line.startswith(f"{name}="):
+                continue
+            value = line.split("=", 1)[1].strip()
+            if len(value) >= 2 and value[0] == value[-1] and value[0] in "'\"":
+                value = value[1:-1]
+            return value
+    except OSError:
+        pass
+    return default
+
+
+def _runtime_metadata(ai_base_url: str) -> dict[str, Any]:
+    fallback = (
+        "shareo-local-internal"
+        if ai_base_url.startswith(("http://127.0.0.1:", "http://localhost:"))
+        else "shareo-dev-internal"
+    )
+    token = _read_local_env("SHAREO_INTERNAL_TOKEN", fallback)
+    metadata: dict[str, Any] = {"status": "unavailable", "ai_base_url": ai_base_url}
+    try:
+        with httpx.Client(base_url=ai_base_url, timeout=10.0, trust_env=False) as client:
+            for name, path in (
+                ("image_search", "/readyz/image-search"),
+                ("rag", "/readyz/rag"),
+            ):
+                response = client.get(path, headers={"X-Internal-Token": token})
+                if response.status_code != 200:
+                    metadata[name] = {"status": "unavailable", "http_status": response.status_code}
+                    continue
+                payload = response.json()
+                metadata[name] = payload if isinstance(payload, dict) else {"status": "invalid"}
+        metadata["status"] = (
+            "ready"
+            if all(
+                metadata.get(name, {}).get("status") == "ready" for name in ("image_search", "rag")
+            )
+            else "degraded"
+        )
+    except (httpx.HTTPError, ValueError, TypeError) as exc:
+        metadata["reason"] = type(exc).__name__
+    return metadata
 
 
 def _split_markdown_row(line: str) -> list[str]:
@@ -594,7 +650,29 @@ def _build_report_environment(args: argparse.Namespace) -> dict[str, Any]:
         "rag_prompt_version": settings.rag_prompt_version,
         "llm_model": settings.llm_model,
         "network_environment": os.environ.get("SHAREO_EVAL_NETWORK", "unspecified"),
+        "ai_base_url": args.ai_base_url,
     }
+    runtime = _runtime_metadata(args.ai_base_url)
+    environment["runtime_metadata"] = runtime
+    image_status = runtime.get("image_search", {})
+    image_model = image_status.get("model", {}) if isinstance(image_status, dict) else {}
+    rag_status = runtime.get("rag", {})
+    rag_model = rag_status.get("model", {}) if isinstance(rag_status, dict) else {}
+    if isinstance(image_model, dict):
+        environment["embedding_model"] = image_model.get("model", environment["embedding_model"])
+        environment["embedding_revision"] = image_model.get(
+            "revision", environment["embedding_revision"]
+        )
+        environment["embedding_device"] = image_model.get("device", environment["embedding_device"])
+    if isinstance(rag_model, dict):
+        environment["text_embedding_model"] = rag_model.get(
+            "model", environment["text_embedding_model"]
+        )
+    if isinstance(rag_status, dict):
+        environment["llm_model"] = rag_status.get("llm_model", environment["llm_model"])
+        environment["rag_prompt_version"] = rag_status.get(
+            "prompt_version", environment["rag_prompt_version"]
+        )
     try:
         environment["git_sha"] = subprocess.check_output(
             ["git", "rev-parse", "HEAD"], cwd=repo_root, text=True
@@ -611,12 +689,20 @@ def _build_report_environment(args: argparse.Namespace) -> dict[str, Any]:
 
 
 def _apply_human_scoring(
-    results: dict[str, Any], scoring_input: Path | None
+    results: dict[str, Any], scoring_input: Path | None, machine_only: bool = False
 ) -> tuple[dict[str, bool | str], bool]:
     image_report = results.get("image_search", {}).get("report", {})
     rag_metrics = results.get("rag", {}).get("metrics", {})
+    machine_gates = _machine_quality_gates(image_report, rag_metrics)
+    machine_passed = all(value is True for value in machine_gates.values())
+    results["machine_quality_gates"] = machine_gates
+    results["machine_quality_gate_passed"] = machine_passed
     human_avg_score: float | None = None
-    if scoring_input is None:
+    if machine_only:
+        results["human_scoring"] = {"status": "SKIPPED"}
+    elif not machine_passed:
+        results["human_scoring"] = {"status": "BLOCKED_MACHINE_GATES"}
+    elif scoring_input is None:
         results["human_scoring"] = {"status": "PENDING"}
     else:
         expected_count = int(rag_metrics.get("total_queries", 0))
@@ -637,7 +723,9 @@ def _apply_human_scoring(
 
     gates = check_quality_gates(image_report, rag_metrics, human_avg_score)
     results["quality_gates"] = gates
-    results["quality_gate_passed"] = all(value is True for value in gates.values())
+    results["quality_gate_passed"] = (
+        machine_passed if machine_only else all(value is True for value in gates.values())
+    )
     return gates, results["quality_gate_passed"]
 
 
@@ -645,6 +733,9 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--base-url", default=os.environ.get("SHAREO_BASE_URL", "http://127.0.0.1:8080")
+    )
+    parser.add_argument(
+        "--ai-base-url", default=os.environ.get("SHAREO_AI_BASE_URL", "http://127.0.0.1:8000")
     )
     parser.add_argument(
         "--image-dataset",
@@ -715,6 +806,11 @@ def main() -> int:
         default=None,
         help="Reuse a previous JSON report and only re-evaluate quality gates",
     )
+    parser.add_argument(
+        "--machine-only",
+        action="store_true",
+        help="evaluate machine gates without requiring human scores",
+    )
     args = parser.parse_args()
 
     if args.report_input and not args.output:
@@ -727,11 +823,13 @@ def main() -> int:
             print(f"Failed to load report: {type(exc).__name__}", file=sys.stderr)
             return 1
         try:
-            gates, all_gates_passed = _apply_human_scoring(results, args.scoring_input)
+            gates, all_gates_passed = _apply_human_scoring(
+                results, args.scoring_input, machine_only=args.machine_only
+            )
         except Exception as exc:
             print(f"Failed to finalize report: {_safe_error(exc)}", file=sys.stderr)
             return 1
-        _print_quality_gates(gates)
+        _print_quality_gates(results["machine_quality_gates"] if args.machine_only else gates)
         _write_report(args.output, results)
         print(f"  Final report written to {args.output}")
         return 0 if all_gates_passed else 1
@@ -811,8 +909,10 @@ def main() -> int:
 
     # ── Quality gates ──
     if run_image and run_rag:
-        gates, all_gates_passed = _apply_human_scoring(results, args.scoring_input)
-        _print_quality_gates(gates)
+        gates, all_gates_passed = _apply_human_scoring(
+            results, args.scoring_input, machine_only=args.machine_only
+        )
+        _print_quality_gates(results["machine_quality_gates"] if args.machine_only else gates)
     else:
         results["quality_gates"] = {"full evaluation required": False}
         results["quality_gate_passed"] = False
@@ -823,7 +923,7 @@ def main() -> int:
     # ── Human scoring template ──
     if run_rag and "scoring_template" in results.get("rag", {}):
         scoring_rows = results["rag"]["scoring_template"]
-        if scoring_rows:
+        if scoring_rows and results.get("machine_quality_gate_passed") and not args.machine_only:
             scoring_path = args.scoring_output or Path("eval_ai_human_scoring.md")
             _write_scoring_template(scoring_path, scoring_rows, report_env)
             print(f"  Human scoring template written to {scoring_path}")
@@ -839,12 +939,12 @@ def main() -> int:
     # ── Summary ──
     print()
     print("=" * 60)
-    return 0 if all_gates_passed else 1
     if all_gates_passed:
         print("  ALL QUALITY GATES PASSED")
     else:
         print("  SOME QUALITY GATES FAILED — review output above")
     print("=" * 60)
+    return 0 if all_gates_passed else 1
 
 
 def _write_scoring_template(path: Path, rows: list[dict], env: dict) -> None:

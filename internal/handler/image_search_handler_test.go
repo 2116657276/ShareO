@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -14,6 +16,26 @@ import (
 
 type fakeImageSearchPosts struct {
 	posts []model.Post
+}
+
+func TestImageSearchPageContract(t *testing.T) {
+	content, err := os.ReadFile("../../web/templates/search/image_search.html")
+	if err != nil {
+		t.Fatal(err)
+	}
+	page := string(content)
+	for _, required := range []string{
+		"/api/v1/search/images",
+		"1–200",
+		"imageSearchResults",
+		"imageSearchEmpty",
+		"imageSearchUnavailable",
+		"/post/${postID}",
+	} {
+		if !strings.Contains(page, required) {
+			t.Fatalf("image search page missing %q", required)
+		}
+	}
 }
 
 func (f *fakeImageSearchPosts) FindByIDs(_ []int64) ([]model.Post, error) {

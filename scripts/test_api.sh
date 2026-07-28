@@ -4,11 +4,46 @@
 #  所有测试通过 curl 调用 API 模拟用户/管理员行为
 #  严禁直接 SQL/Redis/MinIO 操作
 # ============================================================
-set -e
+set -euo pipefail
 
-BASE="http://localhost:8080"
+BASE="${SHAREO_BASE_URL:-http://127.0.0.1:8080}"
+ADMIN_USER="${SHAREO_TEST_ADMIN_USER:-demoadmin}"
+ADMIN_PASSWORD="${SHAREO_TEST_ADMIN_PASSWORD:-admin123}"
+TEST_PASSWORD="${SHAREO_TEST_PASSWORD:-shareo-api-test-pass}"
+SUFFIX="$(python3 -c 'import time; print(time.time_ns())')"
+SHORT_SUFFIX="${SUFFIX: -10}"
+USER1="api-contract-${SHORT_SUFFIX}"
+USER2="api-contract-b-${SHORT_SUFFIX}"
+EMAIL1="${USER1}@shareo.local"
+EMAIL2="${USER2}@shareo.local"
 PASS=0
 FAIL=0
+TMPIMG=""
+POSTID=""
+USER1_ID=""
+USER2_ID=""
+ADM_TOKEN=""
+
+# Local API checks must bypass the host proxy.
+curl() { command curl --noproxy '*' "$@"; }
+
+cleanup() {
+    set +e
+    if [ -n "$POSTID" ] && [ -n "$ADM_TOKEN" ]; then
+        curl -s -X DELETE "$BASE/api/v1/admin/posts/$POSTID" -b "token=$ADM_TOKEN" >/dev/null
+    fi
+    for user_id in "$USER1_ID" "$USER2_ID"; do
+        if [ -n "$user_id" ] && [ -n "$ADM_TOKEN" ]; then
+            curl -s -X PUT "$BASE/api/v1/admin/users/$user_id/status" \
+                -b "token=$ADM_TOKEN" -H 'Content-Type: application/json' \
+                -d '{"status":0}' >/dev/null
+        fi
+    done
+    if [ -n "$TMPIMG" ]; then
+        rm -f "$TMPIMG"
+    fi
+}
+trap cleanup EXIT
 
 red()    { echo -e "\033[31m$1\033[0m"; }
 green()  { echo -e "\033[32m$1\033[0m"; }
@@ -46,33 +81,33 @@ echo "=== 1. Auth 认证测试 ==="
 # Register
 REG=$(curl -s -X POST "$BASE/api/v1/auth/register" \
   -H 'Content-Type: application/json' \
-  -d '{"username":"ftest01","password":"256500","email":"ftest01@test.com"}')
+  -d "{\"username\":\"$USER1\",\"password\":\"$TEST_PASSWORD\",\"email\":\"$EMAIL1\"}")
 check "注册新用户" '"code":0' "$REG"
 USER1_ID=$(echo "$REG" | python3 -c "import sys,json;print(json.load(sys.stdin)['data']['user']['id'])" 2>/dev/null)
 
 # Login
 LOGIN=$(curl -s -X POST "$BASE/api/v1/auth/login" \
   -H 'Content-Type: application/json' \
-  -d '{"username":"ftest01","password":"256500"}')
+  -d "{\"username\":\"$USER1\",\"password\":\"$TEST_PASSWORD\"}")
 check "登录" '"code":0' "$LOGIN"
 TOKEN=$(echo "$LOGIN" | python3 -c "import sys,json;print(json.load(sys.stdin)['data']['token'])" 2>/dev/null)
 
 # Register duplicate
 REG2=$(curl -s -X POST "$BASE/api/v1/auth/register" \
   -H 'Content-Type: application/json' \
-  -d '{"username":"ftest01","password":"256500"}')
+  -d "{\"username\":\"$USER1\",\"password\":\"$TEST_PASSWORD\"}")
 check "重复注册" '用户名已存在' "$REG2"
 
 # Login wrong password
 LOGIN2=$(curl -s -X POST "$BASE/api/v1/auth/login" \
   -H 'Content-Type: application/json' \
-  -d '{"username":"ftest01","password":"wrong"}')
+  -d "{\"username\":\"$USER1\",\"password\":\"wrong\"}")
 check "错误密码登录" '用户名或密码错误' "$LOGIN2"
 
 # XSS username
 XSS=$(curl -s -X POST "$BASE/api/v1/auth/register" \
   -H 'Content-Type: application/json' \
-  -d '{"username":"<script>alert(1)</script>","password":"256500"}')
+  -d "{\"username\":\"<script>alert(1)</script>\",\"password\":\"$TEST_PASSWORD\"}")
 check "XSS用户名" '用户名包含非法字符' "$XSS"
 
 # Me
@@ -82,7 +117,7 @@ check "个人信息" '"code":0' "$ME"
 # Update profile
 UP=$(curl -s -X PUT "$BASE/api/v1/auth/profile" -b "token=$TOKEN" \
   -H 'Content-Type: application/json' \
-  -d '{"bio":"functional test bio","email":"ftest01_new@test.com"}')
+  -d "{\"bio\":\"API contract test $SHORT_SUFFIX\",\"email\":\"${USER1}-updated@shareo.local\"}")
 check "更新资料" '"code":0' "$UP"
 
 # Unauthorized access
@@ -92,10 +127,12 @@ check_code "未登录访问me" "401" "$NOAUTH"
 # Register second user for social tests
 REG2B=$(curl -s -X POST "$BASE/api/v1/auth/register" \
   -H 'Content-Type: application/json' \
-  -d '{"username":"ftest02","password":"256500","email":"ftest02@test.com"}')
+  -d "{\"username\":\"$USER2\",\"password\":\"$TEST_PASSWORD\",\"email\":\"$EMAIL2\"}")
+check "注册第二用户" '"code":0' "$REG2B"
+USER2_ID=$(echo "$REG2B" | python3 -c "import sys,json;print(json.load(sys.stdin)['data']['user']['id'])" 2>/dev/null)
 LOGIN2B=$(curl -s -X POST "$BASE/api/v1/auth/login" \
   -H 'Content-Type: application/json' \
-  -d '{"username":"ftest02","password":"256500"}')
+  -d "{\"username\":\"$USER2\",\"password\":\"$TEST_PASSWORD\"}")
 TOKEN2=$(echo "$LOGIN2B" | python3 -c "import sys,json;print(json.load(sys.stdin)['data']['token'])" 2>/dev/null)
 
 echo ""
@@ -103,7 +140,6 @@ echo "=== 2. 帖子与Feed测试 ==="
 
 # Create a valid 1x1 PNG without exposing shell quoting to binary bytes.
 TMPIMG=$(mktemp /tmp/shareo-testimg.XXXXXX.png)
-trap 'rm -f "$TMPIMG"' EXIT
 python3 - "$TMPIMG" <<'PY'
 import base64
 import pathlib
@@ -121,14 +157,14 @@ IMGURL=$(echo "$UPLOAD" | python3 -c "import sys,json;print(json.load(sys.stdin)
 # Create post
 CREATE=$(curl -s -X POST "$BASE/api/v1/posts" -b "token=$TOKEN" \
   -H 'Content-Type: application/json' \
-  -d "{\"content\":\"功能测试帖 #test #风景\",\"images\":[\"$IMGURL\"]}")
+  -d "{\"content\":\"API contract test $SHORT_SUFFIX #test #风景\",\"images\":[\"$IMGURL\"]}")
 check "发帖" '"code":0' "$CREATE"
 POSTID=$(echo "$CREATE" | python3 -c "import sys,json;print(json.load(sys.stdin)['data']['id'])" 2>/dev/null)
 
 # New posts are pending by design. Approve the fixture before testing public reads.
 ADM_LOGIN=$(curl -s -X POST "$BASE/api/v1/auth/login" \
   -H 'Content-Type: application/json' \
-  -d '{"username":"admin","password":"admin123"}')
+  -d "{\"username\":\"$ADMIN_USER\",\"password\":\"$ADMIN_PASSWORD\"}")
 check "管理员登录" '"code":0' "$ADM_LOGIN"
 ADM_TOKEN=$(echo "$ADM_LOGIN" | python3 -c "import sys,json;print(json.load(sys.stdin)['data']['token'])" 2>/dev/null)
 APPROVE=$(curl -s -X POST "$BASE/api/v1/admin/posts/$POSTID/approve" -b "token=$ADM_TOKEN")
@@ -149,6 +185,11 @@ check "Feed流" '"code":0' "$FEED"
 # Search
 SEARCH=$(curl -s "$BASE/api/v1/search?q=功能测试")
 check "搜索" '"code":0' "$SEARCH"
+
+# Semantic image search is a Go public API backed by the internal AI API.
+IMAGE_SEARCH=$(curl -s --get "$BASE/api/v1/search/images" \
+  --data-urlencode 'q=西湖夜景' --data-urlencode 'limit=5')
+check "语义搜图 API" '"code":0' "$IMAGE_SEARCH"
 
 echo ""
 echo "=== 3. 社交功能测试 ==="
@@ -234,8 +275,7 @@ check_code "群成员路由已删除" "404" "$GROUP_MEMBERS_CODE"
 echo ""
 echo "=== 7. 清理测试数据 ==="
 
-curl -s -X DELETE "$BASE/api/v1/admin/posts/$POSTID" -b "token=$ADM_TOKEN" > /dev/null
-green "  PASS: 测试数据已清理"
+green "  PASS: 测试数据将在退出时删除，临时用户将被停用"
 PASS=$((PASS+1))
 
 echo ""

@@ -2,22 +2,23 @@
 {{ $post := .Post }}
 <div class="row" x-data="postDetail({{ $post.ID }}, {{ $post.IsLiked }}, {{ $post.LikeCount }})" x-init="init()">
     <div class="col-lg-8 mx-auto">
+        <article class="surface-card p-3 p-md-4">
         {{ if $post.Images }}
         <div class="image-carousel mb-3" x-data="{ cur: 0, total: {{ len $post.Images }} }">
             {{ range $i, $img := $post.Images }}
-            <img src="{{ mediumURL $img.ImageURL }}" x-show="cur === {{ $i }}" style="display:{{ if eq $i 0 }}block{{ else }}none{{ end }}">
+            <img src="{{ mediumURL $img.ImageURL }}" alt="帖子图片 {{ add $i 1 }}" x-show="cur === {{ $i }}" style="display:{{ if eq $i 0 }}block{{ else }}none{{ end }}" onerror="this.classList.add('img-error')">
             {{ end }}
             {{ if gt (len $post.Images) 1 }}
-            <button @click="cur = (cur - 1 + total) % total" class="carousel-arrow carousel-arrow-left">‹</button>
-            <button @click="cur = (cur + 1) % total" class="carousel-arrow carousel-arrow-right">›</button>
+            <button type="button" @click="cur = (cur - 1 + total) % total" class="carousel-arrow carousel-arrow-left" aria-label="上一张图片">‹</button>
+            <button type="button" @click="cur = (cur + 1) % total" class="carousel-arrow carousel-arrow-right" aria-label="下一张图片">›</button>
             <div class="carousel-dots">
-                {{ range $i, $_ := $post.Images }}<span class="dot" :class="{ active: cur === {{ $i }} }" @click="cur = {{ $i }}"></span>{{ end }}
+                {{ range $i, $_ := $post.Images }}<button type="button" class="dot" :class="{ active: cur === {{ $i }} }" @click="cur = {{ $i }}" aria-label="查看第 {{ add $i 1 }} 张图片"></button>{{ end }}
             </div>
             {{ end }}
         </div>
         {{ end }}
 
-        <h4 class="mb-2">{{ if $post.Content }}{{ $post.Content }}{{ else }}无标题{{ end }}</h4>
+        <h1 class="h4 mb-2">{{ if $post.Content }}{{ $post.Content }}{{ else }}无标题{{ end }}</h1>
         <div class="d-flex align-items-center mb-3">
             <img src="{{ if $post.User }}{{ $post.User.AvatarURL }}{{ end }}" class="rounded-circle me-2" width="36" height="36" style="object-fit:cover" onerror="this.src='/static/img/default-avatar.svg'">
             <div>
@@ -41,12 +42,15 @@
         </div>
 
         <section id="comments" class="mt-4">
-            <h5>评论</h5>
+            <h2 class="h5">评论</h2>
             <form method="post" action="/post/{{ $post.ID }}/comment" class="d-flex gap-2 mb-3">
-                <input name="content" class="form-control" maxlength="500" required placeholder="写下你的评论…">
-                <button class="btn btn-primary">发送</button>
+                <label class="visually-hidden" for="comment-content">评论内容</label>
+                <input id="comment-content" name="content" class="form-control" maxlength="500" required placeholder="写下你的评论…">
+                <button type="submit" class="btn btn-primary">发送</button>
             </form>
-            <template x-if="comments.length === 0"><p class="text-muted">还没有评论</p></template>
+            <div class="loading-block" x-show="commentsLoading" x-cloak role="status"><span class="spinner-border" aria-label="评论加载中"></span></div>
+            <div class="state-panel is-error py-4" x-show="commentsError" x-cloak role="alert"><i class="bi bi-cloud-slash" aria-hidden="true"></i><p class="mb-2" x-text="commentsError"></p><button type="button" class="btn btn-sm btn-outline-secondary" @click="loadComments()">重新加载</button></div>
+            <template x-if="!commentsLoading && !commentsError && comments.length === 0"><div class="empty-block py-4"><i class="bi bi-chat-square-text" aria-hidden="true"></i><p class="mb-0">还没有评论</p></div></template>
             <template x-for="comment in comments" :key="comment.id">
                 <div class="border-bottom py-3">
                     <strong x-text="comment.user?.username || '用户'"></strong>
@@ -54,16 +58,26 @@
                 </div>
             </template>
         </section>
+        </article>
     </div>
 </div>
 <script>
 function postDetail(postId, initialLiked, initialCount) {
     return {
-        liked: Boolean(initialLiked), likeCount: initialCount, busy: false, comments: [],
+        liked: Boolean(initialLiked), likeCount: initialCount, busy: false, comments: [], commentsLoading: true, commentsError: '',
         async init() {
             fetch(`/api/v1/posts/${postId}/view`, {method: 'POST'}).catch(() => {});
-            const r = await fetch(`/api/v1/posts/${postId}/comments?page=1&page_size=50`);
-            if (r.ok) this.comments = (await r.json()).data?.list || [];
+            await this.loadComments();
+        },
+        async loadComments() {
+            this.commentsLoading = true; this.commentsError = '';
+            try {
+                const r = await fetch(`/api/v1/posts/${postId}/comments?page=1&page_size=50`);
+                const d = await r.json();
+                if (!r.ok || d.code !== 0) throw new Error(d.message || '评论加载失败');
+                this.comments = d.data?.list || [];
+            } catch (e) { this.commentsError = e.message || '评论服务暂时不可用'; }
+            finally { this.commentsLoading = false; }
         },
         async toggleLike() {
             this.busy = true;

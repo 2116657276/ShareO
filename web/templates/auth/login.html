@@ -1,15 +1,16 @@
 {{ template "header" . }}
-<div class="auth-container" x-data="{ mode: 'user' }">
+<div class="auth-container auth-page" x-data="{ mode: 'user' }">
     <div class="auth-card">
-        <h2 class="text-center mb-1">ShareO</h2>
+        <div class="auth-mark" aria-hidden="true"><i class="bi bi-camera"></i></div>
+        <h1 class="text-center mb-1">ShareO</h1>
         <p class="text-center text-muted mb-4">拍摄与作品管理系统</p>
 
         <!-- Mode Switch -->
-        <div class="login-mode-switch mb-4">
-            <button type="button" class="mode-btn" :class="{ active: mode === 'user' }" @click="mode = 'user'">
+        <div class="login-mode-switch mb-4" role="tablist" aria-label="登录类型">
+            <button type="button" class="mode-btn" :class="{ active: mode === 'user' }" @click="mode = 'user'" :aria-selected="mode === 'user'">
                 用户登录
             </button>
-            <button type="button" class="mode-btn" :class="{ active: mode === 'admin' }" @click="mode = 'admin'">
+            <button type="button" class="mode-btn" :class="{ active: mode === 'admin' }" @click="mode = 'admin'" :aria-selected="mode === 'admin'">
                 管理员登录
             </button>
         </div>

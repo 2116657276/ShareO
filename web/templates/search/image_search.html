@@ -1,0 +1,160 @@
+{{ template "header" . }}
+<section class="image-search-page" data-image-search>
+    <div class="image-search-hero">
+        <div>
+            <span class="eyebrow"><i class="bi bi-stars"></i> 社区语义检索</span>
+            <h1 class="image-search-title">用一句话找到相似作品</h1>
+            <p class="image-search-intro">描述你想看的画面，ShareO 会从已审核的社区作品中寻找相似图片。</p>
+        </div>
+        <div class="image-search-hero-icon" aria-hidden="true"><i class="bi bi-image"></i></div>
+    </div>
+
+    <form id="imageSearchForm" class="image-search-form" novalidate>
+        <label for="imageSearchQuery" class="visually-hidden">图片描述</label>
+        <div class="image-search-input-wrap">
+            <i class="bi bi-search" aria-hidden="true"></i>
+            <input id="imageSearchQuery" name="q" type="search" maxlength="200"
+                   autocomplete="off" placeholder="例如：雨后的城市街道，暖色灯光"
+                   aria-describedby="imageSearchHint imageSearchStatus">
+            <button id="imageSearchSubmit" class="btn btn-primary" type="submit">
+                <span class="search-submit-label">开始搜图</span>
+                <span class="search-submit-loading" hidden><span class="spinner-border spinner-border-sm me-1" aria-hidden="true"></span>搜索中</span>
+            </button>
+        </div>
+        <div id="imageSearchHint" class="image-search-hint">请输入 1–200 个字符。结果只包含可见的已审核帖子。</div>
+    </form>
+
+    <div id="imageSearchStatus" class="image-search-status" role="status" aria-live="polite" hidden></div>
+    <div id="imageSearchResults" class="image-search-results" aria-live="polite"></div>
+
+    <div id="imageSearchEmpty" class="image-search-empty" hidden>
+        <div class="image-search-empty-icon" aria-hidden="true"><i class="bi bi-image"></i></div>
+        <h2>没有找到相似作品</h2>
+        <p>换一种描述试试，例如补充场景、颜色或拍摄风格。</p>
+    </div>
+
+    <div id="imageSearchUnavailable" class="image-search-empty image-search-unavailable" hidden>
+        <div class="image-search-empty-icon" aria-hidden="true"><i class="bi bi-cloud-slash"></i></div>
+        <h2>语义搜图暂不可用</h2>
+        <p>图片检索服务正在恢复，请稍后重试；社区浏览和普通私聊不受影响。</p>
+        <button id="imageSearchRetry" class="btn btn-outline-secondary" type="button">重新尝试</button>
+    </div>
+</section>
+
+<script>
+(() => {
+    const form = document.getElementById('imageSearchForm');
+    const queryInput = document.getElementById('imageSearchQuery');
+    const submitButton = document.getElementById('imageSearchSubmit');
+    const submitLabel = submitButton.querySelector('.search-submit-label');
+    const submitLoading = submitButton.querySelector('.search-submit-loading');
+    const status = document.getElementById('imageSearchStatus');
+    const results = document.getElementById('imageSearchResults');
+    const empty = document.getElementById('imageSearchEmpty');
+    const unavailable = document.getElementById('imageSearchUnavailable');
+    const retry = document.getElementById('imageSearchRetry');
+
+    function escapeHTML(value) {
+        const node = document.createElement('div');
+        node.textContent = value == null ? '' : String(value);
+        return node.innerHTML;
+    }
+
+    function setStatus(message, kind = '') {
+        status.textContent = message || '';
+        status.className = `image-search-status ${kind}`.trim();
+        status.hidden = !message;
+    }
+
+    function setLoading(value) {
+        submitButton.disabled = value;
+        submitLabel.hidden = value;
+        submitLoading.hidden = !value;
+        form.setAttribute('aria-busy', value ? 'true' : 'false');
+    }
+
+    function resetStates() {
+        results.innerHTML = '';
+        empty.hidden = true;
+        unavailable.hidden = true;
+    }
+
+    function renderResult(item) {
+        const post = item && item.post ? item.post : {};
+        const author = post.user || {};
+        const postID = Number(item && item.post_id);
+        const imageURL = item && item.image_url ? item.image_url : '/static/img/placeholder.svg';
+        const avatarURL = author.avatar_url || '/static/img/default-avatar.svg';
+        const content = post.content || '无描述';
+        const score = Number(item && item.score);
+        const scoreLabel = Number.isFinite(score) ? `相似度 ${(score * 100).toFixed(1)}%` : '语义匹配';
+        return `<article class="image-result-card">
+            <a class="image-result-media" href="/post/${postID}" aria-label="查看帖子 #${postID}">
+                <img src="${escapeHTML(imageURL)}" alt="${escapeHTML(content)}" loading="lazy" onerror="this.classList.add('image-result-error')">
+            </a>
+            <div class="image-result-body">
+                <div class="image-result-score"><i class="bi bi-magic"></i> ${escapeHTML(scoreLabel)}</div>
+                <a class="image-result-content" href="/post/${postID}">${escapeHTML(content)}</a>
+                <div class="image-result-author">
+                    <img src="${escapeHTML(avatarURL)}" alt="" onerror="this.src='/static/img/default-avatar.svg'">
+                    <span>${escapeHTML(author.username || 'ShareO 用户')}</span>
+                </div>
+            </div>
+        </article>`;
+    }
+
+    function renderResults(items) {
+        resetStates();
+        if (!Array.isArray(items) || items.length === 0) {
+            empty.hidden = false;
+            return;
+        }
+        results.innerHTML = items.map(renderResult).join('');
+    }
+
+    async function search() {
+        const query = queryInput.value.trim();
+        if (!query || query.length > 200) {
+            resetStates();
+            setStatus('搜索描述必须为 1–200 个字符。', 'is-error');
+            queryInput.focus();
+            return;
+        }
+        setLoading(true);
+        resetStates();
+        setStatus('正在查找相似作品…');
+        const url = `/api/v1/search/images?q=${encodeURIComponent(query)}&limit=20`;
+        window.history.replaceState(null, '', `/search/images?q=${encodeURIComponent(query)}`);
+        try {
+            const response = await fetch(url, { headers: { Accept: 'application/json' } });
+            let body = {};
+            try { body = await response.json(); } catch (_) { body = {}; }
+            if (response.status === 503) {
+                unavailable.hidden = false;
+                setStatus('图片检索服务暂不可用。', 'is-error');
+                return;
+            }
+            if (!response.ok || body.code !== 0) {
+                setStatus(body.message || '搜索失败，请稍后重试。', 'is-error');
+                return;
+            }
+            const items = body.data && Array.isArray(body.data.results) ? body.data.results : [];
+            renderResults(items);
+            setStatus(`已找到 ${items.length} 条相关作品。`);
+        } catch (_) {
+            setStatus('网络连接失败，请稍后重试。', 'is-error');
+        } finally {
+            setLoading(false);
+        }
+    }
+
+    form.addEventListener('submit', event => { event.preventDefault(); search(); });
+    retry.addEventListener('click', search);
+    const initialQuery = new URLSearchParams(window.location.search).get('q');
+    if (initialQuery) {
+        queryInput.value = initialQuery;
+        search();
+    }
+})();
+</script>
+{{ template "footer" . }}

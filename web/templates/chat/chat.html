@@ -1,53 +1,112 @@
 {{ template "header" . }}
-<style>
-.chat-container { height: calc(100vh - 120px); }
-.conv-list { overflow-y:auto; border-right:1px solid #dee2e6; }
-.conv-item { cursor:pointer; }
-.conv-item:hover,.conv-item.active { background:#f0f2f5; }
-.online-dot { width:8px;height:8px;border-radius:50%;display:inline-block;background:#ccc; }
-.online-dot.online { background:#22c55e; }
-.msg-area { overflow-y:auto; }
-.msg-bubble { max-width:70%;word-wrap:break-word; }
-.msg-bubble.mine { background:#0d6efd;color:#fff;border-radius:18px 18px 4px 18px; }
-.msg-bubble.other { background:#e9ecef;border-radius:18px 18px 18px 4px; }
-</style>
-<div class="container-fluid chat-container" x-data="chatApp()" x-init="init()">
-    <div class="row h-100">
-        <aside class="col-md-4 col-lg-3 conv-list p-0" x-show="!mobileMsg || !activeConv">
-            <div class="p-3 border-bottom"><h5 class="mb-2">私聊</h5>
-                <div class="d-flex gap-2 mb-2"><button class="btn btn-sm btn-primary flex-grow-1" @click="startBotDM">AI 助手</button><button class="btn btn-sm btn-outline-primary flex-grow-1" @click="focusUserSearch">发起私聊</button></div>
-                <div class="input-group input-group-sm"><input x-ref="userSearch" class="form-control" placeholder="搜索用户" x-model="userQuery" @keydown.enter.prevent="searchUsers"><button class="btn btn-primary" @click="searchUsers">搜索</button></div>
+<div class="container-fluid chat-container chat-page-shell" x-data="chatApp()" x-init="init()">
+    <div class="row h-100 chat-panel">
+        <aside class="col-md-4 col-lg-3 conv-list p-0" x-show="!mobileMsg || !activeConv" aria-label="会话列表">
+            <div class="p-3 border-bottom chat-toolbar"><div class="eyebrow">MESSAGES</div><h1 class="h5 mb-2">私聊</h1>
+                <div class="d-flex gap-2 mb-2"><button type="button" class="btn btn-sm btn-primary flex-grow-1" @click="startBotDM">AI 助手</button><button type="button" class="btn btn-sm btn-outline-primary flex-grow-1" @click="focusUserSearch">发起私聊</button></div>
+                <div class="input-group input-group-sm"><label class="visually-hidden" for="user-search">搜索用户</label><input id="user-search" x-ref="userSearch" class="form-control" placeholder="搜索用户" x-model="userQuery" @keydown.enter.prevent="searchUsers"><button type="button" class="btn btn-primary" @click="searchUsers">搜索</button></div>
                 <template x-for="u in userResults" :key="u.id"><button class="btn btn-light btn-sm w-100 text-start mt-1" @click="startDM(u)" x-text="u.is_bot ? 'AI 助手 · ' + u.username : u.username"></button></template>
             </div>
-            <template x-if="!loadingConvs && convs.length === 0"><div class="text-center text-muted py-5">暂无消息</div></template>
+            <div class="loading-block" x-show="loadingConvs" x-cloak role="status"><span class="spinner-border" aria-label="加载中"></span></div>
+            <template x-if="!loadingConvs && !errorMessage && convs.length === 0"><div class="empty-block py-5"><i class="bi bi-chat-dots" aria-hidden="true"></i><p class="mb-0">暂无消息</p></div></template>
             <template x-for="c in convs" :key="c.id"><div class="conv-item p-3 border-bottom d-flex align-items-center" :class="{active:activeConv===c.id}" @click="openConv(c)"><div class="flex-grow-1"><span class="online-dot me-1" :class="{online:c.online}"></span><strong x-text="c.title || '私聊'"></strong><small class="d-block text-muted" x-text="c.last_message?.content?.substring(0,30) || ''"></small></div><span x-show="c.unread_count>0" class="badge bg-danger" x-text="c.unread_count"></span></div></template>
         </aside>
         <main class="col-md-8 col-lg-9 d-flex flex-column" x-show="activeConv || !mobileMsg">
-            <div x-show="!activeConv" class="flex-grow-1 d-flex align-items-center justify-content-center text-muted">选择一个私聊会话</div>
+            <div x-show="errorMessage" x-cloak class="state-panel is-error m-3" role="alert"><i class="bi bi-cloud-slash" aria-hidden="true"></i><h2 class="h5">消息服务暂时不可用</h2><p x-text="errorMessage"></p><button type="button" class="btn btn-outline-secondary" @click="loadConvs()">重新加载</button></div>
+            <div x-show="!activeConv && !errorMessage" class="flex-grow-1 d-flex align-items-center justify-content-center text-muted">选择一个私聊会话</div>
             <div x-show="activeConv" class="d-flex flex-column h-100">
-                <div class="p-3 border-bottom"><button class="btn btn-sm btn-outline-secondary me-2 d-md-none" @click="mobileMsg=false">←</button><strong x-text="activeConvTitle"></strong></div>
-                <div class="flex-grow-1 msg-area p-3" x-ref="msgArea"><button x-show="hasMore" class="btn btn-sm btn-link w-100" @click="loadMore">加载更多</button><template x-for="m in messages" :key="m.id"><div class="mb-2 d-flex" :class="m.sender_id===userId?'justify-content-end':'justify-content-start'"><div class="msg-bubble p-3" :class="m.sender_id===userId?'mine':'other'"><div x-text="m.content"></div><div x-show="citationList(m).length" class="mt-2 pt-2 border-top"><small class="d-block mb-1" :class="m.sender_id===userId?'text-white-50':'text-muted'">来源帖子</small><template x-for="citation in citationList(m)" :key="citation.chunk_id"><a class="d-block small text-decoration-none" :class="m.sender_id===userId?'link-light':'link-primary'" :href="'/post/'+citation.post_id"><span x-text="'帖子 #' + citation.post_id"></span><span class="ms-1 opacity-75" x-text="citation.chunk_id"></span></a></template></div></div></div></template></div>
-                <form class="p-3 border-top input-group" @submit.prevent="sendMsg"><input class="form-control" x-model="newMsg" maxlength="2000" placeholder="输入消息…"><button class="btn btn-primary" :disabled="!newMsg.trim()">发送</button></form>
+                <div class="p-3 border-bottom chat-toolbar"><button type="button" class="btn btn-sm btn-outline-secondary me-2 d-md-none" @click="mobileMsg=false" aria-label="返回会话列表">←</button><strong x-text="activeConvTitle"></strong></div>
+                <div class="flex-grow-1 msg-area p-3" x-ref="msgArea"><button x-show="hasMore" class="btn btn-sm btn-link w-100" @click="loadMore">加载更多</button><template x-for="m in messages" :key="m.id"><div class="mb-2 d-flex" :class="m.sender_id===userId?'justify-content-end':'justify-content-start'"><div class="msg-bubble p-3" :class="m.sender_id===userId?'mine':'other'"><div x-text="m.content"></div><div x-show="citationList(m).length" class="mt-2 pt-2 border-top"><small class="d-block mb-1" :class="m.sender_id===userId?'text-white-50':'text-muted'">来源帖子</small><template x-for="citation in citationList(m)" :key="citation.chunk_id"><a class="d-block small text-decoration-none" :class="m.sender_id===userId?'link-light':'link-primary'" :href="'/post/'+citation.post_id"><span x-text="'帖子 #' + citation.post_id"></span><span class="ms-1 opacity-75" x-text="citation.chunk_id"></span></a></template></div><details x-show="agentTrace(m)" class="mt-2 pt-2 border-top"><summary class="small">深度分析步骤</summary><div class="mt-2" x-show="agentTrace(m)"><template x-for="step in agentTrace(m)?.steps || []" :key="step.index"><div class="agent-step d-flex justify-content-between"><span x-text="step.tool + ' · ' + step.status"></span><span x-text="step.result_count + ' 条 · ' + step.duration_ms + ' ms'"></span></div></template><small class="opacity-75" x-text="agentTrace(m)?.stop_reason || ''"></small></div></details></div></div></template></div>
+                <form class="p-3 border-top chat-compose" @submit.prevent="sendMsg"><div x-show="isBotConversation()" class="form-check form-switch mb-2"><input class="form-check-input" type="checkbox" id="agentMode" x-model="agentMode"><label class="form-check-label small" for="agentMode">深度分析（只读 Agent，多步检索）</label></div><div class="input-group"><label class="visually-hidden" for="message-input">消息内容</label><input id="message-input" class="form-control" x-model="newMsg" maxlength="2000" placeholder="输入消息…"><button type="submit" class="btn btn-primary" :disabled="!newMsg.trim() || sending"><span x-show="!sending">发送</span><span x-show="sending"><span class="spinner-border spinner-border-sm me-1" aria-hidden="true"></span>发送中</span></button></div></form>
             </div>
         </main>
     </div>
 </div>
 <script>
-function chatApp(){return{userId:{{ .user_id }},convs:[],activeConv:null,activeConvTitle:'',messages:[],newMsg:'',hasMore:false,mobileMsg:false,loadingConvs:false,userQuery:'',userResults:[],ws:null,reconnectDelay:1000,requestedConv:Number(new URLSearchParams(location.search).get('conv'))||0,
-async init(){await this.loadConvs();this.connectWS()},
-async loadConvs(){this.loadingConvs=true;const r=await fetch('/api/v1/conversations');if(r.ok){this.convs=(await r.json()).data||[];if(this.requestedConv){const c=this.convs.find(x=>x.id===this.requestedConv);this.requestedConv=0;if(c)this.openConv(c)}}this.loadingConvs=false},
-openConv(c){this.activeConv=c.id;this.activeConvTitle=c.title||'私聊';this.messages=[];this.mobileMsg=true;this.loadMsgs()},
-async loadMsgs(before=0){let url=`/api/v1/conversations/${this.activeConv}/messages?limit=30`;if(before)url+=`&before_id=${before}`;const r=await fetch(url);if(!r.ok)return;const d=await r.json(),batch=(d.data?.messages||[]).reverse();this.messages=before?[...batch,...this.messages]:batch;this.hasMore=Boolean(d.data?.has_more);this.$nextTick(()=>{if(this.$refs.msgArea)this.$refs.msgArea.scrollTop=this.$refs.msgArea.scrollHeight});if(this.messages.length)this.markRead(this.messages[this.messages.length-1].id)},
-loadMore(){if(this.messages.length)this.loadMsgs(this.messages[0].id)},
-focusUserSearch(){this.$nextTick(()=>this.$refs.userSearch?.focus())},
-async startBotDM(){const r=await fetch('/api/v1/users/search?q=shareo_bot&limit=20');if(!r.ok)return;const users=(await r.json()).data||[];const bot=users.find(u=>u.is_bot&&u.username==='shareo_bot');if(bot){await this.startDM(bot)}},
-async sendMsg(){const content=this.newMsg.trim();if(!content)return;this.newMsg='';const r=await fetch(`/api/v1/conversations/${this.activeConv}/messages`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({content})});if(r.ok)this.appendMsg((await r.json()).data)},
-appendMsg(m){if(!this.messages.some(x=>x.id===m.id))this.messages.push(m);this.$nextTick(()=>{if(this.$refs.msgArea)this.$refs.msgArea.scrollTop=this.$refs.msgArea.scrollHeight})},
-async markRead(id){await fetch(`/api/v1/conversations/${this.activeConv}/read`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({message_id:id})}).catch(()=>{})},
-async searchUsers(){const q=this.userQuery.trim();if(!q)return;const r=await fetch('/api/v1/users/search?q='+encodeURIComponent(q));if(r.ok)this.userResults=(await r.json()).data||[]},
-async startDM(u){const r=await fetch('/api/v1/conversations',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user_id:u.id})});if(!r.ok)return;const c=(await r.json()).data;await this.loadConvs();this.openConv(this.convs.find(x=>x.id===c.id)||{id:c.id,title:u.username});this.userResults=[];this.userQuery=''},
-citationList(m){if(!m?.meta)return[];try{const meta=typeof m.meta==='string'?JSON.parse(m.meta):m.meta;return Array.isArray(meta?.citations)?meta.citations.filter(c=>Number.isInteger(Number(c.post_id))&&Number(c.post_id)>0&&typeof c.chunk_id==='string'):[]}catch(_){return[]}},
-connectWS(){const proto=location.protocol==='https:'?'wss:':'ws:';this.ws=new WebSocket(`${proto}//${location.host}/ws`);this.ws.onopen=()=>{this.reconnectDelay=1000};this.ws.onmessage=e=>{const d=JSON.parse(e.data);if(d.type==='new_message'&&d.data?.message){const m=d.data.message;if(m.conversation_id===this.activeConv){this.appendMsg(m);this.markRead(m.id)}this.loadConvs()}};this.ws.onclose=()=>{setTimeout(()=>this.connectWS(),this.reconnectDelay);this.reconnectDelay=Math.min(this.reconnectDelay*2,16000)}}
-}}
+function chatApp() {
+    return {
+        userId: {{ .user_id }}, convs: [], activeConv: null, activeConvTitle: '', messages: [], newMsg: '',
+        agentMode: false, sending: false, hasMore: false, mobileMsg: false, loadingConvs: false,
+        userQuery: '', userResults: [], ws: null, reconnectDelay: 1000, errorMessage: '',
+        requestedConv: Number(new URLSearchParams(location.search).get('conv')) || 0,
+
+        async init() { await this.loadConvs(); this.connectWS(); },
+        async readJSON(response) { try { return await response.json(); } catch (_) { return {}; } },
+        async loadConvs() {
+            this.loadingConvs = true; this.errorMessage = '';
+            try {
+                const r = await fetch('/api/v1/conversations');
+                const d = await this.readJSON(r);
+                if (!r.ok || d.code !== 0) throw new Error(d.message || '会话加载失败');
+                this.convs = d.data || [];
+                if (this.requestedConv) {
+                    const c = this.convs.find(x => x.id === this.requestedConv);
+                    this.requestedConv = 0;
+                    if (c) this.openConv(c);
+                }
+            } catch (e) { this.errorMessage = e.message || '会话服务暂时不可用'; }
+            finally { this.loadingConvs = false; }
+        },
+        openConv(c) { this.activeConv = c.id; this.activeConvTitle = c.title || '私聊'; this.agentMode = false; this.messages = []; this.mobileMsg = true; this.loadMsgs(); },
+        async loadMsgs(before = 0) {
+            let url = `/api/v1/conversations/${this.activeConv}/messages?limit=30`;
+            if (before) url += `&before_id=${before}`;
+            try {
+                const r = await fetch(url); const d = await this.readJSON(r);
+                if (!r.ok || d.code !== 0) throw new Error(d.message || '消息加载失败');
+                const batch = (d.data?.messages || []).reverse();
+                this.messages = before ? [...batch, ...this.messages] : batch;
+                this.hasMore = Boolean(d.data?.has_more);
+                this.$nextTick(() => { if (this.$refs.msgArea) this.$refs.msgArea.scrollTop = this.$refs.msgArea.scrollHeight; });
+                if (this.messages.length) this.markRead(this.messages[this.messages.length - 1].id);
+            } catch (e) { this.errorMessage = e.message || '消息服务暂时不可用'; }
+        },
+        loadMore() { if (this.messages.length) this.loadMsgs(this.messages[0].id); },
+        focusUserSearch() { this.$nextTick(() => this.$refs.userSearch?.focus()); },
+        async startBotDM() {
+            try {
+                const r = await fetch('/api/v1/users/search?q=shareo_bot&limit=20'); const users = (await this.readJSON(r)).data || [];
+                const bot = users.find(u => u.is_bot && u.username === 'shareo_bot');
+                if (bot) await this.startDM(bot); else this.errorMessage = '暂未找到 AI 助手';
+            } catch (_) { this.errorMessage = 'AI 助手暂时不可用'; }
+        },
+        async sendMsg() {
+            const content = this.newMsg.trim(); if (!content || this.sending) return;
+            this.newMsg = ''; this.sending = true; this.errorMessage = '';
+            const payload = { content }; if (this.isBotConversation()) payload.ai_mode = this.agentMode ? 'agent' : 'rag';
+            try {
+                const r = await fetch(`/api/v1/conversations/${this.activeConv}/messages`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)});
+                const d = await this.readJSON(r); if (!r.ok || d.code !== 0) throw new Error(d.message || '消息发送失败');
+                this.appendMsg(d.data);
+            } catch (e) { this.errorMessage = e.message || '消息发送失败，请稍后重试'; }
+            finally { this.sending = false; }
+        },
+        appendMsg(m) { if (m && !this.messages.some(x => x.id === m.id)) this.messages.push(m); this.$nextTick(() => { if (this.$refs.msgArea) this.$refs.msgArea.scrollTop = this.$refs.msgArea.scrollHeight; }); },
+        async markRead(id) { await fetch(`/api/v1/conversations/${this.activeConv}/read`, {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({message_id:id})}).catch(() => {}); },
+        async searchUsers() {
+            const q = this.userQuery.trim(); if (!q) return;
+            try { const r = await fetch('/api/v1/users/search?q=' + encodeURIComponent(q)); const d = await this.readJSON(r); if (!r.ok || d.code !== 0) throw new Error(d.message || '用户搜索失败'); this.userResults = d.data || []; }
+            catch (e) { this.errorMessage = e.message || '用户搜索失败'; }
+        },
+        async startDM(u) {
+            try {
+                const r = await fetch('/api/v1/conversations', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({user_id:u.id})});
+                const d = await this.readJSON(r); if (!r.ok || d.code !== 0) throw new Error(d.message || '会话创建失败');
+                await this.loadConvs(); this.openConv(this.convs.find(x => x.id === d.data.id) || {id:d.data.id, title:u.username}); this.userResults = []; this.userQuery = '';
+            } catch (e) { this.errorMessage = e.message || '会话创建失败'; }
+        },
+        isBotConversation() { return this.activeConvTitle === 'shareo_bot'; },
+        metaObject(m) { if (!m?.meta) return null; try { return typeof m.meta === 'string' ? JSON.parse(m.meta) : m.meta; } catch (_) { return null; } },
+        citationList(m) { const meta = this.metaObject(m); return Array.isArray(meta?.citations) ? meta.citations.filter(c => Number.isInteger(Number(c.post_id)) && Number(c.post_id) > 0 && typeof c.chunk_id === 'string') : []; },
+        agentTrace(m) { const trace = this.metaObject(m)?.agent_trace; return trace && Array.isArray(trace.steps) ? trace : null; },
+        connectWS() {
+            const proto = location.protocol === 'https:' ? 'wss:' : 'ws:'; this.ws = new WebSocket(`${proto}//${location.host}/ws`);
+            this.ws.onopen = () => { this.reconnectDelay = 1000; if (this.errorMessage === '实时连接已断开，正在重试…') this.errorMessage = ''; };
+            this.ws.onmessage = e => { try { const d = JSON.parse(e.data); if (d.type === 'new_message' && d.data?.message) { const m = d.data.message; if (m.conversation_id === this.activeConv) { this.appendMsg(m); this.markRead(m.id); } this.loadConvs(); } } catch (_) {} };
+            this.ws.onerror = () => { this.errorMessage = '实时连接已断开，正在重试…'; };
+            this.ws.onclose = () => { setTimeout(() => this.connectWS(), this.reconnectDelay); this.reconnectDelay = Math.min(this.reconnectDelay * 2, 16000); };
+        }
+    }
+}
 </script>
 {{ template "footer" . }}

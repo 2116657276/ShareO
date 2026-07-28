@@ -1,23 +1,23 @@
 {{ template "header" . }}
 <div class="row"><div class="col-lg-8 mx-auto" x-data="notifications()" x-init="fetchNotifs()">
-    <div class="d-flex justify-content-between align-items-center mb-3">
-        <h4 class="mb-0">通知</h4>
+    <div class="page-header align-items-center">
+        <div><div class="eyebrow">NOTIFICATIONS</div><h1>通知</h1><p>查看互动和审核状态变化。</p></div>
         <button class="btn btn-sm btn-outline-secondary" @click="markAllRead()" x-show="unreadCount > 0">全部已读</button>
     </div>
 
     <!-- Loading -->
     <template x-if="loading">
-        <div class="text-center py-5"><div class="spinner-border text-primary"></div></div>
+        <div class="loading-block"><div class="spinner-border" aria-label="加载中"></div></div>
     </template>
 
     <!-- Empty state -->
-    <template x-if="!loading && items.length === 0">
-        <div class="text-center py-5 text-muted"><i class="bi bi-bell" style="font-size:3rem"></i><p class="mt-2">暂无通知</p></div>
+    <template x-if="!loading && !errorMessage && items.length === 0">
+        <div class="empty-block"><i class="bi bi-bell" aria-hidden="true"></i><p class="mb-0">暂无通知</p></div>
     </template>
 
     <!-- Notification list -->
     <template x-for="n in items" :key="n.id">
-        <div class="card mb-2" :class="{ 'border-primary': n.is_read === 0 }" style="cursor:pointer"
+        <div class="surface-card clickable-card mb-2" :class="{ 'border-primary': n.is_read === 0 }" style="cursor:pointer"
              @click="openNotif(n)">
             <div class="card-body py-2 px-3 d-flex align-items-center">
                 <img :src="n.actor?.avatar_url || '/static/img/default-avatar.svg'" class="rounded-circle me-2" width="36" height="36" onerror="this.src='/static/img/default-avatar.svg'">
@@ -33,6 +33,11 @@
         </div>
     </template>
 
+    <div class="state-panel is-error" x-show="errorMessage" x-cloak role="alert">
+        <i class="bi bi-cloud-slash" aria-hidden="true"></i><h3>通知加载失败</h3><p x-text="errorMessage"></p>
+        <button type="button" class="btn btn-outline-secondary" @click="fetchNotifs()">重新加载</button>
+    </div>
+
     <!-- Load more -->
     <div class="text-center mt-3" x-show="hasMore">
         <button class="btn btn-outline-secondary btn-sm" @click="loadMore()">加载更多</button>
@@ -47,18 +52,23 @@ function notifications() {
         loading: true,
         hasMore: false,
         unreadCount: 0,
+        errorMessage: '',
 
         async fetchNotifs() {
             this.loading = true;
+            this.errorMessage = '';
             try {
                 const r = await fetch('/api/v1/notifications?page=' + this.page + '&page_size=20');
                 const d = await r.json();
-                if (d.code === 0) {
+                if (r.ok && d.code === 0) {
                     this.items = this.page === 1 ? d.data.list : [...this.items, ...d.data.list];
                     this.hasMore = d.data.list.length === 20;
                     await this.fetchUnreadCount();
+                } else {
+                    this.errorMessage = d.message || '通知服务暂时不可用';
                 }
-            } finally { this.loading = false; }
+            } catch (e) { this.errorMessage = '网络连接异常，请稍后重试'; }
+            finally { this.loading = false; }
         },
 
         async fetchUnreadCount() {

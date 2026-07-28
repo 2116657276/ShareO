@@ -3,6 +3,7 @@ package handler
 import (
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/zhoujianlin/ShareO/internal/model"
@@ -16,6 +17,8 @@ type InternalHandler struct {
 	postRepo *repository.PostRepo
 	chatSvc  *service.ChatService
 }
+
+const agentEvalIsolatedHeader = "X-ShareO-Agent-Eval-Isolated"
 
 func NewInternalHandler(postRepo *repository.PostRepo, chatServices ...*service.ChatService) *InternalHandler {
 	if postRepo == nil {
@@ -74,6 +77,53 @@ func (h *InternalHandler) ListIndexPayloads(c *gin.Context) {
 	response.Success(c, gin.H{"items": payloads, "next_after_id": nextAfterID})
 }
 
+func (h *InternalHandler) SearchAgentPosts(c *gin.Context) {
+	query := strings.TrimSpace(c.Query("q"))
+	if query == "" || len([]rune(query)) > 200 {
+		response.BadRequest(c, "搜索关键词必须为 1-200 个字符")
+		return
+	}
+	limit, err := strconv.Atoi(c.DefaultQuery("limit", "10"))
+	if err != nil || limit < 1 || limit > 10 {
+		response.BadRequest(c, "limit 必须为 1-10")
+		return
+	}
+	items, err := h.postRepo.SearchApprovedPosts(query, limit)
+	if err != nil {
+		response.InternalError(c, "Agent 搜索暂不可用")
+		return
+	}
+	response.Success(c, gin.H{"items": items})
+}
+
+func (h *InternalHandler) ReadAgentPosts(c *gin.Context) {
+	var req struct {
+		PostIDs []int64 `json:"post_ids" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil || len(req.PostIDs) == 0 || len(req.PostIDs) > 10 {
+		response.BadRequest(c, "post_ids 必须包含 1-10 个帖子 ID")
+		return
+	}
+	seen := make(map[int64]struct{}, len(req.PostIDs))
+	for _, id := range req.PostIDs {
+		if id <= 0 {
+			response.BadRequest(c, "post_ids 必须为正整数")
+			return
+		}
+		if _, ok := seen[id]; ok {
+			response.BadRequest(c, "post_ids 不得重复")
+			return
+		}
+		seen[id] = struct{}{}
+	}
+	items, err := h.postRepo.ReadApprovedPosts(req.PostIDs)
+	if err != nil {
+		response.InternalError(c, "Agent 帖子读取暂不可用")
+		return
+	}
+	response.Success(c, gin.H{"items": items})
+}
+
 func (h *InternalHandler) BotTask(c *gin.Context) {
 	if h.chatSvc == nil {
 		response.InternalError(c, "Bot 服务未配置")
@@ -84,7 +134,12 @@ func (h *InternalHandler) BotTask(c *gin.Context) {
 		response.BadRequest(c, "消息 ID 无效")
 		return
 	}
-	task, err := h.chatSvc.GetBotTask(c.Request.Context(), messageID)
+	var task *service.BotTask
+	if c.GetHeader(agentEvalIsolatedHeader) == "1" {
+		task, err = h.chatSvc.GetBotTaskWithoutHistory(c.Request.Context(), messageID)
+	} else {
+		task, err = h.chatSvc.GetBotTask(c.Request.Context(), messageID)
+	}
 	if err != nil {
 		handleChatError(c, err)
 		return
@@ -102,6 +157,8 @@ func (h *InternalHandler) BotReply(c *gin.Context) {
 		ConversationID  int64               `json:"conversation_id" binding:"required"`
 		Content         string              `json:"content" binding:"required"`
 		Citations       []model.BotCitation `json:"citations"`
+		Mode            model.AIMode        `json:"ai_mode"`
+		AgentTrace      *model.AgentTrace   `json:"agent_trace"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.BadRequest(c, "Bot 回复格式无效")
@@ -109,6 +166,7 @@ func (h *InternalHandler) BotReply(c *gin.Context) {
 	}
 	message, err := h.chatSvc.ReplyAsBot(
 		c.Request.Context(), req.SourceMessageID, req.ConversationID, req.Content, req.Citations,
+		model.BotReplyMeta{Mode: req.Mode, Trace: req.AgentTrace},
 	)
 	if err != nil {
 		handleChatError(c, err)

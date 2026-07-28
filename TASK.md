@@ -1,48 +1,58 @@
 # TASK.md — 当前任务
 
-> 更新时间：2026-07-26 | 当前阶段：Phase 7C 已完成
+> 更新时间：2026-07-28 | 当前阶段：Phase 8B 进行中 | 暂缓：浏览器验收与 Docker/Compose 打包
 
-## Phase 7A：Demo 数据与冻结评测集 ✅ 已完成
+## 当前状态
 
-- [x] 实现可重复的 `make demo-seed`，固定 Demo 用户、管理员、`shareo_bot`、26 篇真实图片帖子正文。
-- [x] 接入 26 张真实 JPEG 照片（`resources/static/pictures/`），重构 40 条搜图与 30 条 RAG 标注集。
-- [x] `make check` 全部通过（Go tests, Python tests, ruff, shell syntax, doc check）。
-- [x] RAG Bot 端到端通过 DeepSeek V4 Flash 验证，引用准确。
+当前主线是：本机自动回归 → 用户人工验收 → Docker/Compose 最终打包。后端 API、RAG、Agent 和 Go Template 页面已经完成工程实现；浏览器人工验收、源码冷启动和最终发布复核仍未完成。
 
-## Phase 7B：真实 Provider 与质量评测 ✅ 已完成
+- [x] API 边界、聊天/RAG/Agent 自动化、readiness、源码指纹和失败语义已补齐。
+- [x] 当前本机环境的 36 条 Agent 评测曾取得工具选择率 `0.9167`，其余机器门禁通过。该报告位于仓库外，工作区为 dirty，不作为干净提交的最终发布证据。
+- [x] Go Template 页面和独立 `/search/images` 页面已实现，并通过模板、Handler、静态契约和本机自动检查。
+- [x] 本机人工样本已扩展为 47 条 approved 帖子；图片和正文向量各 47 条，索引 pending 为 0。该语料只用于人工体验，不替代冻结评测集。
+- [ ] 用户完成浏览器人工测试，并抽查 10 条 Agent 答案。
+- [ ] 人工验收通过后，执行干净源码 Compose 冷启动、故障恢复、最终质量复核和发布证据归档。
 
-- [x] DeepSeek V4 Flash 已配置（`.env`，不入库），`/readyz/rag` 返回 ready。
-- [x] 实现 `make eval-ai` 统一评测命令（搜图 + RAG）。
-- [x] 修正评测报告、人工评分模板和质量门禁失败语义，补齐必要单元测试。
-- [x] 使用当前 Compose 配置全新重建六个服务与数据库，并完成健康和 readiness 检查。
-- [x] 连续运行两次 `make demo-seed`，并使用 `validate_eval_dataset.py` 校验数据和数据库可见性。
-- [x] 运行完整搜图与 RAG 评测 `make eval-ai` 并记录质量指标。
-- [x] 完成人工相关性评分（30 条，1–5 分，平均 4.8667）。
-- [x] 达到 [Phase 7 质量门禁](docs/phases/phase-7-demo-evaluation-release.md#退出标准)：Recall@5 0.8125、MRR 0.7771、RAG 来源命中率 1.0000、引用可访问率 100%、虚假引用 0、失败请求 0。
+## 固定边界
 
-## Phase 7C：发布与演示收口
+Go 对外提供 `GET /api/v1/search/images`；AI 内部使用 `POST /v1/search/images` 和 `POST /v1/rag/answer`；Agent 继续通过 `shareo_bot` 私聊中的 `ai_mode=agent` 触发，不新增公开 RAG/Agent API。
 
-- [x] 运行自动检查、真实集成、race、图片 E2E、Bot E2E、评测和全新卷冷启动。
-- [x] 使用独立 Compose 项目验证 AI、Qdrant、MinIO、Redis、测试 LLM provider 故障时的受控降级，并确认恢复后基线通过。
-- [x] 完成 README、运行手册、五分钟 Demo 和最终证据矩阵；演示耗时 5.08 秒，Bot 返回 2 条引用。
-- [x] 清理无效脚本、旧术语、未引用文件和意外工作区文件；敏感配置、照片和模型缓存未入库。
+日常开发使用宿主机 Go/Python、Homebrew MySQL/Redis/MinIO 和本地 Qdrant。Docker/Compose 只在用户人工验收通过后恢复。不得重置本机数据、提交 `.env`、配置凭证、个人照片、模型缓存、原始响应或未脱敏报告。
 
-Phase 7C 最终门禁：`make check`、真实 MySQL/Redis/Qdrant 集成、`go test -race ./...`、图片 E2E、Bot E2E、冷启动、独立 Compose 五类降级验证和 40/30 评测复核均通过。最终复核报告为 [`phase7c_revalidated_final.json`](docs/eval/results/phase7c_revalidated_final.json)，证据索引为 [`evidence-matrix.md`](docs/evidence/phase7c/evidence-matrix.md)。
+## 已完成阶段
 
-## 环境备忘
+### Phase 7A：Demo 与冻结评测集
 
-- `compose.yaml` 与 Colima 配置已经调整；Phase 7C 冷启动已完成。构建阶段曾受 Docker 网络访问 Go 依赖代理影响，最终使用已验证镜像启动清理后的新卷；过程备份保留在工作区外。
-- 2026-07-26 已确认 Colima 正常运行，本机使用独立 `docker-compose`，Makefile 会自动回退。
-- 已完成 Compose 六服务健康检查；MySQL 26 篇 approved 可见帖子、26 个帖子图片、MinIO 26/26/26 原图/中图/缩略图对象、Qdrant 图片/正文索引各 26 条，图片与 RAG readiness 均为 ready。保留源码修改、`.env` 和被忽略的本地真实照片。
+- [x] `make demo-seed` 幂等创建 26 条 Demo 帖子和图片索引。
+- [x] 接入 26 张真实 JPEG 照片，完成 40 条搜图与 30 条 RAG 标注集。
+- [x] 冻结 40 条搜图与 30 条 RAG 数据集，并完成静态、可见性和工程校验。
+
+### Phase 7B：质量评测
+
+- [x] 完成搜图/RAG 机器评测和 30 条人工相关性评分；历史平均分 `4.8667`，最低 `4`。
+- [x] 历史报告的准确性、引用和无答案门禁通过；报告仍受 dirty workspace 和旧运行时元数据限制。
+
+### Phase 7C：发布与演示
+
+- [x] 历史工程门禁、真实集成、故障矩阵和 API 冒烟已有脱敏记录。
+- [ ] 源码冷启动、浏览器五分钟演示、干净提交复评和最终发布证据待补。
+
+### Phase 8A：只读 Agent 工程门禁
+
+- [x] 多 tool call 闭合、Provider 失败轨迹、受控重试、预算限制、工具白名单、引用复核和源码指纹已实现并有测试。
+- [x] 测试 Provider、Go/Python 单测、race、真实集成、本机 API 回归、RAG 40/30 回归和本机 Agent 机器评测已有证据。
+- [x] 历史真实 DeepSeek 轮次中的 `0.6944`、`0.7778`、`0.8889` 保留为实验记录；最新本机工作区轮次为 `0.9167`，但仍需干净提交复评。
+
+## 下一项工作
+
+1. 用户按 [`frontend-manual-acceptance.md`](docs/evidence/phase8-agent/frontend-manual-acceptance.md) 完成页面、WebSocket、引用跳转、降级行为和 10 条 Agent 答案抽查。
+2. 根据人工结果修复必要问题并重跑本机自动门禁；不得用人工评分掩盖机器失败。
+3. 人工验收通过后恢复 Docker/Compose，完成源码构建、冷启动、幂等 seed、故障矩阵和最终脱敏证据。
 
 ## 证据入口
 
-- [Phase 0–7 阶段索引](docs/phases/README.md)
-- [当前执行计划](docs/plan.md)
-- [架构与降级矩阵](docs/architecture.md)
-- [AI 评测规范](docs/eval/README.md)
-- [Phase 7B 最终机器报告](docs/eval/results/phase7b_final.json)
-- [Phase 7B 人工评分表](docs/eval/results/phase7b_human_scoring.md)
-- [Phase 7C 最终评测复核](docs/eval/results/phase7c_revalidated_final.json)
-- [Phase 7C 最终证据矩阵](docs/evidence/phase7c/evidence-matrix.md)
-- [五分钟演示规范](docs/demo.md)
+- 当前执行顺序：[`docs/plan.md`](docs/plan.md)
+- 阶段边界：[`docs/phases/README.md`](docs/phases/README.md)
+- API 与运行规则：[`docs/reference/api.md`](docs/reference/api.md)、[`docs/operations/runbook.md`](docs/operations/runbook.md)
+- 评测规则与历史实验：[`docs/eval/README.md`](docs/eval/README.md)、[`docs/eval/experiments.md`](docs/eval/experiments.md)
+- 人工验收清单：[`docs/evidence/phase8-agent/frontend-manual-acceptance.md`](docs/evidence/phase8-agent/frontend-manual-acceptance.md)

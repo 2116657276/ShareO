@@ -159,6 +159,7 @@ func SetupRouter(trustedOrigins ...string) *gin.Engine {
 	needLogin.Use(middleware.AuthRequired())
 	{
 		needLogin.GET("/home", feedH.HomePage)
+		needLogin.GET("/search/images", imageSearchH.ImageSearchPage)
 		needLogin.GET("/post/:id", postH.DetailPage)
 		needLogin.GET("/post/create", postH.CreatePage)
 		needLogin.GET("/post/:id/edit", postH.EditPage)
@@ -181,6 +182,8 @@ func SetupRouter(trustedOrigins ...string) *gin.Engine {
 		internalAPI.GET("/health", internalH.HealthCheck)
 		internalAPI.GET("/posts/index-payloads", internalH.ListIndexPayloads)
 		internalAPI.GET("/posts/:id/index-payload", internalH.IndexPayload)
+		internalAPI.GET("/posts/agent/search", internalH.SearchAgentPosts)
+		internalAPI.POST("/posts/agent/read", internalH.ReadAgentPosts)
 		internalAPI.GET("/bot/tasks/:message_id", internalH.BotTask)
 		internalAPI.POST("/bot/reply", internalH.BotReply)
 	}

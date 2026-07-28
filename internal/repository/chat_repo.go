@@ -200,6 +200,16 @@ func (r *ChatRepo) CreateBotReply(
 	content string,
 	citations []model.BotCitation,
 ) (*model.Message, bool, error) {
+	return r.CreateBotReplyWithMeta(ctx, sourceMessageID, conversationID, content, citations, model.BotReplyMeta{Mode: model.AIModeRAG})
+}
+
+func (r *ChatRepo) CreateBotReplyWithMeta(
+	ctx context.Context,
+	sourceMessageID, conversationID int64,
+	content string,
+	citations []model.BotCitation,
+	replyMeta model.BotReplyMeta,
+) (*model.Message, bool, error) {
 	var result *model.Message
 	created := false
 	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
@@ -259,6 +269,8 @@ func (r *ChatRepo) CreateBotReply(
 		metaBytes, err := json.Marshal(model.MessageMeta{
 			SourceMessageID: sourceMessageID,
 			Citations:       filtered,
+			Mode:            replyMeta.Mode,
+			AgentTrace:      replyMeta.Trace,
 		})
 		if err != nil {
 			return err

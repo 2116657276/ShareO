@@ -35,12 +35,12 @@ if [ "$NO_BUILD" = "1" ] || [ -n "$MODEL_CACHE_VOLUME" ]; then
         '      NO_PROXY: app,redis,qdrant,mysql,localhost,127.0.0.1,::1' \
         '      no_proxy: app,redis,qdrant,mysql,localhost,127.0.0.1,::1' \
         '      SHAREO_AI_LLM_BASE_URL: ""' \
-        '      SHAREO_AI_LLM_API_KEY: ""'
-        if [ -n "$MODEL_CACHE_VOLUME" ]; then
-            printf '%s\n' \
-            '    volumes:' \
-            '      - hf_cache:/models'
-        fi
+        '      SHAREO_AI_LLM_API_KEY: ""' \
+        '      HF_HUB_OFFLINE: "1"' \
+        '      TRANSFORMERS_OFFLINE: "1"' \
+        '    volumes:' \
+        '      - ./ai-service/app:/app/app:ro' \
+        '      - hf_cache:/models'
         if [ -n "$MODEL_CACHE_VOLUME" ]; then
             printf '%s\n' \
             'volumes:' \
@@ -148,13 +148,14 @@ done
 echo "PASS duplicate index deliveries converged"
 
 # Put one delivery into a dead consumer's pending list, then prove the restarted
-# FastAPI process reclaims it after the 30-second idle threshold.
+# FastAPI process reclaims it after the 30-second idle threshold. The extra
+# window covers CPU model cold-load time before the reclaimed task is ACKed.
 "${compose[@]}" stop ai-service >/dev/null
 "${compose[@]}" exec -T redis redis-cli XADD shareo:stream:index_post '*' action upsert post_id "$POST_ID" >/dev/null
 "${compose[@]}" exec -T redis redis-cli XREADGROUP GROUP ai-workers abandoned COUNT 1 STREAMS shareo:stream:index_post '>' >/dev/null
 "${compose[@]}" start ai-service >/dev/null
 RECOVERED=0
-for _ in $(seq 1 45); do
+for _ in $(seq 1 120); do
     pending="$("${compose[@]}" exec -T redis redis-cli --raw XPENDING shareo:stream:index_post ai-workers | sed -n '1p')"
     if [ "$pending" = "0" ]; then
         RECOVERED=1
@@ -163,7 +164,7 @@ for _ in $(seq 1 45); do
     sleep 1
 done
 [ "$RECOVERED" = "1" ] || { echo "AI restart did not reclaim pending index task" >&2; exit 1; }
-echo "PASS FastAPI restart reclaimed pending index task within 45 seconds"
+echo "PASS FastAPI restart reclaimed pending index task within 120 seconds"
 
 # A second post exercises the normal delete event and ten-second visibility goal.
 SHAREO_BASE_URL="$APP_URL" bash scripts/test_image_search.sh

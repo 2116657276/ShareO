@@ -1,8 +1,11 @@
 {{ template "header" . }}
-<h3 class="mb-4"><i class="bi bi-check2-square"></i> 帖子审核</h3>
-<a href="/admin" class="btn btn-outline-secondary btn-sm mb-3">← 返回仪表盘</a>
+<div class="page-header">
+    <div><div class="eyebrow">CONTENT REVIEW</div><h1>帖子审核</h1><p>审核待发布内容，确保公开 Feed 只展示合规帖子。</p></div>
+    <div class="page-actions"><a href="/admin" class="btn btn-outline-secondary">返回仪表盘</a></div>
+</div>
+<div id="admin-review-error" class="alert alert-danger" role="alert" hidden></div>
 {{ if .Posts }}
-<div class="list-group">
+<div class="list-group surface-card overflow-hidden">
     {{ range .Posts }}
     <div class="list-group-item">
         <div class="row align-items-center">
@@ -29,8 +32,8 @@
 function review(id, status, comment) {
     fetch('/api/v1/admin/posts/'+id+'/'+(status==='approved'?'approve':'reject'), {
         method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({comment:comment})
-    }).then(r=>r.json()).then(d=>{ if(d.code===0) location.reload(); else alert(d.message); });
+    }).then(async r=>{const d=await r.json().catch(()=>({})); if(!r.ok||d.code!==0) throw new Error(d.message||'审核操作失败'); location.reload();}).catch(e=>{const box=document.getElementById('admin-review-error');box.textContent=e.message||'审核操作失败';box.hidden=false;});
 }
 </script>
-{{ else }}<div class="text-center py-5"><div style="font-size:4rem"></div><h4 class="text-muted">没有待审核帖子</h4></div>{{ end }}
+{{ else }}<div class="empty-block"><i class="bi bi-check2-circle" aria-hidden="true"></i><h4>没有待审核帖子</h4><p class="mb-0">新的帖子提交后会出现在这里。</p></div>{{ end }}
 {{ template "footer" . }}

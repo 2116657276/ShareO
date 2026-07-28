@@ -20,3 +20,7 @@ RAG 使用 FastEmbed + Qdrant Client + `httpx` OpenAI-compatible 调用 + 自研
 - 模型输出的 chunk ID 必须属于本次检索结果。
 - 所有引用在写入聊天消息前由 Go 验证。
 - 不实现 rerank、GraphRAG、Agent 或工具循环。
+
+## 后续关系
+
+本 ADR 继续约束已实现的 RAG 快速路径；Phase 8 的只读 Agent 例外由 [ADR-008](ADR-008-readonly-agent.md) 单独定义，不改变 RAG pipeline 的实现边界。

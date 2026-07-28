@@ -20,11 +20,13 @@
 ## 回答流程
 
 ```text
-问题 → query embedding → Qdrant top 8
-     → 按post_id去重至最多5个来源
+问题 → query embedding → Qdrant top_k
+     → 按post_id去重至最多10个候选来源
      → 受限Prompt → DeepSeek/OpenAI-compatible chat completions
      → JSON解析 → chunk ID白名单 → 回答与引用
 ```
+
+公开的 AI 内部接口默认 `top_k=8`，允许请求方传入 1–20；冻结质量评测显式使用 `top_k=15`。`rag_max_sources=10` 限制进入 Prompt 的去重帖子数，私聊 Bot 回调再截断为最多 5 条引用。这三个数含义不同，不应合并描述。
 
 模型输出固定为：
 
@@ -54,4 +56,4 @@ Python只提交本次检索候选中的chunk ID。Go只接受格式正确且对�
 
 ## 质量门禁
 
-30条冻结问答的来源命中率≥0.80、引用可访问率100%、虚假引用0、人工相关性平均≥4.0/5。本地检索P95≤2秒；DeepSeek总延迟记录P50/P95和超时率，不设硬门禁。
+30条冻结问答的来源命中率≥0.80、引用可访问率100%、虚假引用0、人工相关性平均≥4.0/5。性能目标是本地检索P95≤2秒，并记录 DeepSeek总延迟P50/P95和超时率；当前评测器只采集端到端总延迟，分段检索 P95 和超时分类仍待实现。

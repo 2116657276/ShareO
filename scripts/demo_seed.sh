@@ -11,6 +11,33 @@ BASE_URL="${SHAREO_BASE_URL:-http://127.0.0.1:8080}"
 INTERNAL_TOKEN="${SHAREO_INTERNAL_TOKEN:-}"
 DB_PASSWORD="${SHAREO_DB_PASSWORD:-shareo_pass}"
 
+if [ "$DB_PASSWORD" = "shareo_pass" ] && [ -f "$PROJECT_DIR/config.yaml" ]; then
+    config_password="$(awk '
+        /^database:[[:space:]]*$/ { inside=1; next }
+        /^[^[:space:]]/ { inside=0 }
+        inside && /^[[:space:]]+password:/ {
+            value=$0
+            sub(/^[[:space:]]+password:[[:space:]]*/, "", value)
+            gsub(/^\"|\"$/, "", value)
+            gsub(/^\x27|\x27$/, "", value)
+            print value
+            exit
+        }
+    ' "$PROJECT_DIR/config.yaml")"
+    [ -n "$config_password" ] && DB_PASSWORD="$config_password"
+fi
+
+if [ -z "$INTERNAL_TOKEN" ]; then
+    case "$BASE_URL" in
+        http://127.0.0.1:*|http://localhost:*)
+            INTERNAL_TOKEN="shareo-local-internal"
+            ;;
+        *)
+            INTERNAL_TOKEN="shareo-dev-internal"
+            ;;
+    esac
+fi
+
 # Disable system proxy for local API calls
 unset http_proxy HTTP_PROXY https_proxy HTTPS_PROXY all_proxy ALL_PROXY
 ADMIN_USER="demoadmin"
@@ -302,19 +329,34 @@ green "  ✓ Go 服务健康"
 echo ""
 echo "=== Step 1: 创建管理员 ==="
 
-# Create admin via docker-compose or direct API
-if docker-compose version >/dev/null 2>&1; then
+# Create admin through the host MySQL in local mode, otherwise use Compose.
+case "$BASE_URL" in
+    http://127.0.0.1:*|http://localhost:*)
+        if command -v mysql >/dev/null 2>&1 && MYSQL_PWD="$DB_PASSWORD" mysql \
+            --protocol=tcp -h 127.0.0.1 -P "${SHAREO_MYSQL_PORT:-3306}" -u root shareo -e \
+            "INSERT INTO users (username, password_hash, email, role, status) VALUES ('$ADMIN_USER', '$ADMIN_HASH', '$ADMIN_EMAIL', 'admin', 1) ON DUPLICATE KEY UPDATE role='admin', status=1;" \
+            >/dev/null 2>&1; then
+            yellow "  → 本机 MySQL 中的管理员 $ADMIN_USER 已就绪"
+        else
+            red "本机 MySQL 中无法创建管理员，请确认 SHAREO_DB_PASSWORD 和 schema"
+            exit 1
+        fi
+        ;;
+    *)
+        if docker-compose version >/dev/null 2>&1; then
     docker-compose exec -T mysql mysql -uroot -p"$DB_PASSWORD" shareo -e \
         "INSERT INTO users (username, password_hash, email, role, status) VALUES ('$ADMIN_USER', '$ADMIN_HASH', '$ADMIN_EMAIL', 'admin', 1) ON DUPLICATE KEY UPDATE role='admin', status=1;" 2>/dev/null || true
     yellow "  → 管理员 $ADMIN_USER 已就绪"
-elif docker compose version >/dev/null 2>&1; then
+        elif docker compose version >/dev/null 2>&1; then
     docker compose exec -T mysql mysql -uroot -p"$DB_PASSWORD" shareo -e \
         "INSERT INTO users (username, password_hash, email, role, status) VALUES ('$ADMIN_USER', '$ADMIN_HASH', '$ADMIN_EMAIL', 'admin', 1) ON DUPLICATE KEY UPDATE role='admin', status=1;" 2>/dev/null || true
     yellow "  → 管理员 $ADMIN_USER 已就绪"
-else
+        else
     yellow "  → 未检测到 docker compose，尝试通过 API 注册管理员"
     register_or_login "$ADMIN_USER" "$ADMIN_PASSWORD" >/dev/null || true
-fi
+        fi
+        ;;
+esac
 
 ADMIN_RESP="$(api_call POST "$BASE_URL/api/v1/auth/login" \
     "{\"username\":\"$ADMIN_USER\",\"password\":\"$ADMIN_PASSWORD\"}")"
@@ -352,11 +394,6 @@ POST_COUNT=0
 POST_MAP_FILE="$DEMO_IMG_DIR/post_id_map.txt"
 EXISTING_INDEX_FILE="$(mktemp /tmp/shareo-demo-index.XXXXXX)"
 trap 'rm -f "$EXISTING_INDEX_FILE"' EXIT
-
-if [ -z "$INTERNAL_TOKEN" ]; then
-    red "SHAREO_INTERNAL_TOKEN 未设置，无法验证 Demo seed 幂等性"
-    exit 1
-fi
 
 if ! curl --noproxy '*' --fail --silent \
     -H "X-Internal-Token: $INTERNAL_TOKEN" \

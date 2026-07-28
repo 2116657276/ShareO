@@ -6,7 +6,9 @@ from collections.abc import Callable
 import httpx
 import pytest
 
+from app.config import settings
 from app.rag.pipeline import NO_ANSWER, Citation, RAGAnswer
+from app.agent.graph import AgentAnswer
 from app.workers.bot import (
     FALLBACK_MESSAGE,
     MAX_CALLBACK_CITATIONS,
@@ -61,6 +63,36 @@ def task_payload() -> dict:
             {"id": 9, "content": "怎么拍夜景？", "sender": {"is_bot": 0}},
         ],
     }
+
+
+def agent_task_payload() -> dict:
+    payload = task_payload()
+    payload["message"]["meta"] = json.dumps({"ai_mode": "agent"})
+    return payload
+
+
+class FakeAgentRunner:
+    async def answer(self, question, history=None):
+        assert question == "怎么拍夜景？"
+        return AgentAnswer(
+            "已根据多个社区来源整理。",
+            [Citation(post_id=12, chunk_id="12:0", excerpt="夜景", score=0.9)],
+            {
+                "version": "agent-trace-v1",
+                "status": "completed",
+                "stop_reason": "model_answer",
+                "total_duration_ms": 12,
+                "steps": [
+                    {
+                        "index": 0,
+                        "tool": "semantic_search_posts",
+                        "status": "success",
+                        "result_count": 1,
+                        "duration_ms": 4,
+                    }
+                ],
+            },
+        )
 
 
 def transport_for(
@@ -128,6 +160,28 @@ async def test_successful_task_calls_rag_and_posts_whitelisted_citation():
 
 
 @pytest.mark.asyncio
+async def test_eval_isolation_header_suppresses_conversation_history(monkeypatch):
+    monkeypatch.setattr(settings, "agent_eval_isolated_history", True)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.method == "GET":
+            assert request.headers["X-ShareO-Agent-Eval-Isolated"] == "1"
+            payload = task_payload()
+            payload["history"] = []
+            return httpx.Response(200, json={"data": payload})
+        assert_callback(request, "可以使用三脚架。")
+        return httpx.Response(200, json={"code": 0})
+
+    pipeline = FakePipeline()
+    client = transport_for(handler)
+    worker = BotTaskHandler(client, pipeline, "http://go.test", "test-token")
+    await worker("1-0", {"message_id": "9", "conversation_id": "7"})
+    await client.aclose()
+
+    assert pipeline.calls == [("怎么拍夜景？", [])]
+
+
+@pytest.mark.asyncio
 async def test_missing_provider_writes_fixed_fallback_without_rag_call():
     posted: list[httpx.Request] = []
 
@@ -174,6 +228,42 @@ async def test_many_rag_citations_are_capped_to_go_callback_limit():
 
     client = transport_for(handler)
     worker = BotTaskHandler(client, ManyCitationPipeline(), "http://go.test", "test-token")
+    await worker("1-0", {"message_id": "9", "conversation_id": "7"})
+    await client.aclose()
+
+
+@pytest.mark.asyncio
+async def test_agent_task_posts_trace_and_mode():
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.method == "GET":
+            return httpx.Response(200, json={"data": agent_task_payload()})
+        payload = json.loads(request.content)
+        assert payload["ai_mode"] == "agent"
+        assert payload["agent_trace"]["steps"][0]["tool"] == "semantic_search_posts"
+        assert payload["citations"] == [{"post_id": 12, "chunk_id": "12:0"}]
+        return httpx.Response(200, json={"code": 0})
+
+    client = transport_for(handler)
+    worker = BotTaskHandler(
+        client, FakePipeline(), "http://go.test", "test-token", FakeAgentRunner()
+    )
+    await worker("1-0", {"message_id": "9", "conversation_id": "7"})
+    await client.aclose()
+
+
+@pytest.mark.asyncio
+async def test_agent_missing_provider_keeps_failed_trace():
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.method == "GET":
+            return httpx.Response(200, json={"data": agent_task_payload()})
+        payload = json.loads(request.content)
+        assert payload["ai_mode"] == "agent"
+        assert payload["agent_trace"]["status"] == "failed"
+        assert payload["agent_trace"]["stop_reason"] == "provider_unavailable"
+        return httpx.Response(200, json={"code": 0})
+
+    client = transport_for(handler)
+    worker = BotTaskHandler(client, FakePipeline(configured=False), "http://go.test", "test-token")
     await worker("1-0", {"message_id": "9", "conversation_id": "7"})
     await client.aclose()
 

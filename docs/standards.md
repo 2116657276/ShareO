@@ -30,7 +30,7 @@ Handler → Service → Repository → DB/Redis
 
 - **工具链**: Python 固定 3.12；uv dependency group 管理 dev 依赖（lock 文件提交）；CI 和检查用 locked/frozen；`ruff check` + `ruff format` + `pytest` 必须可离线跑。
 - **类型**: 全量 type hints；对外数据结构一律 pydantic v2 model，不裸传 dict。
-- **结构**: `api/`（路由）→ `core/`（模型/存储客户端）→ `rag/`（管线）→ `workers/`（消费者）；模型加载懒加载 + 进程内单例。
+- **结构**: 当前路由集中在 `app/main.py`；其余代码按 `core/`（模型/存储客户端）→ `rag/`（管线）→ `agent/`（Phase 8 状态图、工具和轨迹）→ `workers/`（消费者）分责。`agent/` 只能通过现有 RAG/向量客户端和受保护 Go 内部只读接口取数，不直接访问 MySQL 或 MinIO；模型加载保持懒加载和进程内单例。
 - **配置**: pydantic-settings 读 `SHAREO_AI_*` 环境变量，禁止硬编码密钥/地址。
 
 ## 4. API 设计规范
@@ -47,15 +47,16 @@ Handler → Service → Repository → DB/Redis
 - **提交信息**: Conventional Commits——`feat:` / `fix:` / `docs:` / `refactor:` / `test:` / `chore:`，subject 中文可；修复评审项带编号（`fix: 搜索分页除零 panic (SR-01)`）。
 - **粒度**: 一个逻辑变更一个提交；修复清单逐项提交，不打包。
 - **分支**: 日常直接 main（单人项目）；每个 Phase 的大改动开 `phase1-im` 风格分支，完成后合回；main 时刻保持 `make check` 绿。
-- **禁止入库**: config.yaml、密钥、二进制产物（bin/）、个人照片/数据（resources/）、模型权重文件。
+- **禁止入库**: `config.yaml`、`.env`/`.env.*`（`.env.example` 除外）、密钥、二进制产物（`bin/`）、个人照片/数据（`resources/`）、模型权重、缓存、运行日志、备份和未脱敏原始响应。评测报告只提交脱敏后的指标和可复现元数据。
 
 ## 6. 测试规范
 
 - 新功能最低要求：Service 层核心逻辑单测；跨服务能力增加隔离 `scripts/test_*.sh` E2E。
-- 当前行为证据由 Go/Python 单测、真实 MySQL/Redis 集成、`test-image-e2e` 和 `test-ai-e2e` 组成；最终发布再按 `docs/demo.md` 完成页面演示。
+- 当前行为证据由 Go/Python 单测、真实 MySQL/Redis 集成、`test-image-e2e` 和 `test-ai-e2e` 组成；API 自动化只能证明链路，最终页面演示仍需按 `docs/demo.md` 人工验证 WebSocket 实时下行和引用点击。
 - 涉及并发的代码（ws Hub、队列消费）必须过 `go test -race`。
 - 无外部服务的门禁统一 `make check`；真实 MySQL/Redis 放 `make test-integration`。该目标强制要求 `SHAREO_TEST_MYSQL_DSN`（库名以 `_test` 结尾）与 `SHAREO_TEST_REDIS_URL`，避免把 skip 算作通过。
 - AI 效果不写断言式单测，走 `docs/eval/` 评测集 + 指标（见 [eval/README.md](eval/README.md)）；工程部分（编码维度、upsert 幂等、检索 top-k 形状）写常规单测。
+- Agent 额外要求工具白名单、参数 schema、最大步数/调用数/文本量/总耗时、提示词注入隔离、最终引用复核和脱敏轨迹测试；Agent 评测不得用成功样例替代冻结数据集。
 - 修 bug 先写复现用例再修（能自动化的自动化，不能的记入手测清单）。
 
 ## 7. 安全规范

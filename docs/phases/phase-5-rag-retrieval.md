@@ -23,7 +23,7 @@
 - 中文段落/句末优先的 400/80 分块。
 - `BAAI/bge-small-zh-v1.5` 512 维文本向量。
 - `post_chunks` schema、确定性 point ID 和 payload index。
-- top 8 检索、按帖子去重至 5 个来源。
+- API 默认 top_k 8，冻结评测显式使用 15；按帖子去重至最多 10 个 Prompt 候选，Bot 回调最多保留 5 条引用。
 - Prompt 数据隔离、JSON 解析和 chunk ID 白名单。
 
 ## 接口与数据流
@@ -57,4 +57,4 @@ chunk point ID 由 `post_id:chunk_no` 的 UUIDv5确定；状态变化同时清�
 
 ## 遗留项
 
-真实 DeepSeek 和 30 条质量评测由 Phase 7B完成。
+真实 provider 和 30 条质量评测已由 Phase 7B 完成；本地检索分段 P95 仍缺独立测量证据。

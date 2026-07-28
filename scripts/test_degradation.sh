@@ -31,6 +31,8 @@ if [ -n "$MODEL_CACHE_VOLUME" ]; then
         '    environment:' \
         '      NO_PROXY: app,redis,qdrant,mysql,mock-llm,localhost,127.0.0.1,::1' \
         '      no_proxy: app,redis,qdrant,mysql,mock-llm,localhost,127.0.0.1,::1' \
+        '      HF_HUB_OFFLINE: "1"' \
+        '      TRANSFORMERS_OFFLINE: "1"' \
         '    volumes:' \
         '      - hf_cache:/models'
         printf '%s\n' \

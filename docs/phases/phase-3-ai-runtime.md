@@ -8,7 +8,7 @@
 
 ## 当前基线
 
-FastAPI lifespan 启动共享模型、Qdrant client 和两个 Redis Streams consumer；Compose 是唯一完整运行方式。
+FastAPI lifespan 启动共享模型、Qdrant client 和两个 Redis Streams consumer。日常开发可使用本机服务；Compose 作为最终完整运行方式和发布复核环境。
 
 ## 范围与非目标
 
@@ -53,9 +53,9 @@ Go 发布 Stream 事件；Python consumer 读取 Go 内部载荷，写 Qdrant或
 ## 提交与环境证据
 
 - `b942643`：统一 AI 单进程和 Compose。
-- 清空卷冷启动通过；两个 Stream consumer 正常且无遗留 pending。
+- 历史阶段记录曾完成清空卷启动、两个 Stream consumer 正常且无遗留 pending；该记录不代表 Phase 7C/8 当前源码变更已经通过独立源码重建。
 - `make check`、Compose 配置和 Redis 集成测试通过。
 
 ## 遗留项
 
-Phase 7C 需要补齐真实故障注入证据。
+Phase 7C 已补齐独立 Compose 故障注入证据；源码构建冷启动仍待补证。

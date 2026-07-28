@@ -1,7 +1,11 @@
 {{ template "header" . }}
 {{ $stats := .Stats }}
 <div x-data="adminPanel()">
-    <h4 class="mb-3">管理仪表盘</h4>
+    <div class="page-header">
+        <div><div class="eyebrow">ADMIN CONSOLE</div><h1>管理仪表盘</h1><p>审核社区内容、管理用户并查看系统日志。</p></div>
+        <div class="page-actions"><a href="/home" class="btn btn-outline-secondary">返回社区</a></div>
+    </div>
+    <div class="state-panel is-error mb-3" x-show="errorMessage" x-cloak role="alert"><i class="bi bi-shield-exclamation" aria-hidden="true"></i><h2 class="h5">管理数据加载失败</h2><p x-text="errorMessage"></p><button type="button" class="btn btn-outline-secondary" @click="errorMessage=''">关闭提示</button></div>
 
     <!-- Stats Grid: equal-width cards -->
     <div class="admin-stats-grid">
@@ -32,7 +36,7 @@
     </div>
 
     <!-- Panel: Post Review -->
-    <div class="card border-0 shadow-sm rounded-4 mb-3">
+    <div class="surface-card mb-3">
         <div class="card-header bg-white border-0 rounded-4 d-flex align-items-center" @click="toggle('review')" style="cursor:pointer">
             <i class="bi bi-check2-square me-2" style="color:var(--primary)"></i>
             <span class="fw-semibold">帖子审核</span>
@@ -63,7 +67,7 @@
     </div>
 
     <!-- Panel: User Management -->
-    <div class="card border-0 shadow-sm rounded-4 mb-3">
+    <div class="surface-card mb-3">
         <div class="card-header bg-white border-0 rounded-4 d-flex align-items-center" @click="toggle('users')" style="cursor:pointer">
             <i class="bi bi-people me-2" style="color:var(--primary)"></i>
             <span class="fw-semibold">用户管理</span>
@@ -95,7 +99,7 @@
     </div>
 
     <!-- Panel: System Logs -->
-    <div class="card border-0 shadow-sm rounded-4 mb-3">
+    <div class="surface-card mb-3">
         <div class="card-header bg-white border-0 rounded-4 d-flex align-items-center" @click="toggle('logs')" style="cursor:pointer">
             <i class="bi bi-journal-text me-2" style="color:var(--primary)"></i>
             <span class="fw-semibold">系统日志</span>
@@ -129,6 +133,13 @@ function adminPanel() {
         reviewPosts: [], reviewLoading: false,
         users: [], usersLoading: false,
         logs: [], logsLoading: false,
+        errorMessage: '',
+
+        async request(url, options = {}) {
+            const r = await fetch(url, options); const d = await r.json();
+            if (!r.ok || d.code !== 0) throw new Error(d.message || '管理接口暂时不可用');
+            return d;
+        },
 
         async toggle(s) {
             this.open = this.open === s ? null : s;
@@ -138,43 +149,36 @@ function adminPanel() {
         },
 
         async loadReview() {
-            this.reviewLoading = true;
-            const r = await fetch('/api/v1/admin/pending-posts?page_size=50');
-            const d = await r.json();
-            if (d.code === 0) this.reviewPosts = d.data.list || [];
-            this.reviewLoading = false;
+            this.reviewLoading = true; this.errorMessage = '';
+            try { const d = await this.request('/api/v1/admin/pending-posts?page_size=50'); this.reviewPosts = d.data.list || []; }
+            catch (e) { this.errorMessage = e.message || '审核列表加载失败'; }
+            finally { this.reviewLoading = false; }
         },
 
         async loadUsers() {
-            this.usersLoading = true;
-            const r = await fetch('/api/v1/admin/users?page=1&page_size=100');
-            const d = await r.json();
-            if (d.code === 0) this.users = d.data.list || [];
-            this.usersLoading = false;
+            this.usersLoading = true; this.errorMessage = '';
+            try { const d = await this.request('/api/v1/admin/users?page=1&page_size=100'); this.users = d.data.list || []; }
+            catch (e) { this.errorMessage = e.message || '用户列表加载失败'; }
+            finally { this.usersLoading = false; }
         },
 
         async loadLogs() {
-            this.logsLoading = true;
-            const r = await fetch('/api/v1/admin/logs?page=1&page_size=50');
-            const d = await r.json();
-            if (d.code === 0) this.logs = d.data.list || [];
-            this.logsLoading = false;
+            this.logsLoading = true; this.errorMessage = '';
+            try { const d = await this.request('/api/v1/admin/logs?page=1&page_size=50'); this.logs = d.data.list || []; }
+            catch (e) { this.errorMessage = e.message || '日志加载失败'; }
+            finally { this.logsLoading = false; }
         },
 
         async doReview(id, status, comment = '') {
             const url = '/api/v1/admin/posts/' + id + '/' + (status === 'approved' ? 'approve' : 'reject');
-            const r = await fetch(url, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({comment})});
-            const d = await r.json();
-            if (d.code === 0) { this.reviewPosts = this.reviewPosts.filter(p => p.id !== id); location.reload(); }
-            else alert(d.message);
+            try { await this.request(url, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({comment})}); this.reviewPosts = this.reviewPosts.filter(p => p.id !== id); location.reload(); }
+            catch (e) { this.errorMessage = e.message || '审核操作失败'; }
         },
 
         async toggleUser(id, status) {
             if (!confirm('确认'+(status===0?'封禁':'解封')+'该用户?')) return;
-            const r = await fetch('/api/v1/admin/users/'+id+'/status', {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({status})});
-            const d = await r.json();
-            if (d.code === 0) location.reload();
-            else alert(d.message);
+            try { await this.request('/api/v1/admin/users/'+id+'/status', {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({status})}); location.reload(); }
+            catch (e) { this.errorMessage = e.message || '账号状态更新失败'; }
         }
     }
 }

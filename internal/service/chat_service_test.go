@@ -173,6 +173,27 @@ func TestBotTaskRequiresBotDMAndReturnsChronologicalHistory(t *testing.T) {
 	}
 }
 
+func TestBotTaskWithoutHistoryDoesNotReadConversationHistory(t *testing.T) {
+	user := &model.User{ID: 1, Status: model.UserStatusActive}
+	bot := &model.User{ID: 2, Username: model.ShareOBotUsername, Status: model.UserStatusActive, IsBot: 1}
+	repo := &fakeChatRepo{
+		conversation: &model.Conversation{ID: 5},
+		messageByID:  &model.Message{ID: 9, ConversationID: 5, SenderID: user.ID},
+		members: []model.ConversationMember{
+			{UserID: user.ID, User: user}, {UserID: bot.ID, User: bot},
+		},
+		recent: []model.Message{{ID: 8}},
+	}
+	svc, _ := newChatServiceForTest(repo)
+	task, err := svc.GetBotTaskWithoutHistory(context.Background(), 9)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(task.History) != 0 {
+		t.Fatalf("history=%v, want empty history", task.History)
+	}
+}
+
 func TestMessageHistoryDropsCitationsForInvisiblePosts(t *testing.T) {
 	metaBytes, _ := json.Marshal(model.MessageMeta{Citations: []model.BotCitation{
 		{PostID: 10, ChunkID: "10:0"}, {PostID: 11, ChunkID: "11:0"},
@@ -195,5 +216,93 @@ func TestMessageHistoryDropsCitationsForInvisiblePosts(t *testing.T) {
 	}
 	if len(filtered.Citations) != 1 || filtered.Citations[0].PostID != 10 {
 		t.Fatalf("citations=%v", filtered.Citations)
+	}
+}
+
+func TestAgentMessagePersistsModeOnlyForBotConversation(t *testing.T) {
+	user := &model.User{ID: 1, Status: model.UserStatusActive}
+	bot := &model.User{ID: 2, Username: model.ShareOBotUsername, Status: model.UserStatusActive, IsBot: 1}
+	repo := &fakeChatRepo{
+		conversation: &model.Conversation{ID: 5},
+		isMember:     true,
+		members: []model.ConversationMember{
+			{UserID: user.ID, User: user}, {UserID: bot.ID, User: bot},
+		},
+	}
+	svc, _ := newChatServiceForTest(repo)
+	message, err := svc.SendMessage(context.Background(), user.ID, 5, "比较夜景拍摄方法", model.AIModeAgent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var meta model.MessageMeta
+	if message.Meta == nil || json.Unmarshal([]byte(*message.Meta), &meta) != nil || meta.Mode != model.AIModeAgent {
+		t.Fatalf("message meta=%v", message.Meta)
+	}
+}
+
+func TestAgentTraceValidationRejectsUnknownToolAndAcceptsBoundedStep(t *testing.T) {
+	valid := model.BotReplyMeta{
+		Mode: model.AIModeAgent,
+		Trace: &model.AgentTrace{
+			Version:           "agent-trace-v1",
+			Status:            "completed",
+			StopReason:        "model_answer",
+			ProviderAttempts:  2,
+			ProviderRetries:   1,
+			RejectedToolCalls: 2,
+			Steps: []model.AgentTraceStep{{
+				Index: 0, Tool: "read_posts", Status: "success", ResultCount: 1,
+			}},
+		},
+	}
+	if err := validateBotReplyMeta(valid); err != nil {
+		t.Fatalf("valid trace rejected: %v", err)
+	}
+	invalidRejected := valid
+	invalidRejected.Trace = &model.AgentTrace{
+		Version:           "agent-trace-v1",
+		Status:            "completed",
+		StopReason:        "model_answer",
+		RejectedToolCalls: 129,
+	}
+	if err := validateBotReplyMeta(invalidRejected); !errors.Is(err, ErrChatInvalid) {
+		t.Fatalf("invalid rejected tool count error=%v", err)
+	}
+	requestFailure := valid
+	requestFailure.Trace = &model.AgentTrace{
+		Version:          "agent-trace-v1",
+		Status:           "failed",
+		StopReason:       "provider_error",
+		FailureCategory:  "request",
+		ProviderAttempts: 1,
+	}
+	if err := validateBotReplyMeta(requestFailure); err != nil {
+		t.Fatalf("request failure trace rejected: %v", err)
+	}
+	invalid := valid
+	invalid.Trace = &model.AgentTrace{Steps: []model.AgentTraceStep{{Index: 0, Tool: "delete_posts", Status: "success"}}}
+	if err := validateBotReplyMeta(invalid); !errors.Is(err, ErrChatInvalid) {
+		t.Fatalf("unknown tool error=%v", err)
+	}
+	invalid = valid
+	invalid.Trace = &model.AgentTrace{
+		Version:         "agent-trace-v1",
+		Status:          "failed",
+		StopReason:      "provider_error",
+		FailureCategory: "unknown",
+	}
+	if err := validateBotReplyMeta(invalid); !errors.Is(err, ErrChatInvalid) {
+		t.Fatalf("invalid failure category error=%v", err)
+	}
+	invalid = valid
+	invalid.Trace = &model.AgentTrace{
+		Version:          "agent-trace-v1",
+		Status:           "failed",
+		StopReason:       "provider_error",
+		ProviderAttempts: 1,
+		ProviderRetries:  2,
+	}
+	if err := validateBotReplyMeta(invalid); !errors.Is(err, ErrChatInvalid) {
+		t.Fatalf("invalid provider count error=%v", err)
 	}
 }

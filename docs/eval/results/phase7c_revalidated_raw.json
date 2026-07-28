@@ -2,8 +2,8 @@
   "environment": {
     "date": "2026-07-26",
     "base_url": "http://127.0.0.1:8080",
-    "image_dataset": "/Users/zhoujianlin/GoLandProjects/ShareO/docs/eval/image_search_v1.jsonl",
-    "rag_dataset": "/Users/zhoujianlin/GoLandProjects/ShareO/docs/eval/rag_qa_v1.jsonl",
+    "image_dataset": "docs/eval/image_search_v1.jsonl",
+    "rag_dataset": "docs/eval/rag_qa_v1.jsonl",
     "image_dataset_sha256": "525c871c8f385d1d2bf3822e7edfc2aa9e4fec866cc6999b118671c79b3be8c7",
     "rag_dataset_sha256": "19e92621377ba919f1a7c55e0b6253030a27aec630cc91d8cb4e7e91d7d2ea44",
     "python_version": "3.12.13",

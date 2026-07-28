@@ -14,7 +14,16 @@ from urllib.parse import unquote
 ROOT = Path(__file__).resolve().parents[1]
 LINK_RE = re.compile(r"(?<!!)\[[^]]*]\(([^)]+)\)")
 SKIP_PREFIXES = ("http://", "https://", "mailto:", "#")
-SKIP_DIRECTORIES = {".git", ".venv", "node_modules", "__pycache__"}
+SKIP_DIRECTORIES = {
+    ".git",
+    ".venv",
+    ".cache",
+    ".local",
+    "node_modules",
+    "__pycache__",
+    "qdrant",
+    "resources",
+}
 
 PHASE_DIR = ROOT / "docs" / "phases"
 EXPECTED_PHASE_FILES = {
@@ -26,6 +35,7 @@ EXPECTED_PHASE_FILES = {
     "phase-5-rag-retrieval.md",
     "phase-6-chat-bot.md",
     "phase-7-demo-evaluation-release.md",
+    "phase-8-agent.md",
 }
 REQUIRED_PHASE_HEADINGS = (
     "目标",
@@ -131,12 +141,15 @@ def validate_phase_contracts(failures: list[str]) -> None:
 
 def validate_status(failures: list[str]) -> None:
     expectations = {
-        ROOT / "README.md": "Phase 7C 发布与演示收口已完成",
+        ROOT / "README.md": "这是固定流程的引用式 RAG 系统，不是通用 Agent",
         ROOT / "docs" / "roadmap.md": "| Phase 7 Demo 与发布 |",
         PHASE_DIR / "README.md": "Phase 7 — Demo、评测与发布",
     }
     task_status = (ROOT / "TASK.md").read_text(encoding="utf-8")
-    if not re.search(r"当前阶段：Phase 7(?:[ABC])?(?: 进行中| 已完成)", task_status):
+    if not re.search(
+        r"当前阶段：Phase (?:7(?:[ABC])?|8(?:[A-Z])?)(?: 进行中| 已完成| 本机自动化收口)",
+        task_status,
+    ):
         failures.append("TASK.md missing canonical Phase 7 status")
     for path, expected in expectations.items():
         if expected not in path.read_text(encoding="utf-8"):

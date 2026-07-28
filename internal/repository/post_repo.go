@@ -30,6 +30,52 @@ type IndexPayload struct {
 	Images    []IndexImage `json:"images"`
 }
 
+func (r *PostRepo) SearchApprovedPosts(query string, limit int) ([]IndexPayload, error) {
+	query = strings.TrimSpace(query)
+	if query == "" {
+		return nil, nil
+	}
+	if limit < 1 || limit > 10 {
+		limit = 10
+	}
+	var posts []model.Post
+	db := DB.Where("status = ? AND is_deleted = 0", model.StatusApproved)
+	if hasFulltext {
+		db = db.Where("MATCH(content) AGAINST(? IN NATURAL LANGUAGE MODE)", query).
+			Order(gorm.Expr("MATCH(content) AGAINST(? IN NATURAL LANGUAGE MODE) DESC, id DESC", query))
+	} else {
+		db = db.Where("content LIKE ?", "%"+query+"%").Order("id DESC")
+	}
+	if err := db.Preload("Images", func(db *gorm.DB) *gorm.DB {
+		return db.Order("sort_order ASC")
+	}).Limit(limit).Find(&posts).Error; err != nil {
+		return nil, err
+	}
+	items := make([]IndexPayload, 0, len(posts))
+	for _, post := range posts {
+		items = append(items, buildIndexPayload(post))
+	}
+	return items, nil
+}
+
+func (r *PostRepo) ReadApprovedPosts(ids []int64) ([]IndexPayload, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+	if len(ids) > 10 {
+		ids = ids[:10]
+	}
+	posts, err := r.FindByIDs(ids)
+	if err != nil {
+		return nil, err
+	}
+	items := make([]IndexPayload, 0, len(posts))
+	for index := range posts {
+		items = append(items, buildIndexPayload(posts[index]))
+	}
+	return items, nil
+}
+
 // hasFulltext is set after DB init based on whether the FULLTEXT index is available.
 var hasFulltext bool
 

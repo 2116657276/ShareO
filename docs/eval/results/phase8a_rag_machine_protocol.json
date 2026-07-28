@@ -1,0 +1,153 @@
+{
+  "environment": {
+    "date": "2026-07-27",
+    "base_url": "http://127.0.0.1:8080",
+    "image_dataset": "docs/eval/image_search_v1.jsonl",
+    "rag_dataset": "docs/eval/rag_qa_v1.jsonl",
+    "image_dataset_sha256": "525c871c8f385d1d2bf3822e7edfc2aa9e4fec866cc6999b118671c79b3be8c7",
+    "rag_dataset_sha256": "19e92621377ba919f1a7c55e0b6253030a27aec630cc91d8cb4e7e91d7d2ea44",
+    "python_version": "3.12.13",
+    "platform": "macOS-15.7.7-arm64-arm-64bit",
+    "embedding_model": "OFA-Sys/chinese-clip-vit-base-patch16",
+    "embedding_revision": "36e679e65c2a2fead755ae21162091293ad37834",
+    "embedding_device": "cpu",
+    "text_embedding_model": "BAAI/bge-small-zh-v1.5",
+    "rag_top_k": 15,
+    "rag_max_sources": 10,
+    "rag_prompt_version": "rag-v1",
+    "llm_model": "deepseek-v4-flash",
+    "network_environment": "unspecified",
+    "ai_base_url": "http://127.0.0.1:8000",
+    "runtime_metadata": {
+      "status": "ready",
+      "ai_base_url": "http://127.0.0.1:8000",
+      "image_search": {
+        "status": "ready",
+        "model": {
+          "model": "OFA-Sys/chinese-clip-vit-base-patch16",
+          "revision": "36e679e65c2a2fead755ae21162091293ad37834",
+          "device": "cpu",
+          "dimension": 512,
+          "state": "ready",
+          "error": ""
+        },
+        "consumer": "running",
+        "vector_store": {
+          "collection": "images",
+          "dimension": 512,
+          "distance": "Cosine",
+          "points_count": 26,
+          "post_id_indexed": true
+        }
+      },
+      "rag": {
+        "status": "ready",
+        "model": {
+          "model": "BAAI/bge-small-zh-v1.5",
+          "dimension": 512,
+          "state": "ready",
+          "error": ""
+        },
+        "consumer": "running",
+        "llm": "configured",
+        "llm_model": "deepseek-v4-flash",
+        "text_embedding_model": "BAAI/bge-small-zh-v1.5",
+        "text_embedding_revision": "unresolved",
+        "vector_store": {
+          "collection": "post_chunks",
+          "dimension": 512,
+          "distance": "Cosine",
+          "points_count": 26,
+          "payload_indexes": [
+            "chunk_id",
+            "post_id"
+          ]
+        },
+        "prompt_version": "rag-v1"
+      }
+    },
+    "git_sha": "91d470feadf5b735cdbba4479e621474ff360c8f",
+    "git_dirty": true
+  },
+  "image_search": {
+    "report": {
+      "queries": 40,
+      "semantic_duplicate_queries": 0,
+      "semantic": {
+        "recall_5": 0.8125,
+        "recall_10": 0.8125,
+        "mrr": 0.7770833333333333,
+        "manual_relevance_at_10": 0.085,
+        "latency_p50_ms": 101.80858399689896,
+        "latency_p95_ms": 139.59691699710675
+      },
+      "keyword": {
+        "recall_5": 0.0875,
+        "recall_10": 0.0875,
+        "mrr": 0.1,
+        "manual_relevance_at_10": 0.1,
+        "latency_p50_ms": 6.833209001342766,
+        "latency_p95_ms": 11.654916001134552
+      },
+      "quality_gate_passed": true
+    },
+    "metrics": {
+      "recall_5": 0.8125,
+      "recall_10": 0.8125,
+      "mrr": 0.7770833333333333,
+      "duplicate_queries": 0,
+      "latency_p50_ms": 101.80858399689896,
+      "latency_p95_ms": 139.59691699710675
+    }
+  },
+  "rag": {
+    "report": {
+      "total_queries": 30,
+      "skipped": 0,
+      "failed_queries": 0,
+      "source_hit_rate": 0.9667,
+      "citation_accessible_rate": 1.0,
+      "total_hallucinated": 0,
+      "avg_sources_per_answer": 2.0,
+      "latency_p50_ms": 2128.2,
+      "latency_p95_ms": 4194.5,
+      "no_answer_accuracy": 1.0
+    },
+    "metrics": {
+      "source_hit_rate": 0.9667,
+      "citation_accessible_rate": 1.0,
+      "total_hallucinated": 0,
+      "avg_sources_per_answer": 2.0,
+      "latency_p50_ms": 2128.2,
+      "latency_p95_ms": 4194.5,
+      "total_queries": 30,
+      "skipped": 0,
+      "failed_queries": 0,
+      "no_answer_accuracy": 1.0
+    }
+  },
+  "machine_quality_gates": {
+    "recall_5 >= 0.70": true,
+    "mrr >= 0.55": true,
+    "no duplicate posts": true,
+    "all labeled RAG queries evaluated": true,
+    "source_hit_rate >= 0.80": true,
+    "citation_accessible 100%": true,
+    "hallucinated citations 0": true
+  },
+  "machine_quality_gate_passed": true,
+  "human_scoring": {
+    "status": "SKIPPED"
+  },
+  "quality_gates": {
+    "recall_5 >= 0.70": true,
+    "mrr >= 0.55": true,
+    "no duplicate posts": true,
+    "all labeled RAG queries evaluated": true,
+    "source_hit_rate >= 0.80": true,
+    "citation_accessible 100%": true,
+    "hallucinated citations 0": true,
+    "human_relevance_avg >= 4.0": "PENDING"
+  },
+  "quality_gate_passed": true
+}
