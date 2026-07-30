@@ -443,6 +443,11 @@ stop_local() {
     stop_pid_file "$STATE_DIR/minio.pid" MinIO
 }
 
+stop_local_apps() {
+    stop_pid_file "$STATE_DIR/app.pid" "Go app"
+    stop_pid_file "$STATE_DIR/ai.pid" "AI service"
+}
+
 main() {
     local action="${1:-doctor}"
     cd "$PROJECT_DIR"
@@ -451,8 +456,9 @@ main() {
         infra-up) start_infra ;;
         infra-down) stop_infra ;;
         dev-local) start_infra; start_local_processes ;;
+        app-stop) stop_local_apps ;;
         local-stop|stop) stop_local ;;
-        *) echo "usage: $0 {doctor|infra-up|infra-down|dev-local|local-stop}" >&2; return 2 ;;
+        *) echo "usage: $0 {doctor|infra-up|infra-down|dev-local|app-stop|local-stop}" >&2; return 2 ;;
     esac
 }
 

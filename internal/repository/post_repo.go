@@ -30,6 +30,47 @@ type IndexPayload struct {
 	Images    []IndexImage `json:"images"`
 }
 
+type PostSearchCandidate struct {
+	PostID    int64     `json:"post_id"`
+	Content   string    `json:"content"`
+	Score     float64   `json:"score"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+func (r *PostRepo) SearchKeywordCandidates(query string, limit int) ([]PostSearchCandidate, error) {
+	query = strings.TrimSpace(query)
+	if query == "" {
+		return nil, nil
+	}
+	if limit < 1 || limit > 200 {
+		limit = 200
+	}
+	var candidates []PostSearchCandidate
+	if hasFulltext {
+		err := DB.Raw(
+			`SELECT id AS post_id, content, created_at,
+			 MATCH(content) AGAINST(? IN NATURAL LANGUAGE MODE) AS score
+			 FROM posts
+			 WHERE status = ? AND is_deleted = 0
+			   AND MATCH(content) AGAINST(? IN NATURAL LANGUAGE MODE)
+			 ORDER BY score DESC, id DESC LIMIT ?`,
+			query, model.StatusApproved, query, limit,
+		).Scan(&candidates).Error
+		if err == nil {
+			return candidates, nil
+		}
+		slog.Warn("keyword candidate full-text search failed; falling back to LIKE", "err", err)
+	}
+	err := DB.Model(&model.Post{}).
+		Select("id AS post_id, content, created_at, 0 AS score").
+		Where("status = ? AND is_deleted = 0 AND content LIKE ?",
+			model.StatusApproved, "%"+escapeLikePattern(query)+"%").
+		Order("created_at DESC, id DESC").
+		Limit(limit).
+		Scan(&candidates).Error
+	return candidates, err
+}
+
 func (r *PostRepo) SearchApprovedPosts(query string, limit int) ([]IndexPayload, error) {
 	query = strings.TrimSpace(query)
 	if query == "" {
@@ -248,6 +289,27 @@ func (r *PostRepo) Feed(q FeedQuery) ([]model.Post, int64, error) {
 	}).Order(orderClause).Offset(offset).Limit(q.PageSize).Find(&posts).Error
 
 	return posts, total, err
+}
+
+// FollowingFeed returns approved posts authored by users followed by userID.
+// The follows join keeps filtering and pagination in MySQL instead of merging
+// one request per followed user in the browser.
+func (r *PostRepo) FollowingFeed(userID int64, page, pageSize int) ([]model.Post, int64, error) {
+	var posts []model.Post
+	var total int64
+	query := DB.Model(&model.Post{}).
+		Joins("JOIN follows ON follows.followee_id = posts.user_id AND follows.follower_id = ?", userID).
+		Where("posts.is_deleted = 0 AND posts.status = ?", model.StatusApproved)
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+	offset := (page - 1) * pageSize
+	if err := query.Preload("User").Preload("Images", func(db *gorm.DB) *gorm.DB {
+		return db.Order("sort_order ASC")
+	}).Order("posts.created_at DESC, posts.id DESC").Offset(offset).Limit(pageSize).Find(&posts).Error; err != nil {
+		return nil, 0, err
+	}
+	return posts, total, nil
 }
 
 func (r *PostRepo) IncrementView(id int64) {

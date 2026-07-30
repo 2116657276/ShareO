@@ -1,7 +1,7 @@
 # AGENTS.md
 
 本文件用于指导 AI 编程代理在 ShareO 中进行代码修改。开始工作前，先阅读
-`README.md`、`CONTEXT.md`、`TASK.md`、`docs/plan.md` 以及与目标模块相关的文档；
+`README.md`、`CONTEXT.md`、`TASK.md`、`docs/REVIEW.md` 以及与目标模块相关的文档；
 不要仅根据文件名或任务描述猜测现有行为。
 
 ## 项目原则
@@ -10,7 +10,7 @@
 - 修改范围保持最小，只处理当前任务必需的内容，不顺便重构无关代码。
 - 优先修复根因，复用已有实现和依赖，避免不必要的抽象、框架和第三方依赖。
 - 任务描述与代码、测试或事实文档冲突时，先确认实际行为；以明确需求和可验证事实为依据，并说明冲突。
-- 不恢复已经从最终范围移除的收藏、转帖、话题、群聊、Agent、工具调用或独立 Bot 页面。
+- 不恢复已经从最终范围移除的转帖、话题、群聊、写入型/外部工具 Agent 或独立 Bot 页面。私人收藏与同一 Bot 私聊中的只读 Agent 属于经 ADR 明确批准的范围例外。
 
 ## 架构与设计边界
 
@@ -57,8 +57,8 @@
 ## 测试与交付
 
 - 修改后先运行与改动直接相关的测试；核心逻辑需要覆盖正常路径、边界条件和失败路径。
-- 在成本合理时运行 `make check`；并按影响范围补充 `make test-integration`、`make test-image-e2e`、`make test-ai-e2e`、`go test -race ./...` 或 `make eval-ai`。
+- 在成本合理时运行 `make check`；并按影响范围补充 `make test-integration`、`go test -race ./...`、`make test-api` 或 `make eval-ai`。
 - AI 效果通过 `docs/eval/` 中的冻结数据集和指标验证，不用普通单测替代质量评测；并发、队列和幂等逻辑必须有工程测试。
 - 无法执行某项检查时，明确记录未运行的命令、原因和替代验证方式；不得声称运行过未实际运行的命令。
 - 只有在需求实现、相关验证完成或明确说明限制、无明显临时文件和敏感信息、必要文档同步后，才可报告任务完成。
-- 当前状态只更新 `TASK.md`，执行顺序只更新 `docs/plan.md`；阶段门禁和证据写入 `docs/phases/`，技术选型写入 ADR，功能变更同步 `docs/features.md`。
+- 当前状态只更新 `TASK.md`，完工证据和边界写入 `docs/REVIEW.md` 与 `docs/evidence/final-freeze/`；技术选型写入 ADR，功能变更同步 `docs/features.md`。

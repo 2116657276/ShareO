@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"sort"
 	"strings"
 	"time"
 
@@ -31,6 +32,7 @@ type ChatRepository interface {
 	EnsureDM(context.Context, int64, int64) (*model.Conversation, error)
 	GetConversation(context.Context, int64) (*model.Conversation, error)
 	ListConversations(context.Context, int64) ([]model.Conversation, error)
+	GetFollowedAt(context.Context, int64, []int64) (map[int64]time.Time, error)
 	IsMember(context.Context, int64, int64) (bool, error)
 	GetMembers(context.Context, int64) ([]model.ConversationMember, error)
 	CreateMessage(context.Context, *model.Message) error
@@ -215,6 +217,7 @@ type ConversationWithMeta struct {
 	Members     []model.ConversationMember `json:"members,omitempty"`
 	UnreadCount int64                      `json:"unread_count"`
 	Online      bool                       `json:"online"`
+	FollowedAt  *time.Time                 `json:"followed_at,omitempty"`
 }
 
 func (s *ChatService) ListConversations(ctx context.Context, userID int64) ([]ConversationWithMeta, error) {
@@ -223,6 +226,7 @@ func (s *ChatService) ListConversations(ctx context.Context, userID int64) ([]Co
 		return nil, err
 	}
 	result := make([]ConversationWithMeta, 0, len(conversations))
+	peerIDs := make([]int64, 0, len(conversations))
 	for _, conv := range conversations {
 		lastMessage, err := s.repo.GetLastMessage(ctx, conv.ID)
 		if err != nil {
@@ -248,6 +252,7 @@ func (s *ChatService) ListConversations(ctx context.Context, userID int64) ([]Co
 			if member.UserID != userID && member.User != nil {
 				conv.Title = member.User.Username
 				online = s.IsUserOnline(ctx, member.UserID)
+				peerIDs = append(peerIDs, member.UserID)
 				break
 			}
 		}
@@ -256,7 +261,45 @@ func (s *ChatService) ListConversations(ctx context.Context, userID int64) ([]Co
 			UnreadCount: unread, Online: online,
 		})
 	}
+	followedAt, err := s.repo.GetFollowedAt(ctx, userID, peerIDs)
+	if err != nil {
+		return nil, err
+	}
+	for i := range result {
+		for _, member := range result[i].Members {
+			if member.UserID == userID {
+				continue
+			}
+			if timestamp, ok := followedAt[member.UserID]; ok {
+				followed := timestamp
+				result[i].FollowedAt = &followed
+			}
+			break
+		}
+	}
+	sortConversationPreviews(result)
 	return result, nil
+}
+
+func sortConversationPreviews(items []ConversationWithMeta) {
+	sort.SliceStable(items, func(i, j int) bool {
+		left := conversationPreviewTime(items[i])
+		right := conversationPreviewTime(items[j])
+		if !left.Equal(right) {
+			return left.After(right)
+		}
+		return items[i].ID > items[j].ID
+	})
+}
+
+func conversationPreviewTime(item ConversationWithMeta) time.Time {
+	if item.LastMessage != nil && !item.LastMessage.CreatedAt.IsZero() {
+		return item.LastMessage.CreatedAt
+	}
+	if item.FollowedAt != nil && !item.FollowedAt.IsZero() {
+		return *item.FollowedAt
+	}
+	return item.CreatedAt
 }
 
 func (s *ChatService) SearchUsers(ctx context.Context, query string, callerID int64, limit int) ([]model.User, error) {

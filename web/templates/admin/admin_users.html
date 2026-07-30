@@ -11,7 +11,7 @@
             {{ range .Users }}
             <tr>
                 <td>{{ .ID }}</td>
-                <td><img src="{{ .AvatarURL }}" class="rounded-circle me-1" width="24" height="24" style="object-fit:cover" onerror="this.src='/static/img/default-avatar.svg'">{{ .Username }}</td>
+                <td><img src="{{ .AvatarURL }}" class="rounded-circle me-1 avatar-xs" onerror="this.src='/static/img/default-avatar.svg'">{{ .Username }}</td>
                 <td class="text-muted small">{{ .Email }}</td>
                 <td><span class="badge {{ if eq .Role "admin" }}bg-danger{{ else }}bg-secondary{{ end }}">{{ .Role }}</span></td>
                 <td><span class="badge {{ if eq .Status 1 }}bg-success{{ else }}bg-dark{{ end }}">{{ if eq .Status 1 }}正常{{ else }}封禁{{ end }}</span></td>

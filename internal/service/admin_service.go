@@ -48,8 +48,6 @@ func (s *AdminService) DeletePost(postID int64, adminID int64) error {
 	}
 	publishIndexAction("delete", postID)
 	s.feedSvc.InvalidateCache()
-	// Notify the author about forced deletion
-	s.notifSvc.Send(post.UserID, adminID, model.NotifTypeReview, postID)
 	s.writeAdminLog(adminID, "delete_post", fmt.Sprintf("post_id=%d", postID))
 	return nil
 }
@@ -66,10 +64,6 @@ func (s *AdminService) ReviewPost(postID int64, status, comment string, reviewer
 			publishIndexAction("delete", postID)
 		}
 		s.feedSvc.InvalidateCache()
-		// Notify the post author about review result
-		if post, findErr := s.postRepo.FindByID(postID); findErr == nil && post != nil {
-			s.notifSvc.Send(post.UserID, reviewerID, model.NotifTypeReview, postID)
-		}
 		s.writeAdminLog(reviewerID, "review_post", fmt.Sprintf("post_id=%d status=%s", postID, status))
 	}
 	return err

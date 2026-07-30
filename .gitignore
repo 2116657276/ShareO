@@ -51,6 +51,8 @@ scripts/demo-assets/
 
 # Dependencies
 vendor/
+!web/static/vendor/
+!web/static/vendor/**
 ai-service/.venv/
 ai-service/.pytest_cache/
 ai-service/.ruff_cache/
@@ -59,7 +61,7 @@ __pycache__/
 
 # Local native runtime and model/cache data
 qdrant/
-.cache/shareo/
+.cache/
 .local/shareo/
 hf_cache/
 models/

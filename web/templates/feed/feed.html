@@ -1,12 +1,18 @@
 {{ template "header" . }}
-<div class="mb-4" x-data="feedPage({{ .Page }}, {{ .Total }}, '{{ .Sort }}')">
+<div class="feed-page" x-data="feedPage({{ .Page }}, {{ .Total }}, '{{ .Sort }}')" :class="'feed-layout-' + layout">
     <div class="page-header">
         <div>
             <div class="eyebrow">COMMUNITY FEED</div>
             <h1>发现美好</h1>
             <p>浏览社区作品，发现灵感和创意</p>
         </div>
-        <div class="page-actions"><a href="/post/create" class="btn btn-primary"><i class="bi bi-plus-square me-1" aria-hidden="true"></i>发布作品</a></div>
+        <div class="page-actions">
+            <div class="layout-toggle" aria-label="Feed 布局">
+                <button type="button" :class="{ 'is-active': layout === 'single' }" @click="setLayout('single')" aria-label="单列布局" title="单列布局"><i class="bi bi-view-stacked"></i></button>
+                <button type="button" :class="{ 'is-active': layout === 'two' }" @click="setLayout('two')" aria-label="双列布局" title="双列布局"><i class="bi bi-view-stacked rotate-90"></i></button>
+            </div>
+            <a href="/post/create" class="btn btn-primary"><i class="bi bi-plus-square me-1" aria-hidden="true"></i>发布作品</a>
+        </div>
     </div>
 
     <div class="feed-tabs">
@@ -20,22 +26,22 @@
             <span class="input-group-text bg-white border-end-0 rounded-start-pill"><i class="bi bi-search text-muted"></i></span>
             <label class="visually-hidden" for="feed-search">搜索作品</label>
             <input id="feed-search" type="search" class="form-control border-start-0 rounded-end-pill" placeholder="搜索作品..."
-                   x-model="searchInput" maxlength="200" style="border-left:0">
+                   x-model="searchInput" maxlength="200">
             <button type="submit" class="btn btn-primary rounded-pill ms-2 px-4" :disabled="loading">搜索</button>
         </div>
         <div x-show="searchActive" class="mt-2" aria-live="polite">
-            <small class="text-muted" @click="clearSearch()" style="cursor:pointer">搜索: "<span x-text="searchQuery"></span>" &middot; <span x-text="searchTotal"></span> 条结果 &middot; 点击清除</small>
+            <button type="button" class="btn btn-link btn-sm text-muted p-0" @click="clearSearch()">搜索: "<span x-text="searchQuery"></span>" &middot; <span x-text="searchTotal"></span> 条结果 &middot; 点击清除</button>
         </div>
     </form>
 
     {{ if .Error }}<div class="alert alert-danger">{{ .Error }}</div>{{ end }}
 
-    <div class="feed-grid" id="feedGrid">
+    <div class="feed-grid is-single-column" id="feedGrid" :class="layout === 'two' ? 'is-two-column' : 'is-single-column'">
         {{ range $idx, $p := .Posts }}
         <a href="/post/{{ $p.ID }}" class="text-decoration-none feed-item">
             <div class="feed-card">
                 <div class="card-img-container skeleton-bg">
-                    <img src="{{ thumbURL $p.CoverImage }}" alt="cover" decoding="async"
+                    <img src="{{ mediumURL $p.CoverImage }}" alt="cover" decoding="async"
                          {{ if lt $idx 12 }}loading="eager"{{ else }}loading="lazy"{{ end }}
                          {{ if lt $idx 4 }}fetchpriority="high"{{ end }}
                          onload="this.parentElement.classList.remove('skeleton-bg')"
@@ -56,7 +62,7 @@
     </div>
 
     <!-- Empty state (shown via Alpine when grid is cleared and no results) -->
-    <div class="state-panel" id="emptyState" style="display:none">
+    <div class="state-panel" id="emptyState" hidden>
         <i class="bi bi-images" aria-hidden="true"></i>
         <h4 class="text-muted mt-3">还没有作品</h4>
         <p class="text-muted">成为第一个分享作品的人吧</p>
@@ -72,7 +78,7 @@
     <!-- Load More -->
     <div class="text-center mt-4" id="loadMoreArea">
         <div x-show="loading" class="py-3">
-            <div class="spinner-border text-warning" style="width:2rem;height:2rem"></div>
+            <div class="spinner-border text-warning loading-spinner"></div>
             <p class="text-muted mt-2 small">加载中...</p>
         </div>
         <button class="btn btn-outline-secondary btn-lg px-5"
@@ -87,14 +93,14 @@ function escapeHTML(str) {
     div.appendChild(document.createTextNode(str || ''));
     return div.innerHTML;
 }
-function thumbUrl(url) { return url ? url.replace('/posts/medium/', '/posts/thumb/') : url; }
+function displayImageUrl(url) { return url ? url.replace(/\/posts\/(original|thumb)\//, '/posts/medium/') : url; }
 
 function renderPostCard(post) {
     const imgCount = post.images ? post.images.length : 1;
     const content = escapeHTML(post.content || '');
     const username = escapeHTML(post.user ? post.user.username : '');
     const avatar = escapeHTML(post.user && post.user.avatar_url ? post.user.avatar_url : '/static/img/default-avatar.svg');
-    const coverImg = escapeHTML(post.cover_image || '');
+    const coverImg = escapeHTML(displayImageUrl(post.cover_image || ''));
     const likeIcon = post.is_liked ? 'bi-heart-fill liked' : 'bi-heart';
     const badgeHtml = imgCount > 1 ? `<span class="card-img-badge"><i class="bi bi-images"></i> ${imgCount}</span>` : '';
 
@@ -121,9 +127,18 @@ function feedPage(currentPage, totalCount, sort) {
     const pageSize = 12;
     const totalPages = Math.ceil(totalCount / pageSize);
     return {
-        page: currentPage, total: totalCount, tab: sort || 'latest',
+        page: currentPage, total: totalCount, tab: sort || 'latest', layout: 'single',
         loading: false, hasMore: currentPage < totalPages && totalCount > 0,
         searchActive: false, searchQuery: '', searchTotal: 0, searchPage: 1, searchHasMore: false, searchInput: '', errorMessage: '',
+
+        init() {
+            this.layout = window.localStorage.getItem('shareo.feed.layout') === 'two' ? 'two' : 'single';
+        },
+
+        setLayout(mode) {
+            this.layout = mode === 'two' ? 'two' : 'single';
+            window.localStorage.setItem('shareo.feed.layout', this.layout);
+        },
 
         async doSearch() {
             const q = this.searchInput.trim();
@@ -156,10 +171,10 @@ function feedPage(currentPage, totalCount, sort) {
             this.errorMessage = '';
             grid.innerHTML = '';
             if (!list || list.length === 0) {
-                document.getElementById('emptyState').style.display = '';
+                document.getElementById('emptyState').hidden = false;
                 return;
             }
-            document.getElementById('emptyState').style.display = 'none';
+            document.getElementById('emptyState').hidden = true;
             list.forEach(p => { grid.insertAdjacentHTML('beforeend', renderPostCard(p)); });
         },
 
@@ -184,7 +199,7 @@ function feedPage(currentPage, totalCount, sort) {
                     this.hasMore = false; this.searchHasMore = false;
                     this.loading = false; return;
                 }
-                document.getElementById('emptyState').style.display = 'none';
+                document.getElementById('emptyState').hidden = true;
                 const grid = document.getElementById('feedGrid');
                 d.data.list.forEach(p => { grid.insertAdjacentHTML('beforeend', renderPostCard(p)); });
                 if (this.searchActive) {

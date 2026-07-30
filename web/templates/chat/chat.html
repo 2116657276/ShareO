@@ -1,112 +1,284 @@
 {{ template "header" . }}
-<div class="container-fluid chat-container chat-page-shell" x-data="chatApp()" x-init="init()">
-    <div class="row h-100 chat-panel">
-        <aside class="col-md-4 col-lg-3 conv-list p-0" x-show="!mobileMsg || !activeConv" aria-label="会话列表">
-            <div class="p-3 border-bottom chat-toolbar"><div class="eyebrow">MESSAGES</div><h1 class="h5 mb-2">私聊</h1>
-                <div class="d-flex gap-2 mb-2"><button type="button" class="btn btn-sm btn-primary flex-grow-1" @click="startBotDM">AI 助手</button><button type="button" class="btn btn-sm btn-outline-primary flex-grow-1" @click="focusUserSearch">发起私聊</button></div>
-                <div class="input-group input-group-sm"><label class="visually-hidden" for="user-search">搜索用户</label><input id="user-search" x-ref="userSearch" class="form-control" placeholder="搜索用户" x-model="userQuery" @keydown.enter.prevent="searchUsers"><button type="button" class="btn btn-primary" @click="searchUsers">搜索</button></div>
-                <template x-for="u in userResults" :key="u.id"><button class="btn btn-light btn-sm w-100 text-start mt-1" @click="startDM(u)" x-text="u.is_bot ? 'AI 助手 · ' + u.username : u.username"></button></template>
+<section class="chat-page-shell" x-data="chatApp()" x-init="init()">
+    <div class="chat-panel">
+        <div class="chat-conversation-index" x-show="view === 'list'" x-cloak>
+            <header class="chat-index-header">
+                <div><div class="eyebrow">MESSAGES</div><h1>私聊</h1><p>选择一位聊过的用户继续对话。</p></div>
+            </header>
+            <div class="state-panel is-error m-3" x-show="errorMessage" x-cloak role="alert">
+                <i class="bi bi-cloud-slash" aria-hidden="true"></i><h2 class="h5">消息服务暂时不可用</h2>
+                <p x-text="errorMessage"></p><button type="button" class="btn btn-outline-secondary" @click="loadConvs()">重新加载</button>
             </div>
             <div class="loading-block" x-show="loadingConvs" x-cloak role="status"><span class="spinner-border" aria-label="加载中"></span></div>
-            <template x-if="!loadingConvs && !errorMessage && convs.length === 0"><div class="empty-block py-5"><i class="bi bi-chat-dots" aria-hidden="true"></i><p class="mb-0">暂无消息</p></div></template>
-            <template x-for="c in convs" :key="c.id"><div class="conv-item p-3 border-bottom d-flex align-items-center" :class="{active:activeConv===c.id}" @click="openConv(c)"><div class="flex-grow-1"><span class="online-dot me-1" :class="{online:c.online}"></span><strong x-text="c.title || '私聊'"></strong><small class="d-block text-muted" x-text="c.last_message?.content?.substring(0,30) || ''"></small></div><span x-show="c.unread_count>0" class="badge bg-danger" x-text="c.unread_count"></span></div></template>
-        </aside>
-        <main class="col-md-8 col-lg-9 d-flex flex-column" x-show="activeConv || !mobileMsg">
-            <div x-show="errorMessage" x-cloak class="state-panel is-error m-3" role="alert"><i class="bi bi-cloud-slash" aria-hidden="true"></i><h2 class="h5">消息服务暂时不可用</h2><p x-text="errorMessage"></p><button type="button" class="btn btn-outline-secondary" @click="loadConvs()">重新加载</button></div>
-            <div x-show="!activeConv && !errorMessage" class="flex-grow-1 d-flex align-items-center justify-content-center text-muted">选择一个私聊会话</div>
-            <div x-show="activeConv" class="d-flex flex-column h-100">
-                <div class="p-3 border-bottom chat-toolbar"><button type="button" class="btn btn-sm btn-outline-secondary me-2 d-md-none" @click="mobileMsg=false" aria-label="返回会话列表">←</button><strong x-text="activeConvTitle"></strong></div>
-                <div class="flex-grow-1 msg-area p-3" x-ref="msgArea"><button x-show="hasMore" class="btn btn-sm btn-link w-100" @click="loadMore">加载更多</button><template x-for="m in messages" :key="m.id"><div class="mb-2 d-flex" :class="m.sender_id===userId?'justify-content-end':'justify-content-start'"><div class="msg-bubble p-3" :class="m.sender_id===userId?'mine':'other'"><div x-text="m.content"></div><div x-show="citationList(m).length" class="mt-2 pt-2 border-top"><small class="d-block mb-1" :class="m.sender_id===userId?'text-white-50':'text-muted'">来源帖子</small><template x-for="citation in citationList(m)" :key="citation.chunk_id"><a class="d-block small text-decoration-none" :class="m.sender_id===userId?'link-light':'link-primary'" :href="'/post/'+citation.post_id"><span x-text="'帖子 #' + citation.post_id"></span><span class="ms-1 opacity-75" x-text="citation.chunk_id"></span></a></template></div><details x-show="agentTrace(m)" class="mt-2 pt-2 border-top"><summary class="small">深度分析步骤</summary><div class="mt-2" x-show="agentTrace(m)"><template x-for="step in agentTrace(m)?.steps || []" :key="step.index"><div class="agent-step d-flex justify-content-between"><span x-text="step.tool + ' · ' + step.status"></span><span x-text="step.result_count + ' 条 · ' + step.duration_ms + ' ms'"></span></div></template><small class="opacity-75" x-text="agentTrace(m)?.stop_reason || ''"></small></div></details></div></div></template></div>
-                <form class="p-3 border-top chat-compose" @submit.prevent="sendMsg"><div x-show="isBotConversation()" class="form-check form-switch mb-2"><input class="form-check-input" type="checkbox" id="agentMode" x-model="agentMode"><label class="form-check-label small" for="agentMode">深度分析（只读 Agent，多步检索）</label></div><div class="input-group"><label class="visually-hidden" for="message-input">消息内容</label><input id="message-input" class="form-control" x-model="newMsg" maxlength="2000" placeholder="输入消息…"><button type="submit" class="btn btn-primary" :disabled="!newMsg.trim() || sending"><span x-show="!sending">发送</span><span x-show="sending"><span class="spinner-border spinner-border-sm me-1" aria-hidden="true"></span>发送中</span></button></div></form>
+            <div class="empty-block py-5" x-show="!loadingConvs && !errorMessage && visibleConvs.length === 0" x-cloak>
+                <i class="bi bi-chat-dots" aria-hidden="true"></i><h2 class="h5">暂无私聊消息</h2>
+                <p class="mb-0">从用户主页发起私聊，发送第一条消息后会显示在这里。</p>
             </div>
-        </main>
+            <div class="conversation-list-scroll" x-show="visibleConvs.length > 0" x-cloak>
+                <template x-for="c in visibleConvs" :key="c.id">
+                    <button type="button" class="conversation-row" @click="openConv(c)">
+                        <span class="conversation-identity">
+                            <img class="conversation-preview-avatar" :src="conversationAvatar(c)" alt="" onerror="this.src='/static/img/default-avatar.svg'">
+                            <span class="conversation-name"><strong x-text="c.title || '私聊用户'"></strong><small><span class="online-dot" :class="{online:c.online}"></span><span x-text="c.online ? '在线' : '离线'"></span></small></span>
+                        </span>
+                        <span class="conversation-summary">
+                            <span class="conversation-time" x-text="conversationTime(c)"></span>
+                            <span class="conversation-preview" x-text="messagePreview(c.last_message)"></span>
+                        </span>
+                        <span x-show="c.unread_count > 0" class="conversation-unread" x-text="c.unread_count > 99 ? '99+' : c.unread_count"></span>
+                    </button>
+                </template>
+            </div>
+        </div>
+
+        <div class="chat-conversation-detail" x-show="view === 'detail'" x-cloak>
+            <header class="chat-detail-header">
+                <button type="button" class="chat-back-button" @click="backToList()" aria-label="返回私聊列表"><i class="bi bi-arrow-left"></i></button>
+                <div class="chat-peer-summary" x-show="!isBotConversation()" x-cloak>
+                    <img class="chat-detail-avatar" :src="conversationAvatar(activeConversation)" alt="" onerror="this.src='/static/img/default-avatar.svg'">
+                    <span><strong x-text="activeConvTitle || '私聊'"></strong><small x-text="activeConversation?.online ? '在线' : '私聊会话'"></small></span>
+                </div>
+                <strong class="chat-bot-heading" x-show="isBotConversation()" x-cloak>问问小O</strong>
+                <span class="agent-mode-label ms-auto" x-show="isBotConversation() && agentMode"><i class="bi bi-stars"></i> 深度分析</span>
+            </header>
+            <div class="state-panel is-error m-3" x-show="errorMessage" x-cloak role="alert">
+                <p class="mb-2" x-text="errorMessage"></p><button type="button" class="btn btn-sm btn-outline-secondary" @click="loadMsgs()">重新加载</button>
+            </div>
+            <div class="msg-area" x-ref="msgArea">
+                <button x-show="hasMore" class="btn btn-sm btn-link w-100" @click="loadMore">加载更多</button>
+                <template x-for="m in messages" :key="m.id">
+                    <div class="message-row" :class="m.sender_id === userId ? 'is-mine' : 'is-other'">
+                        <div class="msg-bubble" :class="m.sender_id === userId ? 'mine' : 'other'">
+                            <div class="message-content" x-text="m.content"></div>
+                            <div x-show="citationList(m).length" class="citation-group">
+                                <small class="citation-heading">来源帖子</small>
+                                <template x-for="citation in citationList(m)" :key="citation.chunk_id">
+                                    <a class="citation-card" :href="'/post/' + citation.post_id">
+                                        <i class="bi bi-file-earmark-image" aria-hidden="true"></i>
+                                        <span><strong x-text="'帖子 #' + citation.post_id"></strong><small>查看已审核来源</small></span>
+                                        <i class="bi bi-chevron-right ms-auto" aria-hidden="true"></i>
+                                    </a>
+                                </template>
+                            </div>
+                            <details x-show="agentTrace(m)" class="agent-trace-card">
+                                <summary><i class="bi bi-diagram-3 me-1"></i>深度分析步骤</summary>
+                                <div class="agent-trace-body">
+                                    <template x-for="step in agentTrace(m)?.steps || []" :key="step.index">
+                                        <div class="agent-step"><span x-text="step.tool + ' · ' + step.status"></span><span x-text="step.result_count + ' 条 · ' + step.duration_ms + ' ms'"></span></div>
+                                    </template>
+                                </div>
+                            </details>
+                        </div>
+                    </div>
+                </template>
+            </div>
+            <form class="chat-compose" @submit.prevent="sendMsg">
+                <div x-show="isBotConversation()" class="form-check form-switch agent-mode-switch">
+                    <input class="form-check-input" type="checkbox" id="agentMode" x-model="agentMode">
+                    <label class="form-check-label" for="agentMode">深度分析</label>
+                </div>
+                <div class="input-group">
+                    <label class="visually-hidden" for="message-input">消息内容</label>
+                    <input id="message-input" class="form-control" x-model="newMsg" maxlength="2000" placeholder="输入消息…">
+                    <button type="submit" class="btn btn-primary" :disabled="!newMsg.trim() || sending">
+                        <span x-show="!sending">发送</span><span x-show="sending">发送中…</span>
+                    </button>
+                </div>
+            </form>
+        </div>
     </div>
-</div>
+</section>
 <script>
 function chatApp() {
     return {
-        userId: {{ .user_id }}, convs: [], activeConv: null, activeConvTitle: '', messages: [], newMsg: '',
-        agentMode: false, sending: false, hasMore: false, mobileMsg: false, loadingConvs: false,
-        userQuery: '', userResults: [], ws: null, reconnectDelay: 1000, errorMessage: '',
+        userId: {{ .user_id }}, convs: [], activeConv: null, activeConversation: null, activeConvTitle: '',
+        view: 'list', messages: [], newMsg: '', agentMode: false, sending: false, hasMore: false,
+        loadingConvs: false, ws: null, reconnectDelay: 1000, errorMessage: '',
         requestedConv: Number(new URLSearchParams(location.search).get('conv')) || 0,
+        requestedBotAgent: new URLSearchParams(location.search).get('bot') === 'agent',
 
-        async init() { await this.loadConvs(); this.connectWS(); },
+        get visibleConvs() { return this.convs.filter(c => c.last_message && !this.isBotConversationData(c)); },
+        async init() {
+            await this.loadConvs();
+            if (this.requestedBotAgent) await this.openBotAgent();
+            this.connectWS();
+        },
         async readJSON(response) { try { return await response.json(); } catch (_) { return {}; } },
         async loadConvs() {
             this.loadingConvs = true; this.errorMessage = '';
             try {
-                const r = await fetch('/api/v1/conversations');
-                const d = await this.readJSON(r);
-                if (!r.ok || d.code !== 0) throw new Error(d.message || '会话加载失败');
-                this.convs = d.data || [];
+                const response = await fetch('/api/v1/conversations');
+                const body = await this.readJSON(response);
+                if (!response.ok || body.code !== 0) throw new Error(body.message || '会话加载失败');
+                this.convs = this.sortConversations(body.data || []);
                 if (this.requestedConv) {
-                    const c = this.convs.find(x => x.id === this.requestedConv);
+                    const conversation = this.convs.find(c => c.id === this.requestedConv);
                     this.requestedConv = 0;
-                    if (c) this.openConv(c);
+                    if (conversation && !this.isBotConversationData(conversation)) this.openConv(conversation);
                 }
-            } catch (e) { this.errorMessage = e.message || '会话服务暂时不可用'; }
-            finally { this.loadingConvs = false; }
+                if (this.activeConv) {
+                    const current = this.convs.find(c => c.id === this.activeConv);
+                    if (current) this.activeConversation = current;
+                }
+            } catch (error) {
+                this.errorMessage = error.message || '会话服务暂时不可用';
+            } finally {
+                this.loadingConvs = false;
+            }
         },
-        openConv(c) { this.activeConv = c.id; this.activeConvTitle = c.title || '私聊'; this.agentMode = false; this.messages = []; this.mobileMsg = true; this.loadMsgs(); },
+        openConv(conversation, useAgent = false) {
+            if (!conversation?.id) return;
+            this.activeConv = conversation.id;
+            this.activeConversation = conversation;
+            this.activeConvTitle = conversation.title || '私聊';
+            this.agentMode = Boolean(useAgent);
+            this.messages = [];
+            this.errorMessage = '';
+            this.view = 'detail';
+            this.loadMsgs();
+        },
+        backToList() {
+            this.view = 'list';
+            this.activeConv = null;
+            this.activeConversation = null;
+            this.activeConvTitle = '';
+            this.messages = [];
+            this.errorMessage = '';
+            this.loadConvs();
+        },
+        async openBotAgent() {
+            this.requestedBotAgent = false;
+            let conversation = this.convs.find(c => c.title === 'shareo_bot');
+            if (!conversation) {
+                try {
+                    const searchResponse = await fetch('/api/v1/users/search?q=shareo_bot&limit=20');
+                    const searchBody = await this.readJSON(searchResponse);
+                    const bot = (searchBody.data || []).find(user => user.is_bot && user.username === 'shareo_bot');
+                    if (!bot) throw new Error('暂未找到小O');
+                    const createResponse = await fetch('/api/v1/conversations', {
+                        method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({user_id: bot.id})
+                    });
+                    const createBody = await this.readJSON(createResponse);
+                    if (!createResponse.ok || createBody.code !== 0) throw new Error(createBody.message || '小O会话创建失败');
+                    await this.loadConvs();
+                    conversation = this.convs.find(c => c.id === createBody.data.id) || {id: createBody.data.id, title: 'shareo_bot', members: [{user_id: bot.id, user: bot}]};
+                } catch (error) {
+                    this.errorMessage = error.message || '小O暂时不可用';
+                    return;
+                }
+            }
+            this.openConv(conversation, true);
+        },
+        sortConversations(items) {
+            return [...items].sort((a, b) => new Date(this.conversationSortTime(b)) - new Date(this.conversationSortTime(a)) || Number(b.id) - Number(a.id));
+        },
+        conversationSortTime(c) { return c.last_message?.created_at || c.followed_at || c.created_at || 0; },
+        conversationTime(c) {
+            const date = new Date(this.conversationSortTime(c));
+            if (Number.isNaN(date.getTime())) return '';
+            const today = new Date();
+            return date.toDateString() === today.toDateString()
+                ? date.toLocaleTimeString('zh-CN', {hour:'2-digit', minute:'2-digit'})
+                : date.toLocaleDateString('zh-CN', {month:'numeric', day:'numeric'});
+        },
+        messagePreview(message) { return String(message?.content || '').replace(/\s+/g, ' ').slice(0, 56) || '还没有消息'; },
+        conversationAvatar(c) {
+            const peer = (c?.members || []).find(member => Number(member.user_id) !== Number(this.userId));
+            return peer?.user?.avatar_url || '/static/img/default-avatar.svg';
+        },
+        isBotConversationData(conversation) {
+            if (conversation?.title === 'shareo_bot') return true;
+            return (conversation?.members || []).some(member => member?.user?.is_bot && member.user.username === 'shareo_bot');
+        },
         async loadMsgs(before = 0) {
+            if (!this.activeConv) return;
             let url = `/api/v1/conversations/${this.activeConv}/messages?limit=30`;
             if (before) url += `&before_id=${before}`;
             try {
-                const r = await fetch(url); const d = await this.readJSON(r);
-                if (!r.ok || d.code !== 0) throw new Error(d.message || '消息加载失败');
-                const batch = (d.data?.messages || []).reverse();
+                const response = await fetch(url);
+                const body = await this.readJSON(response);
+                if (!response.ok || body.code !== 0) throw new Error(body.message || '消息加载失败');
+                const batch = (body.data?.messages || []).reverse();
                 this.messages = before ? [...batch, ...this.messages] : batch;
-                this.hasMore = Boolean(d.data?.has_more);
-                this.$nextTick(() => { if (this.$refs.msgArea) this.$refs.msgArea.scrollTop = this.$refs.msgArea.scrollHeight; });
-                if (this.messages.length) this.markRead(this.messages[this.messages.length - 1].id);
-            } catch (e) { this.errorMessage = e.message || '消息服务暂时不可用'; }
+                this.hasMore = Boolean(body.data?.has_more);
+                this.$nextTick(() => {
+                    if (this.$refs.msgArea) this.$refs.msgArea.scrollTop = this.$refs.msgArea.scrollHeight;
+                });
+                if (this.messages.length) await this.markRead(this.messages[this.messages.length - 1].id);
+            } catch (error) {
+                this.errorMessage = error.message || '消息服务暂时不可用';
+            }
         },
         loadMore() { if (this.messages.length) this.loadMsgs(this.messages[0].id); },
-        focusUserSearch() { this.$nextTick(() => this.$refs.userSearch?.focus()); },
-        async startBotDM() {
-            try {
-                const r = await fetch('/api/v1/users/search?q=shareo_bot&limit=20'); const users = (await this.readJSON(r)).data || [];
-                const bot = users.find(u => u.is_bot && u.username === 'shareo_bot');
-                if (bot) await this.startDM(bot); else this.errorMessage = '暂未找到 AI 助手';
-            } catch (_) { this.errorMessage = 'AI 助手暂时不可用'; }
-        },
         async sendMsg() {
-            const content = this.newMsg.trim(); if (!content || this.sending) return;
+            const content = this.newMsg.trim();
+            if (!content || this.sending || !this.activeConv) return;
             this.newMsg = ''; this.sending = true; this.errorMessage = '';
-            const payload = { content }; if (this.isBotConversation()) payload.ai_mode = this.agentMode ? 'agent' : 'rag';
+            const payload = {content};
+            if (this.isBotConversation()) payload.ai_mode = this.agentMode ? 'agent' : 'rag';
             try {
-                const r = await fetch(`/api/v1/conversations/${this.activeConv}/messages`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)});
-                const d = await this.readJSON(r); if (!r.ok || d.code !== 0) throw new Error(d.message || '消息发送失败');
-                this.appendMsg(d.data);
-            } catch (e) { this.errorMessage = e.message || '消息发送失败，请稍后重试'; }
-            finally { this.sending = false; }
+                const response = await fetch(`/api/v1/conversations/${this.activeConv}/messages`, {
+                    method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)
+                });
+                const body = await this.readJSON(response);
+                if (!response.ok || body.code !== 0) throw new Error(body.message || '消息发送失败');
+                this.appendMsg(body.data);
+                await this.loadConvs();
+            } catch (error) {
+                this.errorMessage = error.message || '消息发送失败，请稍后重试';
+            } finally {
+                this.sending = false;
+            }
         },
-        appendMsg(m) { if (m && !this.messages.some(x => x.id === m.id)) this.messages.push(m); this.$nextTick(() => { if (this.$refs.msgArea) this.$refs.msgArea.scrollTop = this.$refs.msgArea.scrollHeight; }); },
-        async markRead(id) { await fetch(`/api/v1/conversations/${this.activeConv}/read`, {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({message_id:id})}).catch(() => {}); },
-        async searchUsers() {
-            const q = this.userQuery.trim(); if (!q) return;
-            try { const r = await fetch('/api/v1/users/search?q=' + encodeURIComponent(q)); const d = await this.readJSON(r); if (!r.ok || d.code !== 0) throw new Error(d.message || '用户搜索失败'); this.userResults = d.data || []; }
-            catch (e) { this.errorMessage = e.message || '用户搜索失败'; }
+        appendMsg(message) {
+            if (message && !this.messages.some(existing => existing.id === message.id)) this.messages.push(message);
+            this.$nextTick(() => {
+                if (this.$refs.msgArea) this.$refs.msgArea.scrollTop = this.$refs.msgArea.scrollHeight;
+            });
         },
-        async startDM(u) {
-            try {
-                const r = await fetch('/api/v1/conversations', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({user_id:u.id})});
-                const d = await this.readJSON(r); if (!r.ok || d.code !== 0) throw new Error(d.message || '会话创建失败');
-                await this.loadConvs(); this.openConv(this.convs.find(x => x.id === d.data.id) || {id:d.data.id, title:u.username}); this.userResults = []; this.userQuery = '';
-            } catch (e) { this.errorMessage = e.message || '会话创建失败'; }
+        async markRead(messageID) {
+            await fetch(`/api/v1/conversations/${this.activeConv}/read`, {
+                method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({message_id:messageID})
+            }).catch(() => {});
+            window.dispatchEvent(new Event('shareo:unread-refresh'));
         },
-        isBotConversation() { return this.activeConvTitle === 'shareo_bot'; },
-        metaObject(m) { if (!m?.meta) return null; try { return typeof m.meta === 'string' ? JSON.parse(m.meta) : m.meta; } catch (_) { return null; } },
-        citationList(m) { const meta = this.metaObject(m); return Array.isArray(meta?.citations) ? meta.citations.filter(c => Number.isInteger(Number(c.post_id)) && Number(c.post_id) > 0 && typeof c.chunk_id === 'string') : []; },
-        agentTrace(m) { const trace = this.metaObject(m)?.agent_trace; return trace && Array.isArray(trace.steps) ? trace : null; },
+        isBotConversation() { return this.isBotConversationData(this.activeConversation); },
+        metaObject(message) {
+            if (!message?.meta) return null;
+            try { return typeof message.meta === 'string' ? JSON.parse(message.meta) : message.meta; } catch (_) { return null; }
+        },
+        citationList(message) {
+            const citations = this.metaObject(message)?.citations;
+            return Array.isArray(citations) ? citations.filter(c => Number(c.post_id) > 0 && typeof c.chunk_id === 'string') : [];
+        },
+        agentTrace(message) {
+            const trace = this.metaObject(message)?.agent_trace;
+            return trace && Array.isArray(trace.steps) ? trace : null;
+        },
         connectWS() {
-            const proto = location.protocol === 'https:' ? 'wss:' : 'ws:'; this.ws = new WebSocket(`${proto}//${location.host}/ws`);
-            this.ws.onopen = () => { this.reconnectDelay = 1000; if (this.errorMessage === '实时连接已断开，正在重试…') this.errorMessage = ''; };
-            this.ws.onmessage = e => { try { const d = JSON.parse(e.data); if (d.type === 'new_message' && d.data?.message) { const m = d.data.message; if (m.conversation_id === this.activeConv) { this.appendMsg(m); this.markRead(m.id); } this.loadConvs(); } } catch (_) {} };
+            const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+            this.ws = new WebSocket(`${protocol}//${location.host}/ws`);
+            this.ws.onopen = () => { this.reconnectDelay = 1000; };
+            this.ws.onmessage = event => {
+                try {
+                    const payload = JSON.parse(event.data);
+                    if (payload.type !== 'new_message' || !payload.data?.message) return;
+                    const message = payload.data.message;
+                    if (message.conversation_id === this.activeConv && this.view === 'detail') {
+                        this.appendMsg(message);
+                        this.markRead(message.id);
+                    }
+                    this.loadConvs();
+                    window.dispatchEvent(new Event('shareo:unread-refresh'));
+                } catch (_) {}
+            };
             this.ws.onerror = () => { this.errorMessage = '实时连接已断开，正在重试…'; };
-            this.ws.onclose = () => { setTimeout(() => this.connectWS(), this.reconnectDelay); this.reconnectDelay = Math.min(this.reconnectDelay * 2, 16000); };
+            this.ws.onclose = () => {
+                window.setTimeout(() => this.connectWS(), this.reconnectDelay);
+                this.reconnectDelay = Math.min(this.reconnectDelay * 2, 16000);
+            };
         }
-    }
+    };
 }
 </script>
 {{ template "footer" . }}

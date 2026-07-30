@@ -1,6 +1,6 @@
 # 只读社区知识 Agent 设计
 
-> 状态：Phase 8 Agent 的工程与安全设计已实现；机器门禁、用户人工验收和发布状态以 [`TASK.md`](../../TASK.md) 为准。实现边界以 [ADR-008](../adr/ADR-008-readonly-agent.md) 为准。
+> 状态：只读 Agent 的工程与安全设计已实现；机器门禁和发布证据边界以 [`docs/REVIEW.md`](../REVIEW.md) 为准。实现边界以 [ADR-008](../adr/ADR-008-readonly-agent.md) 为准。
 
 ## 目标
 

@@ -6,7 +6,7 @@
         {{ if $post.Images }}
         <div class="image-carousel mb-3" x-data="{ cur: 0, total: {{ len $post.Images }} }">
             {{ range $i, $img := $post.Images }}
-            <img src="{{ mediumURL $img.ImageURL }}" alt="帖子图片 {{ add $i 1 }}" x-show="cur === {{ $i }}" style="display:{{ if eq $i 0 }}block{{ else }}none{{ end }}" onerror="this.classList.add('img-error')">
+            <img src="{{ mediumURL $img.ImageURL }}" alt="帖子图片 {{ add $i 1 }}" class="carousel-image" x-show="cur === {{ $i }}" {{ if ne $i 0 }}x-cloak{{ end }} onerror="this.classList.add('img-error')">
             {{ end }}
             {{ if gt (len $post.Images) 1 }}
             <button type="button" @click="cur = (cur - 1 + total) % total" class="carousel-arrow carousel-arrow-left" aria-label="上一张图片">‹</button>
@@ -20,7 +20,7 @@
 
         <h1 class="h4 mb-2">{{ if $post.Content }}{{ $post.Content }}{{ else }}无标题{{ end }}</h1>
         <div class="d-flex align-items-center mb-3">
-            <img src="{{ if $post.User }}{{ $post.User.AvatarURL }}{{ end }}" class="rounded-circle me-2" width="36" height="36" style="object-fit:cover" onerror="this.src='/static/img/default-avatar.svg'">
+            <img src="{{ if $post.User }}{{ $post.User.AvatarURL }}{{ end }}" class="rounded-circle me-2 avatar-sm" onerror="this.src='/static/img/default-avatar.svg'">
             <div>
                 <a href="/user/{{ $post.UserID }}" class="fw-bold text-dark text-decoration-none">{{ if $post.User }}{{ $post.User.Username }}{{ end }}</a>
                 <br><small class="text-muted">{{ $post.CreatedAt.Format "2006-01-02 15:04" }}</small>
@@ -35,6 +35,12 @@
             <button class="action-btn" :class="{ liked: liked }" @click="toggleLike()" :disabled="busy">
                 <i class="bi" :class="liked ? 'bi-heart-fill' : 'bi-heart'"></i> <span x-text="likeCount"></span>
             </button>
+            {{ if .user_id }}
+            <button class="action-btn" :class="{ favorited: favorited }" @click="toggleFavorite()" :disabled="favoriteBusy" :aria-label="favorited ? '取消收藏' : '收藏'">
+                <i class="bi" :class="favorited ? 'bi-bookmark-fill' : 'bi-bookmark'"></i>
+                <span x-text="favorited ? '已收藏' : '收藏'"></span>
+            </button>
+            {{ end }}
             <a href="#comments" class="action-btn text-decoration-none"><i class="bi bi-chat"></i> <span>{{ $post.CommentCount }}</span></a>
             {{ if eq .user_id $post.UserID }}
             <a href="/post/{{ $post.ID }}/edit" class="action-btn text-decoration-none"><i class="bi bi-pencil"></i> 编辑</a>
@@ -52,9 +58,12 @@
             <div class="state-panel is-error py-4" x-show="commentsError" x-cloak role="alert"><i class="bi bi-cloud-slash" aria-hidden="true"></i><p class="mb-2" x-text="commentsError"></p><button type="button" class="btn btn-sm btn-outline-secondary" @click="loadComments()">重新加载</button></div>
             <template x-if="!commentsLoading && !commentsError && comments.length === 0"><div class="empty-block py-4"><i class="bi bi-chat-square-text" aria-hidden="true"></i><p class="mb-0">还没有评论</p></div></template>
             <template x-for="comment in comments" :key="comment.id">
-                <div class="border-bottom py-3">
-                    <strong x-text="comment.user?.username || '用户'"></strong>
-                    <span class="ms-2" x-text="comment.content"></span>
+                <div class="comment-item">
+                    <a class="comment-author-link" :href="comment.user?.id ? '/user/' + comment.user.id : null">
+                        <img class="comment-avatar" :src="comment.user?.avatar_url || '/static/img/default-avatar.svg'" alt="" onerror="this.src='/static/img/default-avatar.svg'">
+                        <strong x-text="comment.user?.username || '用户'"></strong>
+                    </a>
+                    <span class="comment-content" x-text="comment.content"></span>
                 </div>
             </template>
         </section>
@@ -65,6 +74,7 @@
 function postDetail(postId, initialLiked, initialCount) {
     return {
         liked: Boolean(initialLiked), likeCount: initialCount, busy: false, comments: [], commentsLoading: true, commentsError: '',
+        favorited: {{ if $post.IsFavorited }}true{{ else }}false{{ end }}, favoriteBusy: false,
         async init() {
             fetch(`/api/v1/posts/${postId}/view`, {method: 'POST'}).catch(() => {});
             await this.loadComments();
@@ -90,6 +100,22 @@ function postDetail(postId, initialLiked, initialCount) {
                     this.liked = next;
                 }
             } finally { this.busy = false; }
+        },
+        async toggleFavorite() {
+            if (this.favoriteBusy) return;
+            const previous = this.favorited;
+            this.favorited = !previous;
+            this.favoriteBusy = true;
+            try {
+                const r = await fetch(`/api/v1/posts/${postId}/favorite`, {method: previous ? 'DELETE' : 'PUT'});
+                const d = await r.json();
+                if (!r.ok || d.code !== 0) throw new Error(d.message || '收藏操作失败');
+                this.favorited = Boolean(d.data?.favorited);
+            } catch (_) {
+                this.favorited = previous;
+            } finally {
+                this.favoriteBusy = false;
+            }
         },
         async startDM(userId) {
             const r = await fetch('/api/v1/conversations', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({user_id:userId})});

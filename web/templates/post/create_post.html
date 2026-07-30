@@ -14,7 +14,7 @@
                      @dragover.prevent="$el.classList.add('dragover')"
                      @dragleave.prevent="$el.classList.remove('dragover')"
                      @drop.prevent="handleDrop($event)">
-                    <i class="bi bi-cloud-upload" style="font-size:2.5rem;color:var(--primary)"></i>
+                    <i class="bi bi-cloud-upload"></i>
                     <p class="mt-2 mb-0 fw-medium">点击或拖拽上传图片</p>
                     <small class="text-muted">支持 JPG / PNG / WebP / GIF，单张不超过 50MB</small>
                     <input type="file" x-ref="fileInput" accept="image/*" multiple hidden @change="handleFileSelect($event)">

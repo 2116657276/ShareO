@@ -1,0 +1,83 @@
+{{ template "header" . }}
+<section class="following-page" x-data="followingPage({{ .user_id }})" x-init="init()">
+    <header class="following-intro">
+        <div>
+            <div class="eyebrow">FOLLOWING</div>
+            <h1 class="h2 fw-bold mt-1 mb-2">关注动态</h1>
+            <p class="text-muted mb-0">看看你关注的人最近分享了什么。</p>
+        </div>
+    </header>
+
+    <div class="following-people surface-card" x-show="people.length > 0" x-cloak>
+        <div class="following-avatar-rail" aria-label="已关注用户">
+            <template x-for="user in people" :key="user.id">
+                <a class="following-person" :href="'/user/' + user.id">
+                    <img class="following-person-avatar" :src="user.avatar_url || '/static/img/default-avatar.svg'" alt="" onerror="this.src='/static/img/default-avatar.svg'">
+                    <span x-text="user.username"></span>
+                </a>
+            </template>
+        </div>
+    </div>
+
+    <div class="state-panel is-error mb-3" x-show="errorMessage" x-cloak role="alert"><i class="bi bi-cloud-slash" aria-hidden="true"></i><h2 class="h5">关注动态暂时不可用</h2><p x-text="errorMessage"></p><button type="button" class="btn btn-outline-secondary" @click="init(true)">重新加载</button></div>
+    <div class="loading-block" x-show="loadingFeed && feed.length === 0" x-cloak role="status"><span class="spinner-border" aria-label="加载中"></span></div>
+
+    <div class="feed-grid is-single-column following-feed" x-show="feed.length > 0" x-cloak>
+        <template x-for="post in feed" :key="post.id">
+            <a :href="'/post/' + post.id" class="text-decoration-none feed-item" x-html="renderPost(post)"></a>
+        </template>
+    </div>
+    <div class="empty-block surface-panel" x-show="!loadingFeed && !errorMessage && feed.length === 0 && people.length === 0" x-cloak><i class="bi bi-people" aria-hidden="true"></i><h2 class="h5">还没有关注任何人</h2><p class="mb-3">从社区作品进入作者主页，就可以关注喜欢的创作者。</p><a class="btn btn-primary" href="/home">去发现作品</a></div>
+    <div class="empty-block surface-panel" x-show="!loadingFeed && !errorMessage && feed.length === 0 && people.length > 0" x-cloak><i class="bi bi-images" aria-hidden="true"></i><h2 class="h5">关注的人还没有新作品</h2><p class="mb-0">过一会儿再来看看吧。</p></div>
+    <div class="text-center mt-4" x-show="feedHasMore" x-cloak><button type="button" class="btn btn-outline-secondary" :disabled="loadingFeed" @click="loadFeed()"><span x-text="loadingFeed ? '加载中…' : '加载更多'"></span></button></div>
+</section>
+
+<script>
+function followingPage(currentUserID) {
+    return {
+        currentUserID, people: [], feed: [], feedPage: 1, feedTotal: 0,
+        loadingPeople: false, loadingFeed: false, errorMessage: '',
+        get feedHasMore() { return this.feed.length < this.feedTotal; },
+        async readJSON(response) { try { return await response.json(); } catch (_) { return {}; } },
+        async init(reset = false) {
+            if (reset) { this.people = []; this.feed = []; this.feedPage = 1; }
+            this.errorMessage = '';
+            await Promise.all([this.loadPeople(), this.loadFeed()]);
+        },
+        async loadPeople() {
+            if (this.loadingPeople) return;
+            this.loadingPeople = true;
+            try {
+                const response = await fetch(`/api/v1/users/${this.currentUserID}/following?page=1&page_size=6`);
+                const body = await this.readJSON(response);
+                if (!response.ok || body.code !== 0) throw new Error(body.message || '关注列表加载失败');
+                const list = Array.isArray(body.data?.list) ? body.data.list : [];
+                this.people = list.slice(0, 6);
+            } catch (error) { this.errorMessage = error.message || '网络连接异常，请稍后重试'; }
+            finally { this.loadingPeople = false; }
+        },
+        async loadFeed() {
+            if (this.loadingFeed) return;
+            this.loadingFeed = true;
+            try {
+                const response = await fetch(`/api/v1/feed/following?page=${this.feedPage}&page_size=12`);
+                const body = await this.readJSON(response);
+                if (!response.ok || body.code !== 0) throw new Error(body.message || '关注动态加载失败');
+                const list = Array.isArray(body.data?.list) ? body.data.list : [];
+                this.feed = this.feedPage === 1 ? list : [...this.feed, ...list];
+                this.feedTotal = Number(body.data?.total) || 0;
+                this.feedPage += 1;
+            } catch (error) { this.errorMessage = error.message || '网络连接异常，请稍后重试'; }
+            finally { this.loadingFeed = false; }
+        },
+        displayImageURL(url) { return (url || '').replace(/\/posts\/(original|thumb)\//, '/posts/medium/'); },
+        escapeHTML(value) { const node = document.createElement('div'); node.textContent = value || ''; return node.innerHTML; },
+        renderPost(post) {
+            const author = this.escapeHTML(post.user?.username || '社区成员'); const content = this.escapeHTML(post.content || '无标题');
+            const avatar = this.escapeHTML(post.user?.avatar_url || '/static/img/default-avatar.svg'); const image = this.escapeHTML(this.displayImageURL(post.cover_image || ''));
+            return `<article class="feed-card"><div class="card-img-container skeleton-bg"><img src="${image}" alt="" loading="lazy" decoding="async" onload="this.parentElement.classList.remove('skeleton-bg')" onerror="this.parentElement.classList.add('img-error')"></div><div class="card-body"><div class="card-title">${content}</div><div class="card-meta"><img src="${avatar}" class="author-avatar" alt="" onerror="this.src='/static/img/default-avatar.svg'"><span>${author}</span><span class="ms-auto"><i class="bi bi-heart"></i> ${post.like_count || 0}</span></div></div></article>`;
+        }
+    };
+}
+</script>
+{{ template "footer" . }}

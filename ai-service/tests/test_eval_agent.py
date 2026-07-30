@@ -43,17 +43,17 @@ def test_agent_tasks_use_unique_safe_usernames_and_fresh_conversations():
     ]
 
 
-def test_agent_dataset_has_frozen_shape_and_human_subset():
+def test_agent_dataset_has_current_shape_and_human_subset():
     root = Path(__file__).resolve().parents[2]
-    tasks = load_tasks(root / "docs" / "eval" / "agent_tasks_v1.jsonl")
+    tasks = load_tasks(root / ".local" / "shareo" / "eval" / "agent_tasks_current_v1.jsonl")
     assert len(tasks) == 36
     assert sum(item["category"] == "single-source" for item in tasks) == 10
-    assert sum(item["category"] == "multi-source" for item in tasks) == 8
-    assert sum(item["category"] == "comparison" for item in tasks) == 6
-    assert sum(item["category"] == "image" for item in tasks) == 4
+    assert sum(item["category"] == "keyword" for item in tasks) == 8
+    assert sum(item["category"] == "multi-source" for item in tasks) == 4
+    assert sum(item["category"] == "image" for item in tasks) == 6
     assert sum(item["category"] == "no-answer" for item in tasks) == 4
     assert sum(item["category"] == "injection" for item in tasks) == 4
-    assert sum(item.get("human_evaluable") for item in tasks) == 30
+    assert sum(item.get("human_evaluable") for item in tasks) == 32
 
 
 def test_agent_quality_gates_require_all_machine_and_human_evidence():
@@ -76,8 +76,14 @@ def test_agent_quality_gates_require_all_machine_and_human_evidence():
     assert check_quality_gates(report, 4.5, 2)["no human score < 3"] is False
 
 
-def test_agent_dataset_lines_are_valid_json():
-    path = Path(__file__).resolve().parents[2] / "docs" / "eval" / "agent_tasks_v1.jsonl"
+def test_current_agent_dataset_lines_are_valid_json():
+    path = (
+        Path(__file__).resolve().parents[2]
+        / ".local"
+        / "shareo"
+        / "eval"
+        / "agent_tasks_current_v1.jsonl"
+    )
     assert all(json.loads(line)["id"] for line in path.read_text().splitlines() if line)
 
 

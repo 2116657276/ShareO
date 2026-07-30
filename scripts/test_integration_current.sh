@@ -84,12 +84,16 @@ trap cleanup EXIT INT TERM
 
 mysql_exec -e \
     "CREATE DATABASE IF NOT EXISTS $test_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci" >/dev/null
-mysql_exec "$test_db" \
-    < migrations/001_init.sql
+for migration in migrations/*.sql; do
+    mysql_exec "$test_db" < "$migration"
+done
 
 export SHAREO_TEST_MYSQL_DSN="root:${db_password}@tcp(127.0.0.1:${mysql_port})/${test_db}?charset=utf8mb4&parseTime=True&loc=Local"
 export SHAREO_TEST_REDIS_URL="redis://127.0.0.1:${redis_port}/0"
 export SHAREO_TEST_QDRANT_URL="http://127.0.0.1:${qdrant_port}"
+local_no_proxy="127.0.0.1,localhost,::1"
+export NO_PROXY="${NO_PROXY:+$NO_PROXY,}$local_no_proxy"
+export no_proxy="${no_proxy:+$no_proxy,}$local_no_proxy"
 
 go test -count=1 -tags=integration ./...
 (

@@ -10,7 +10,7 @@
     <div class="list-group-item">
         <div class="row align-items-center">
             <div class="col-auto">
-                <img src="{{ .CoverImage }}" width="80" height="80" style="object-fit:cover;border-radius:8px" onerror="this.style.background='#FFF0DC'">
+                <img src="{{ .CoverImage }}" class="review-thumb" onerror="this.classList.add('img-error')">
             </div>
             <div class="col">
                 <div class="fw-bold">{{ if .User }}{{ .User.Username }}{{ end }}</div>

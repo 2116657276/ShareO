@@ -677,7 +677,8 @@ def main() -> int:
         type=Path,
         default=Path(
             os.environ.get(
-                "SHAREO_AGENT_DATASET", str(root / "docs" / "eval" / "agent_tasks_v1.jsonl")
+                "SHAREO_AGENT_DATASET",
+                str(root / ".local" / "shareo" / "eval" / "agent_tasks_current_v1.jsonl"),
             )
         ),
     )

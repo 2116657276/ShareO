@@ -1,62 +1,116 @@
 {{ template "header" . }}
-<div class="row" x-data="profilePage({{ .ProfileUser.ID }}, {{ .IsFollowing }})" x-init="load()">
-    <div class="col-lg-10 mx-auto">
-        <section class="surface-card p-3 p-md-4 mb-4">
-        <div class="profile-header d-flex align-items-center gap-3 mb-0">
-            <img src="{{ .ProfileUser.AvatarURL }}" class="rounded-circle" width="88" height="88" style="object-fit:cover" onerror="this.src='/static/img/default-avatar.svg'">
-            <div class="flex-grow-1">
-                <h1 class="h3 mb-1">{{ .ProfileUser.Username }}</h1>
-                <p class="text-muted mb-2">{{ .ProfileUser.Bio }}</p>
-				<div class="d-flex gap-3 small"><span>{{ .PostCount }} 作品</span><span>{{ .Followers }} 粉丝</span><span>{{ .Following }} 关注</span></div>
-            </div>
-            {{ if ne .user_id .ProfileUser.ID }}
-            <button class="btn btn-outline-primary" @click="toggleFollow" x-text="following ? '已关注' : '关注'"></button>
-            <button class="btn btn-primary" @click="startDM">私信</button>
-            {{ end }}
-        </div>
-        </section>
-
-        <div class="feed-tabs mb-3" role="tablist" aria-label="用户内容">
-            <button class="feed-tab" :class="{active: tab === 'posts'}" @click="switchTab('posts')">作品</button>
-            <button class="feed-tab" :class="{active: tab === 'likes'}" @click="switchTab('likes')">点赞作品</button>
-        </div>
-        <div class="feed-grid">
-            <template x-for="post in posts" :key="post.id">
-                <a :href="`/post/${post.id}`" class="text-decoration-none feed-item">
-                    <div class="feed-card">
-                        <div class="card-img-container"><img :src="post.cover_image" alt="cover"></div>
-                        <div class="card-body"><div class="card-title" x-text="post.content || '无标题'"></div></div>
+<section class="profile-page" x-data="profilePage({{ .ProfileUser.ID }}, {{ .IsFollowing }}, {{ .IsOwnProfile }})">
+    <div class="surface-card p-3 p-md-4 mb-4">
+        <div class="profile-header d-flex align-items-center gap-3 gap-md-4">
+            <img src="{{ .ProfileUser.AvatarURL }}" class="profile-avatar" alt="{{ .ProfileUser.Username }}" onerror="this.src='/static/img/default-avatar.svg'">
+            <div class="flex-grow-1 min-w-0">
+                <div class="d-flex align-items-start justify-content-between gap-3 flex-wrap">
+                    <div>
+                        <div class="eyebrow">PROFILE</div>
+                        <h1 class="h3 fw-bold mt-1 mb-1">{{ .ProfileUser.Username }}</h1>
+                        <p class="text-muted mb-0">{{ if .ProfileUser.Bio }}{{ .ProfileUser.Bio }}{{ else }}这个人还没有写简介。{{ end }}</p>
                     </div>
-                </a>
-            </template>
+                    <div class="page-actions">
+                        {{ if .IsOwnProfile }}
+                        <a class="btn btn-outline-secondary position-relative" href="/notifications"><i class="bi bi-bell me-1"></i>通知</a>
+                        <a class="btn btn-outline-secondary" href="/settings"><i class="bi bi-gear me-1"></i>编辑资料</a>
+                        {{ if eq .role "admin" }}<a class="btn btn-outline-secondary" href="/admin"><i class="bi bi-shield-check me-1"></i>管理</a>{{ end }}
+                        <form action="/logout" method="post" class="d-inline" onsubmit="return confirm('确认退出登录？')"><button type="submit" class="btn btn-outline-secondary"><i class="bi bi-box-arrow-right me-1"></i>退出</button></form>
+                        {{ else }}
+                        <button type="button" class="btn btn-outline-primary" @click="toggleFollow" x-text="following ? '已关注' : '关注'"></button>
+                        <button type="button" class="btn btn-primary" @click="startDM"><i class="bi bi-chat-dots me-1"></i>私聊</button>
+                        {{ end }}
+                    </div>
+                </div>
+                <div class="stats-row">
+                    <div class="stats-col"><div class="stats-num">{{ .PostCount }}</div><div class="stats-label">作品</div></div>
+                    <div class="stats-col"><div class="stats-num">{{ .Followers }}</div><div class="stats-label">粉丝</div></div>
+                    <div class="stats-col"><div class="stats-num">{{ .Following }}</div><div class="stats-label">关注</div></div>
+                </div>
+            </div>
         </div>
-        <div class="state-panel is-error" x-show="errorMessage" x-cloak role="alert"><i class="bi bi-cloud-slash" aria-hidden="true"></i><h3>作品加载失败</h3><p x-text="errorMessage"></p><button type="button" class="btn btn-outline-secondary" @click="load()">重新加载</button></div>
-        <div class="loading-block" x-show="loading" x-cloak role="status"><span class="spinner-border" aria-label="加载中"></span></div>
-        <div class="empty-block" x-show="!loading && !errorMessage && posts.length === 0" x-cloak><i class="bi bi-images" aria-hidden="true"></i><p class="mb-0">暂无内容</p></div>
     </div>
-</div>
+
+    <div class="feed-toolbar profile-content-toolbar">
+        <div class="profile-tabs" role="tablist" aria-label="用户内容">
+            <button class="profile-tab" :class="{active: tab === 'posts'}" @click="switchTab('posts')" type="button">作品</button>
+            <button class="profile-tab" :class="{active: tab === 'likes'}" @click="switchTab('likes')" type="button">点赞</button>
+            {{ if .IsOwnProfile }}<button class="profile-tab" :class="{active: tab === 'favorites'}" @click="switchTab('favorites')" type="button">收藏</button>{{ end }}
+        </div>
+        <div class="layout-toggle" aria-label="内容布局">
+            <button type="button" :class="{ 'is-active': layout === 'single' }" @click="setLayout('single')" aria-label="单列布局"><i class="bi bi-view-stacked"></i></button>
+            <button type="button" :class="{ 'is-active': layout === 'two' }" @click="setLayout('two')" aria-label="双列布局"><i class="bi bi-view-stacked rotate-90"></i></button>
+        </div>
+    </div>
+
+    <div class="feed-grid" :class="layout === 'two' ? 'is-two-column' : 'is-single-column'" x-show="posts.length > 0" x-cloak>
+        <template x-for="post in posts" :key="post.id">
+            <a :href="`/post/${post.id}`" class="feed-item">
+                <article class="feed-card">
+                    <div class="card-img-container"><img :src="displayImageURL(post.cover_image) || '/static/img/placeholder.svg'" alt="" loading="lazy" onerror="this.closest('.card-img-container').classList.add('img-error');this.remove()"></div>
+                    <div class="card-body">
+                        <div class="card-title" x-text="post.content || '无描述'"></div>
+                        <div class="card-meta"><i class="bi bi-heart"></i><span x-text="post.like_count || 0"></span><span class="ms-2"><i class="bi bi-chat"></i> <span x-text="post.comment_count || 0"></span></span></div>
+                    </div>
+                </article>
+            </a>
+        </template>
+    </div>
+
+    <div class="state-panel is-error" x-show="errorMessage" x-cloak role="alert">
+        <i class="bi bi-cloud-slash" aria-hidden="true"></i><h2 class="h5">作品加载失败</h2><p x-text="errorMessage"></p><button type="button" class="btn btn-outline-secondary" @click="load()">重新加载</button>
+    </div>
+    <div class="loading-block" x-show="loading" x-cloak role="status"><span class="spinner-border" aria-label="加载中"></span></div>
+    <div class="empty-block surface-panel" x-show="!loading && !errorMessage && posts.length === 0" x-cloak><i class="bi bi-images" aria-hidden="true"></i><p class="mb-0">暂无内容</p></div>
+</section>
+
 <script>
-function profilePage(userId, initialFollowing) {
+function profilePage(userId, initialFollowing, isOwnProfile) {
     return {
-        tab: 'posts', posts: [], following: Boolean(initialFollowing), loading: false, errorMessage: '',
+        tab: 'posts', posts: [], following: Boolean(initialFollowing), loading: false, errorMessage: '', layout: 'two',
+        init() {
+            this.layout = window.localStorage.getItem('shareo.profile.layout') === 'single' ? 'single' : 'two';
+            this.load();
+        },
+        setLayout(mode) {
+            this.layout = mode === 'single' ? 'single' : 'two';
+            window.localStorage.setItem('shareo.profile.layout', this.layout);
+        },
+        displayImageURL(url) { return (url || '').replace(/\/posts\/(original|thumb)\//, '/posts/medium/'); },
         async load() {
             this.loading = true; this.errorMessage = '';
-			const url = this.tab === 'posts' ? `/api/v1/feed?user_id=${userId}&page=1&page_size=30` : `/api/v1/users/${userId}/likes?page=1&page_size=30`;
+            const url = this.tab === 'posts'
+                ? `/api/v1/feed?user_id=${userId}&page=1&page_size=30`
+                : (this.tab === 'favorites' && isOwnProfile
+                    ? '/api/v1/favorites?page=1&page_size=30'
+                    : `/api/v1/users/${userId}/likes?page=1&page_size=30`);
             try {
-                const r = await fetch(url); const d = await r.json();
-                if (!r.ok || d.code !== 0) throw new Error(d.message || '作品加载失败');
-                this.posts = d.data?.list || [];
-            } catch (e) { this.errorMessage = e.message || '作品服务暂时不可用'; }
+                const response = await fetch(url); const body = await response.json();
+                if (!response.ok || body.code !== 0) throw new Error(body.message || '作品加载失败');
+                this.posts = Array.isArray(body.data?.list) ? body.data.list : [];
+            } catch (error) { this.errorMessage = error.message || '作品服务暂时不可用'; }
             finally { this.loading = false; }
         },
-        switchTab(tab) { this.tab = tab; this.load(); },
+        switchTab(tab) {
+            if (tab === 'favorites' && !isOwnProfile) return;
+            this.tab = tab;
+            this.load();
+        },
         async toggleFollow() {
-            const r = await fetch(`/api/v1/users/${userId}/follow`, {method:'POST'});
-            const d = await r.json(); if (r.ok && d.code === 0) this.following = Boolean(d.data.following);
+            try {
+                const response = await fetch(`/api/v1/users/${userId}/follow`, {method:'POST'});
+                const body = await response.json();
+                if (!response.ok || body.code !== 0) throw new Error(body.message || '关注操作失败');
+                this.following = Boolean(body.data.following);
+            } catch (error) { this.errorMessage = error.message || '关注操作失败'; }
         },
         async startDM() {
-            const r = await fetch('/api/v1/conversations', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({user_id:userId})});
-            const d = await r.json(); if (r.ok && d.code === 0) location.href = `/chat?conv=${d.data.id}`;
+            try {
+                const response = await fetch('/api/v1/conversations', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({user_id:userId})});
+                const body = await response.json();
+                if (!response.ok || body.code !== 0 || !body.data?.id) throw new Error(body.message || '会话创建失败');
+                window.location.href = `/chat?conv=${body.data.id}`;
+            } catch (error) { this.errorMessage = error.message || '暂时无法发起私聊'; }
         }
     };
 }

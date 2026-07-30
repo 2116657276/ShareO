@@ -106,7 +106,7 @@ func ProcessAndUpload(reader io.Reader, size int64, contentType, originalName st
 		result.Medium = result.Original
 	} else {
 		mediumImg := imaging.Fit(srcImg, MediumSize, MediumSize, imaging.Lanczos)
-		mediumBuf, err := encodeJPEG(mediumImg, 85)
+		mediumBuf, err := encodeJPEG(mediumImg, 90)
 		if err != nil {
 			result.Medium = result.Original
 		} else {

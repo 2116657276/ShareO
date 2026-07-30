@@ -1,6 +1,6 @@
 # ShareO 已实现架构
 
-> 更新时间：2026-07-28 | 本文维护稳定架构和历史验证边界；当前阶段状态见 [`TASK.md`](../TASK.md)
+> 更新时间：2026-07-30 | 本文维护稳定架构和证据边界；完工状态见 [`docs/REVIEW.md`](REVIEW.md)
 
 ## 六服务拓扑
 
@@ -14,7 +14,7 @@ Go 模块化单体 ───────► MySQL（12 表，业务真相）
   └─内部 HTTP/token─► Python FastAPI 单进程
                         ├─API + index_post consumer + bot_tasks consumer
                         ├─Chinese-CLIP / FastEmbed
-                        ├─RAG pipeline + Phase 8 LangGraph Agent（已实现）
+                        ├─RAG pipeline + LangGraph 只读 Agent（已实现）
                         ├────────────────► Qdrant（images / post_chunks）
                         └────────────────► DeepSeek/OpenAI-compatible LLM
 ```
@@ -84,9 +84,9 @@ Liveness 不代表模型或业务能力可用；自动化和运维不得用 `/he
 | Redis停止 | 缓存降级，写业务不回滚 | 消息落库可用，在线/推送受影响 | 旧索引可查，新事件延迟 | 新任务延迟 |
 | DeepSeek不可用 | 正常 | 正常 | 正常 | 重试后固定兜底 |
 
-该矩阵已有独立 Compose 历史复核，脱敏结果见 [`docs/evidence/phase7c/evidence-matrix.md`](evidence/phase7c/evidence-matrix.md) 和 [`docs/evidence/phase7c/degradation-automated.log`](evidence/phase7c/degradation-automated.log)。当前日常开发优先使用本机服务；Docker/Compose 故障矩阵属于人工验收通过后的最终打包复核，不在当前本机阶段宣称重新验证。真实 DeepSeek 断开保留为运行手册中的人工复核步骤，自动门禁使用测试 provider。
+当前本机运行保留了依赖边界和 readiness 语义，但本轮没有重新执行 Compose 故障注入；完整证据边界见 [完工冻结审查](REVIEW.md)。日常运行优先使用本机服务，Docker/Compose 仅作为可选打包方式。
 
-### Phase 7C 实测结果
+### 已实现的恢复语义
 
 | 场景 | 实测结果 | 恢复结果 |
 |---|---|---|
@@ -96,13 +96,13 @@ Liveness 不代表模型或业务能力可用；自动化和运维不得用 `/he
 | Redis 停止 | 社区、全文搜索和普通消息 HTTP 200；推送/异步能力进入降级 | Redis 启动后 consumer 自动重建缺失消费组并恢复 readiness |
 | 测试 LLM provider 停止 | 普通私聊 HTTP 200，Bot 返回固定兜底 | provider 启动后 RAG readiness 恢复 |
 
-Phase 8 Agent 的自动化故障矩阵复用上述依赖边界，测试 Provider、Qdrant、Redis、Go 内部接口和重复投递恢复已有历史验证。真实 DeepSeek 机器报告和人工评分也保留为历史证据；当前机器门禁是否通过只由 [`TASK.md`](../TASK.md) 和最新报告决定。Phase 7C 源码冷启动、浏览器演示和最终 Docker 打包仍待后续阶段完成。
+只读 Agent 复用上述依赖边界；当前机器门禁和真实 Provider 结果统一见 [Final Freeze](evidence/final-freeze/README.md)。源码冷启动、浏览器演示和 Compose 故障注入属于已接受的证据缺口，不作为当前整改任务。
 
 ## 模块边界
 
 Go 保持 Handler → Service → Repository 分层，AI桥接只负责事件和内部 HTTP。Python 代码显式分为 image search、RAG、隔离的 `agent/` 模块和 worker runtime。默认 RAG Bot 的控制流由代码固定；显式 Agent 模式才使用规划器和工具调用。Agent 只读调用受保护的 Go 内部帖子接口，不获得 MySQL、MinIO 或 Qdrant 写权限。
 
-## Phase 8 实现中的 Agent 数据流
+## 只读 Agent 数据流
 
 ```text
 用户发送 ai_mode=agent → bot_tasks

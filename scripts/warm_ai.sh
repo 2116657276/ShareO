@@ -51,26 +51,38 @@ wait_http() {
 }
 
 echo "Warming image model..."
+image_warmed=0
 for _ in $(seq 1 180); do
-    if curl --noproxy '*' --silent --show-error --max-time 30 --fail \
+    if curl --noproxy '*' --silent --max-time 30 --fail \
         "${headers[@]}" -X POST "$AI_URL/v1/search/images" \
         -d '{"query":"夜景照片","limit":1}' >/dev/null; then
         echo "[PASS] image model warmup request"
+        image_warmed=1
         break
     fi
     sleep 1
 done
+if [ "$image_warmed" -ne 1 ]; then
+    echo "[FAIL] image model warmup request timed out" >&2
+    exit 1
+fi
 
 echo "Warming text model and checking Provider..."
+rag_warmed=0
 for _ in $(seq 1 180); do
-    if curl --noproxy '*' --silent --show-error --max-time 60 --fail \
+    if curl --noproxy '*' --silent --max-time 60 --fail \
         "${headers[@]}" -X POST "$AI_URL/v1/rag/answer" \
         -d '{"question":"夜景怎么拍？","history":[],"top_k":8}' >/dev/null; then
         echo "[PASS] RAG warmup request"
+        rag_warmed=1
         break
     fi
     sleep 1
 done
+if [ "$rag_warmed" -ne 1 ]; then
+    echo "[FAIL] RAG warmup request timed out" >&2
+    exit 1
+fi
 
 wait_http "image-search readiness" "$AI_URL/readyz/image-search"
 wait_http "RAG readiness" "$AI_URL/readyz/rag"

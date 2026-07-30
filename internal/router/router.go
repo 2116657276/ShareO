@@ -33,6 +33,7 @@ func SetupRouter(trustedOrigins ...string) *gin.Engine {
 	userH := handler.NewUserHandler()
 	uploadH := handler.NewUploadHandler()
 	notifH := handler.NewNotificationHandler()
+	favoriteH := handler.NewFavoriteHandler()
 	postRepo := repository.NewPostRepo()
 	imageSearchH := handler.NewImageSearchHandler(postRepo)
 
@@ -99,6 +100,7 @@ func SetupRouter(trustedOrigins ...string) *gin.Engine {
 		uploadLimiter := middleware.RateLimit(20, 1*time.Minute)
 
 		authAPI.GET("/auth/me", authH.Me)
+		authAPI.GET("/feed/following", feedH.GetFollowingFeed)
 		authAPI.POST("/auth/logout", authH.Logout)
 		authAPI.PUT("/auth/profile", authH.UpdateProfile)
 		authAPI.PUT("/auth/password", authH.ChangePassword)
@@ -106,6 +108,9 @@ func SetupRouter(trustedOrigins ...string) *gin.Engine {
 		authAPI.PUT("/posts/:id", postH.Update)
 		authAPI.DELETE("/posts/:id", postH.Delete)
 		authAPI.POST("/posts/:id/like", socialH.ToggleLike)
+		authAPI.PUT("/posts/:id/favorite", favoriteH.Ensure)
+		authAPI.DELETE("/posts/:id/favorite", favoriteH.Remove)
+		authAPI.GET("/favorites", favoriteH.List)
 		authAPI.GET("/likes", socialH.GetLikes)
 		authAPI.POST("/posts/:id/comments", socialH.CreateComment)
 		authAPI.DELETE("/comments/:cid", socialH.DeleteComment)
@@ -167,6 +172,7 @@ func SetupRouter(trustedOrigins ...string) *gin.Engine {
 		needLogin.POST("/post/:id/edit", postH.WebUpdate)
 		needLogin.POST("/post/:id/comment", socialH.WebCreateComment)
 		needLogin.GET("/user/:id", userH.ProfilePage)
+		needLogin.GET("/following", userH.FollowingPage)
 		needLogin.GET("/settings", authH.SettingsPage)
 		needLogin.POST("/settings", authH.WebSettings)
 		needLogin.POST("/settings/password", authH.WebChangePassword)

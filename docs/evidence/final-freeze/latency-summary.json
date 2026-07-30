@@ -1,0 +1,127 @@
+{
+  "run_id": "20260730T143316Z",
+  "generated_at": "2026-07-30T14:38:07.709Z",
+  "provenance": {
+    "git": {
+      "sha": "efdb049db89964128b7051ab2c7f2b4a6a7be4da",
+      "branch": "main",
+      "dirty": true
+    },
+    "dataset_hashes": {
+      "image_search_current": {
+        "path": ".local/shareo/eval/image_search_local_v1.jsonl",
+        "sha256": "ee2b68c49eeeb51ee45373c9cf517a54883f2e0b94480ef7a8b810b433d51017",
+        "record_count": 34
+      },
+      "rag_current": {
+        "path": ".local/shareo/eval/rag_qa_current_v1.jsonl",
+        "sha256": "522b7bbfa796ef35a25725010dacab946949de1d7402dabd84a8fe4589941ce7",
+        "record_count": 30
+      },
+      "agent_current": {
+        "path": ".local/shareo/eval/agent_tasks_current_v1.jsonl",
+        "sha256": "434ebb53ff95629aaecc9e2c9d5d279a0e6f7bedb7ea22a299a62ebc6774e1aa",
+        "record_count": 36
+      },
+      "post_search_current": {
+        "path": ".local/shareo/eval/post_search_v1.jsonl",
+        "sha256": "45b8bc56dc493c692e55e04d82dff1ffbaf4f3907917db5d5cb5e2fe941d7e9d",
+        "record_count": 32
+      }
+    },
+    "started_at": "2026-07-30T14:33:16.691Z",
+    "provider": {
+      "type": "configured real provider",
+      "model": "deepseek-v4-flash"
+    }
+  },
+  "e2e_report_sources": {
+    "post_search_local": "post-search.json",
+    "image_search_local": "image-search-local.json",
+    "rag_image": "rag-image.json",
+    "agent": "agent.json"
+  },
+  "evaluation_report_aggregate": {
+    "image_total_ms": {
+      "source": "rag-image.json image_search report",
+      "p50_ms": 58.33558299855213,
+      "p95_ms": 69.19283300157986
+    },
+    "rag_total_ms": {
+      "source": "rag-image.json rag report",
+      "p50_ms": 2057.1,
+      "p95_ms": 3101.2
+    },
+    "agent_total_ms": {
+      "source": "agent.json agent report",
+      "p50_ms": 4058.8,
+      "p95_ms": 8179.5
+    },
+    "agent_tool_step_ms": {
+      "status": "unavailable",
+      "reason": "Agent 报告只提供逐题总耗时，没有每个工具步骤耗时字段"
+    }
+  },
+  "structured_log_aggregate": {
+    "status": "available",
+    "source": "ai.log appended structured lines",
+    "image_total_ms": {
+      "sample_count": 69,
+      "p50_ms": 52.3,
+      "p95_ms": 60.8,
+      "max_ms": 84.3
+    },
+    "rag_embedding_ms": {
+      "sample_count": 31,
+      "p50_ms": 7.3,
+      "p95_ms": 10.1,
+      "max_ms": 11.0
+    },
+    "rag_retrieval_ms": {
+      "sample_count": 31,
+      "p50_ms": 8.1,
+      "p95_ms": 10.4,
+      "max_ms": 17.0
+    },
+    "rag_llm_ms": {
+      "sample_count": 31,
+      "p50_ms": 1494.9,
+      "p95_ms": 2473.4,
+      "max_ms": 3306.5
+    },
+    "rag_total_ms": {
+      "sample_count": 31,
+      "p50_ms": 1510.8,
+      "p95_ms": 2485.4,
+      "max_ms": 3316.7
+    },
+    "image_embedding_ms": {
+      "status": "unavailable",
+      "reason": "现有结构化日志没有该分段耗时字段"
+    },
+    "image_search_ms": {
+      "status": "unavailable",
+      "reason": "现有结构化日志没有该分段耗时字段"
+    },
+    "agent_tool_step_ms": {
+      "status": "unavailable",
+      "reason": "现有结构化日志没有该分段耗时字段"
+    },
+    "queue_wait_ms": {
+      "status": "unavailable",
+      "reason": "no structured log field"
+    },
+    "callback_ms": {
+      "status": "unavailable",
+      "reason": "no structured log field"
+    }
+  },
+  "queue_wait_ms": {
+    "status": "unavailable",
+    "reason": "no structured log field"
+  },
+  "callback_ms": {
+    "status": "unavailable",
+    "reason": "no structured log field"
+  }
+}

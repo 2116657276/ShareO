@@ -2,7 +2,7 @@
 
 > 结构事实源：`migrations/001_init.sql`
 
-## MySQL 12 表
+## MySQL 13 表
 
 | 表 | 用途 | 关键约束 |
 |---|---|---|
@@ -11,6 +11,7 @@
 | `post_images` | 帖子图片顺序和尺寸 | 帖子删除级联 |
 | `comments` | 评论与回复 | 帖子、作者、父评论级联；回复用户删除置空 |
 | `likes` | 帖子点赞 | `(user_id,post_id)`唯一 |
+| `favorites` | 私人帖子收藏 | `(user_id,post_id)`唯一；仅收藏者本人查询 |
 | `follows` | 用户关注 | `(follower_id,followee_id)`唯一 |
 | `notifications` | 点赞、评论、关注、审核通知 | 接收者和操作者删除级联 |
 | `system_logs` | 管理审计 | 用户删除置空 |
@@ -25,6 +26,7 @@
 users ──< posts ──< post_images
   │         ├────< comments
   │         └────< likes
+  │         └────< favorites
   ├────< follows >──── users
   ├────< notifications
   └────< conversation_members >──── conversations ──< messages
@@ -38,6 +40,7 @@ users ──< posts ──< post_images
 ## 事务不变量
 
 - 创建帖子与图片关系、互动明细与计数、消息与会话时间、Bot消息与幂等记录必须在各自事务中完成。
+- 收藏是私人关系，不写帖子计数、不产生通知；收藏列表仍执行帖子可见性过滤。
 - `last_read_message_id` 只能推进到同会话真实消息，并通过最大值语义防止倒退。
 - `bot_replies.source_message_id` 保证一条用户来源消息最多产生一条Bot回复。
 - 用户编辑 approved帖子后状态回到 pending，并发布图文向量删除事件。

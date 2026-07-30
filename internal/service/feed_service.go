@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"time"
 
@@ -13,12 +14,15 @@ import (
 type FeedService struct {
 	postRepo *repository.PostRepo
 	likeRepo *repository.LikeRepo
+	search   *hybridPostSearch
 }
 
 func NewFeedService() *FeedService {
+	postRepo := repository.NewPostRepo()
 	return &FeedService{
-		postRepo: repository.NewPostRepo(),
+		postRepo: postRepo,
 		likeRepo: repository.NewLikeRepo(),
+		search:   newHybridPostSearch(postRepo),
 	}
 }
 
@@ -76,8 +80,26 @@ func (s *FeedService) GetFeed(req FeedReq, currentUserID int64) ([]model.Post, i
 	return posts, total, nil
 }
 
-func (s *FeedService) Search(q string, page, pageSize int, currentUserID int64) ([]model.Post, int64, error) {
-	posts, total, err := s.postRepo.Search(q, page, pageSize)
+func (s *FeedService) GetFollowingFeed(req FeedReq, currentUserID int64) ([]model.Post, int64, error) {
+	if currentUserID <= 0 {
+		return nil, 0, errors.New("following feed requires authentication")
+	}
+	if req.Page <= 0 {
+		req.Page = 1
+	}
+	if req.PageSize <= 0 || req.PageSize > 50 {
+		req.PageSize = 20
+	}
+	posts, total, err := s.postRepo.FollowingFeed(currentUserID, req.Page, req.PageSize)
+	if err != nil {
+		return nil, 0, err
+	}
+	s.fillUserInteraction(posts, currentUserID)
+	return posts, total, nil
+}
+
+func (s *FeedService) Search(ctx context.Context, q string, page, pageSize int, currentUserID int64) ([]model.Post, int64, error) {
+	posts, total, err := s.search.Search(ctx, q, page, pageSize)
 	if err != nil {
 		return nil, 0, err
 	}

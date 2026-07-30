@@ -43,7 +43,7 @@ type ImageSearchHandler struct {
 // The browser calls the existing public API; no AI credentials cross this boundary.
 func (h *ImageSearchHandler) ImageSearchPage(c *gin.Context) {
 	c.HTML(http.StatusOK, "image_search.html", userData(c, gin.H{
-		"title": "语义搜图 - ShareO",
+		"title": "搜索 - ShareO",
 	}))
 }
 

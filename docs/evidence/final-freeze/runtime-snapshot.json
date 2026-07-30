@@ -1,0 +1,279 @@
+{
+  "captured_at": "2026-07-30T14:33:38.565Z",
+  "git": {
+    "sha": "efdb049db89964128b7051ab2c7f2b4a6a7be4da",
+    "branch": "main",
+    "dirty": true
+  },
+  "python": "3.14.6",
+  "python_eval_runtime": "Python 3.12.13",
+  "go": "go version go1.26.5 darwin/arm64",
+  "uv": "uv 0.11.28 (Homebrew 2026-07-07 aarch64-apple-darwin)",
+  "platform": "macOS-15.7.7-arm64-arm-64bit-Mach-O",
+  "network_environment": "local-native",
+  "configured_keys": {
+    "SHAREO_AI_LLM_BASE_URL": true,
+    "SHAREO_AI_LLM_API_KEY": true,
+    "SHAREO_AI_LLM_MODEL": true,
+    "SHAREO_INTERNAL_TOKEN": false
+  },
+  "readiness": {
+    "app_url": "http://127.0.0.1:8080",
+    "ai_url": "http://127.0.0.1:8000",
+    "endpoints": {
+      "go_healthz": {
+        "http_status": 200,
+        "payload": {
+          "service": "ShareO",
+          "status": "ok"
+        }
+      },
+      "ai_healthz": {
+        "http_status": 200,
+        "payload": {
+          "status": "ok",
+          "service": "shareo-ai"
+        }
+      },
+      "image_search": {
+        "http_status": 200,
+        "payload": {
+          "status": "ready",
+          "model": {
+            "model": "OFA-Sys/chinese-clip-vit-base-patch16",
+            "revision": "36e679e65c2a2fead755ae21162091293ad37834",
+            "device": "cpu",
+            "dimension": 512,
+            "state": "ready",
+            "error": ""
+          },
+          "consumer": "running",
+          "vector_store": {
+            "collection": "images",
+            "dimension": 512,
+            "distance": "Cosine",
+            "points_count": 47,
+            "post_id_indexed": true
+          }
+        }
+      },
+      "rag": {
+        "http_status": 200,
+        "payload": {
+          "status": "ready",
+          "model": {
+            "model": "BAAI/bge-small-zh-v1.5",
+            "dimension": 512,
+            "state": "ready",
+            "error": ""
+          },
+          "consumer": "running",
+          "llm": "configured",
+          "llm_model": "deepseek-v4-flash",
+          "text_embedding_model": "BAAI/bge-small-zh-v1.5",
+          "text_embedding_revision": "unresolved",
+          "vector_store": {
+            "collection": "post_chunks",
+            "dimension": 512,
+            "distance": "Cosine",
+            "points_count": 47,
+            "payload_indexes": [
+              "chunk_id",
+              "post_id"
+            ]
+          },
+          "prompt_version": "rag-v1"
+        }
+      },
+      "agent": {
+        "http_status": 200,
+        "payload": {
+          "status": "ready",
+          "enabled": true,
+          "llm": "configured",
+          "llm_model": "deepseek-v4-flash",
+          "model": {
+            "model": "BAAI/bge-small-zh-v1.5",
+            "dimension": 512,
+            "state": "ready",
+            "error": ""
+          },
+          "image_model": {
+            "model": "OFA-Sys/chinese-clip-vit-base-patch16",
+            "revision": "36e679e65c2a2fead755ae21162091293ad37834",
+            "device": "cpu",
+            "dimension": 512,
+            "state": "ready",
+            "error": ""
+          },
+          "text_embedding_model": "BAAI/bge-small-zh-v1.5",
+          "text_embedding_revision": "unresolved",
+          "rag_consumer": "running",
+          "prompt_version": "agent-v1",
+          "trace_version": "agent-trace-v1",
+          "source_fingerprint": "9d11fd416d26dc45a74dca971a68e38225a3e9489878587e8926e544d2c56620",
+          "process_started_at": "2026-07-30T14:33:31.304131+00:00",
+          "vector_store": {
+            "collection": "post_chunks",
+            "dimension": 512,
+            "distance": "Cosine",
+            "points_count": 47,
+            "payload_indexes": [
+              "chunk_id",
+              "post_id"
+            ]
+          }
+        }
+      }
+    }
+  },
+  "dataset_hashes": {
+    "image_search_current": {
+      "path": ".local/shareo/eval/image_search_local_v1.jsonl",
+      "sha256": "ee2b68c49eeeb51ee45373c9cf517a54883f2e0b94480ef7a8b810b433d51017",
+      "record_count": 34
+    },
+    "rag_current": {
+      "path": ".local/shareo/eval/rag_qa_current_v1.jsonl",
+      "sha256": "522b7bbfa796ef35a25725010dacab946949de1d7402dabd84a8fe4589941ce7",
+      "record_count": 30
+    },
+    "agent_current": {
+      "path": ".local/shareo/eval/agent_tasks_current_v1.jsonl",
+      "sha256": "434ebb53ff95629aaecc9e2c9d5d279a0e6f7bedb7ea22a299a62ebc6774e1aa",
+      "record_count": 36
+    },
+    "post_search_current": {
+      "path": ".local/shareo/eval/post_search_v1.jsonl",
+      "sha256": "45b8bc56dc493c692e55e04d82dff1ffbaf4f3907917db5d5cb5e2fe941d7e9d",
+      "record_count": 32
+    }
+  },
+  "safe_env": {
+    "SHAREO_AI_LLM_MODEL": "deepseek-v4-flash"
+  },
+  "runtime_parameters": {
+    "chunk_size": "400",
+    "chunk_overlap": "80",
+    "rag_top_k": "15",
+    "rag_max_sources": "10",
+    "llm_timeout_seconds": "30.0",
+    "llm_max_attempts": "2",
+    "agent_max_rounds": "4",
+    "agent_max_tool_calls": "6",
+    "agent_max_parallel_tools": "2",
+    "agent_max_observation_chars": "12000",
+    "agent_timeout_seconds": "45.0"
+  },
+  "final_readiness": {
+    "app_url": "http://127.0.0.1:8080",
+    "ai_url": "http://127.0.0.1:8000",
+    "endpoints": {
+      "go_healthz": {
+        "http_status": 200,
+        "payload": {
+          "service": "ShareO",
+          "status": "ok"
+        }
+      },
+      "ai_healthz": {
+        "http_status": 200,
+        "payload": {
+          "status": "ok",
+          "service": "shareo-ai"
+        }
+      },
+      "image_search": {
+        "http_status": 200,
+        "payload": {
+          "status": "ready",
+          "model": {
+            "model": "OFA-Sys/chinese-clip-vit-base-patch16",
+            "revision": "36e679e65c2a2fead755ae21162091293ad37834",
+            "device": "cpu",
+            "dimension": 512,
+            "state": "ready",
+            "error": ""
+          },
+          "consumer": "running",
+          "vector_store": {
+            "collection": "images",
+            "dimension": 512,
+            "distance": "Cosine",
+            "points_count": 47,
+            "post_id_indexed": true
+          }
+        }
+      },
+      "rag": {
+        "http_status": 200,
+        "payload": {
+          "status": "ready",
+          "model": {
+            "model": "BAAI/bge-small-zh-v1.5",
+            "dimension": 512,
+            "state": "ready",
+            "error": ""
+          },
+          "consumer": "running",
+          "llm": "configured",
+          "llm_model": "deepseek-v4-flash",
+          "text_embedding_model": "BAAI/bge-small-zh-v1.5",
+          "text_embedding_revision": "unresolved",
+          "vector_store": {
+            "collection": "post_chunks",
+            "dimension": 512,
+            "distance": "Cosine",
+            "points_count": 47,
+            "payload_indexes": [
+              "chunk_id",
+              "post_id"
+            ]
+          },
+          "prompt_version": "rag-v1"
+        }
+      },
+      "agent": {
+        "http_status": 200,
+        "payload": {
+          "status": "ready",
+          "enabled": true,
+          "llm": "configured",
+          "llm_model": "deepseek-v4-flash",
+          "model": {
+            "model": "BAAI/bge-small-zh-v1.5",
+            "dimension": 512,
+            "state": "ready",
+            "error": ""
+          },
+          "image_model": {
+            "model": "OFA-Sys/chinese-clip-vit-base-patch16",
+            "revision": "36e679e65c2a2fead755ae21162091293ad37834",
+            "device": "cpu",
+            "dimension": 512,
+            "state": "ready",
+            "error": ""
+          },
+          "text_embedding_model": "BAAI/bge-small-zh-v1.5",
+          "text_embedding_revision": "unresolved",
+          "rag_consumer": "running",
+          "prompt_version": "agent-v1",
+          "trace_version": "agent-trace-v1",
+          "source_fingerprint": "9d11fd416d26dc45a74dca971a68e38225a3e9489878587e8926e544d2c56620",
+          "process_started_at": "2026-07-30T14:33:31.304131+00:00",
+          "vector_store": {
+            "collection": "post_chunks",
+            "dimension": 512,
+            "distance": "Cosine",
+            "points_count": 47,
+            "payload_indexes": [
+              "chunk_id",
+              "post_id"
+            ]
+          }
+        }
+      }
+    }
+  },
+  "captured_at_end": "2026-07-30T14:38:07.704Z"
+}

@@ -54,8 +54,8 @@ func (h *NotificationHandler) MarkAllRead(c *gin.Context) {
 
 func (h *NotificationHandler) UnreadCount(c *gin.Context) {
 	userID := c.GetInt64("user_id")
-	count := h.svc.UnreadCount(userID)
-	response.Success(c, gin.H{"count": count})
+	count, commentCount := h.svc.UnreadCounts(userID)
+	response.Success(c, gin.H{"count": count, "comment_count": commentCount})
 }
 
 func (h *NotificationHandler) NotificationsPage(c *gin.Context) {

@@ -1,4 +1,4 @@
-"""Unified AI evaluation command for Phase 7B.
+"""Unified AI evaluation command for the current local corpus.
 
 Evaluates both semantic image search and RAG bot quality against
 frozen datasets, producing metrics, latency reports, and a human
@@ -7,8 +7,8 @@ scoring template.
 Usage:
   python -m app.commands.eval_ai \\
       --base-url http://127.0.0.1:8080 \\
-      --image-dataset ../../docs/eval/image_search_v1.jsonl \\
-      --rag-dataset ../../docs/eval/rag_qa_v1.jsonl
+      --image-dataset ../../.local/shareo/eval/image_search_local_v1.jsonl \\
+      --rag-dataset ../../.local/shareo/eval/rag_qa_current_v1.jsonl
 """
 
 import argparse
@@ -743,9 +743,10 @@ def main() -> int:
             "SHAREO_IMAGE_DATASET",
             str(
                 Path(__file__).resolve().parent.parent.parent.parent
-                / "docs"
+                / ".local"
+                / "shareo"
                 / "eval"
-                / "image_search_v1.jsonl"
+                / "image_search_local_v1.jsonl"
             ),
         ),
         type=Path,
@@ -756,9 +757,10 @@ def main() -> int:
             "SHAREO_RAG_DATASET",
             str(
                 Path(__file__).resolve().parent.parent.parent.parent
-                / "docs"
+                / ".local"
+                / "shareo"
                 / "eval"
-                / "rag_qa_v1.jsonl"
+                / "rag_qa_current_v1.jsonl"
             ),
         ),
         type=Path,

@@ -10,9 +10,10 @@ import (
 // mockNotifRepo implements notifRepo for testing.
 // It records created notifications and supports configurable errors.
 type mockNotifRepo struct {
-	notifs      []model.Notification
-	err         error
-	unreadCount int64
+	notifs             []model.Notification
+	err                error
+	unreadCount        int64
+	commentUnreadCount int64
 
 	// lastList captures the parameters passed to List()
 	lastListUserID     int64
@@ -61,9 +62,9 @@ func (m *mockNotifRepo) MarkAllRead(userID int64) error {
 	return m.err
 }
 
-func (m *mockNotifRepo) UnreadCount(userID int64) int64 {
+func (m *mockNotifRepo) UnreadCounts(userID int64) (int64, int64) {
 	m.lastUnreadCountUserID = userID
-	return m.unreadCount
+	return m.unreadCount, m.commentUnreadCount
 }
 
 func TestNotificationService_Send_SkipsSelf(t *testing.T) {
@@ -208,15 +209,24 @@ func TestNotificationService_MarkAllRead(t *testing.T) {
 	}
 }
 
-func TestNotificationService_UnreadCount(t *testing.T) {
-	mock := &mockNotifRepo{unreadCount: 5}
+func TestNotificationService_UnreadCounts(t *testing.T) {
+	mock := &mockNotifRepo{unreadCount: 5, commentUnreadCount: 2}
 	svc := &NotificationService{repo: mock}
 
-	count := svc.UnreadCount(7)
-	if count != 5 {
-		t.Errorf("UnreadCount = %d, want 5", count)
+	count, comments := svc.UnreadCounts(7)
+	if count != 5 || comments != 2 {
+		t.Errorf("UnreadCounts = (%d, %d), want (5, 2)", count, comments)
 	}
 	if mock.lastUnreadCountUserID != 7 {
 		t.Errorf("UnreadCount userID = %d, want 7", mock.lastUnreadCountUserID)
+	}
+}
+
+func TestNotificationService_Send_SkipsUnsupportedTypes(t *testing.T) {
+	mock := &mockNotifRepo{}
+	svc := &NotificationService{repo: mock}
+	svc.Send(2, 1, model.NotifTypeReview, 42)
+	if len(mock.notifs) != 0 {
+		t.Fatalf("unsupported notification was created: %+v", mock.notifs)
 	}
 }

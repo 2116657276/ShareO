@@ -8,7 +8,7 @@
 ## 当前有效决定
 
 - 图片使用 Chinese-CLIP（ViT-B/16，512 维），正文使用 `BAAI/bge-small-zh-v1.5`，embedding 在本地运行并按 CUDA → MPS → CPU 选择设备。
-- Bot 使用 OpenAI-compatible chat completions；DeepSeek 是唯一强制真实验收 provider。代码和 Compose 的未覆盖配置默认值为 `deepseek-chat`，实际验收模型必须由受控环境变量明确注入并写入报告；Phase 7B/7C 使用的配置值为 `deepseek-v4-flash`。
+- Bot 使用 OpenAI-compatible chat completions；真实运行所用 Provider 和模型由受控环境变量注入，并随 Final Freeze 运行清单记录，不把某次运行的模型名称固化为项目默认能力。
 - API Key 通过 `SHAREO_AI_LLM_API_KEY` 注入；mock provider 仅用于确定性 E2E，不计入质量报告。
 - Ollama、RTX 4060 和其他 provider 可以作为论文或性能实验，但不是发布前置条件。
 

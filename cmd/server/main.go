@@ -129,7 +129,7 @@ func main() {
 	fmt.Println("  ShareO - 拍摄与作品管理系统")
 	fmt.Println("========================================")
 	fmt.Printf("  Web:     http://localhost%s\n", addr)
-	fmt.Println("  开发管理员：由 make demo-seed 创建")
+	fmt.Println("  管理员账号：由本机初始化配置提供")
 	fmt.Printf("  用户:    注册后登录\n")
 	fmt.Println("========================================")
 

@@ -1,12 +1,68 @@
 {{ define "footer" }}
-</main>
-<footer class="site-footer bg-light text-center py-3 mt-5 border-top">
-    <div class="container"><small class="text-muted">ShareO - 拍摄与作品管理系统 &copy; 2026</small></div>
-</footer>
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-{{ if .ExtraJS }}
-<script src="{{ .ExtraJS }}"></script>
-{{ end }}
+    </main>
+    {{ if .user_id }}
+    <footer class="site-footer"><small>ShareO · 分享你的视角</small></footer>
+    </div>
+    {{ else }}
+    <footer class="site-footer public-footer"><small>ShareO · 分享你的视角</small></footer>
+    {{ end }}
+    <script src="/static/vendor/bootstrap/js/bootstrap.bundle.min.js?v=5.3.3"></script>
+    {{ if .ExtraJS }}<script src="{{ .ExtraJS }}"></script>{{ end }}
+    <script>
+    (() => {
+        const path = window.location.pathname;
+        document.querySelectorAll('[data-nav]').forEach(link => {
+            const nav = link.dataset.nav;
+            const active = (nav === 'home' && path === '/home') ||
+                (nav === 'following' && path === '/following') ||
+                (nav === 'search' && path.startsWith('/search')) ||
+                (nav === 'profile' && (path.startsWith('/user/') || path === '/settings')) ||
+                (nav === 'notifications' && path === '/notifications') ||
+                (nav === 'chat' && path === '/chat') ||
+                (nav === 'admin' && path.startsWith('/admin'));
+            if (active) link.classList.add('is-active');
+        });
+    })();
+    </script>
+    {{ if .user_id }}
+    <script>
+    (() => {
+        let refreshTimer = 0;
+        async function responseData(url) {
+            try {
+                const response = await fetch(url, {headers: {Accept: 'application/json'}});
+                const body = await response.json();
+                return response.ok && body.code === 0 ? body.data || {} : {};
+            } catch (_) {
+                return {};
+            }
+        }
+        async function refreshNavigationUnread() {
+            const [notifications, conversations] = await Promise.all([
+                responseData('/api/v1/notifications/unread-count'),
+                responseData('/api/v1/conversations/unread-count')
+            ]);
+            const comments = Number(notifications.comment_count) || 0;
+            const messages = Number(conversations.count) || 0;
+            document.querySelectorAll('[data-comment-unread]').forEach(node => {
+                node.hidden = comments < 1;
+            });
+            document.querySelectorAll('[data-chat-unread]').forEach(node => {
+                node.hidden = messages < 1;
+                node.textContent = messages > 99 ? '99+' : String(messages);
+            });
+        }
+        window.addEventListener('shareo:unread-refresh', refreshNavigationUnread);
+        window.addEventListener('focus', refreshNavigationUnread);
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden) refreshNavigationUnread();
+        });
+        refreshNavigationUnread();
+        refreshTimer = window.setInterval(refreshNavigationUnread, 25000);
+        window.addEventListener('pagehide', () => window.clearInterval(refreshTimer), {once: true});
+    })();
+    </script>
+    {{ end }}
 </body>
 </html>
 {{ end }}

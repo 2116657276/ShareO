@@ -1,4 +1,11 @@
-.PHONY: up reload-ai down reset logs doctor local-doctor local-infra-up local-infra-down dev-local start-local local-stop local-photo-seed test-local-stack check check-go check-python check-shell check-docs test-api test-integration test-integration-auto test-image-e2e test-ai-e2e test-agent-e2e test-agent-base test-agent-base-local test-degradation eval-ai eval-ai-machine eval-agent eval-agent-machine verify-agent-auto demo-seed backfill-index reconcile-index
+.PHONY: start up stop down doctor logs start-local dev-local local-doctor \
+	local-infra-up local-infra-down local-stop local-logs local-photo-seed \
+	prepare-search-eval prepare-current-ai-eval warm-ai \
+	compose-up compose-down compose-reset compose-logs compose-reload-ai reset reload-ai \
+	test-local-stack check check-go check-python check-shell check-docs test-api \
+	test-integration test-integration-auto \
+	eval-ai eval-ai-machine eval-agent eval-agent-machine eval-post-search \
+	eval-image-search-local final-evidence backfill-index reconcile-index
 
 COMPOSE ?= $(shell docker compose version >/dev/null 2>&1 && echo "docker compose" || echo "docker-compose")
 LOCAL_CACHE_ROOT ?= $(CURDIR)/.cache/shareo
@@ -8,29 +15,20 @@ UV_CACHE_DIR ?= $(LOCAL_CACHE_ROOT)/uv
 GO_ENV = GOCACHE=$(GO_CACHE_DIR) GOMODCACHE=$(GO_MOD_CACHE)
 UV_ENV = UV_CACHE_DIR=$(UV_CACHE_DIR)
 
-up:
-	$(COMPOSE) up -d --build --wait
+start up start-local:
+	bash scripts/start_local.sh
 
-reload-ai:
-	$(COMPOSE) build ai-service
-	$(COMPOSE) up -d --force-recreate --no-deps --wait ai-service
+stop down local-stop:
+	bash scripts/local_runtime.sh local-stop
 
-down:
-	$(COMPOSE) down --remove-orphans
-
-reset:
-	@test "$(CONFIRM)" = "YES" || (echo "Refusing reset: run make reset CONFIRM=YES" && exit 2)
-	$(COMPOSE) down -v --remove-orphans
-	$(COMPOSE) up -d --build --wait
-
-logs:
-	$(COMPOSE) logs -f --tail=200 app ai-service
-
-doctor:
-	bash scripts/dev_preflight.sh
-
-local-doctor:
+doctor local-doctor:
 	bash scripts/local_runtime.sh doctor
+
+logs local-logs:
+	@state_dir="$${SHAREO_LOCAL_STATE_DIR:-/tmp/shareo-local}"; \
+		echo "Go log: $$state_dir/app.log"; \
+		echo "AI log: $$state_dir/ai.log"; \
+		tail -n 120 "$$state_dir/app.log" "$$state_dir/ai.log" 2>/dev/null || true
 
 local-infra-up:
 	bash scripts/local_runtime.sh infra-up
@@ -41,18 +39,37 @@ local-infra-down:
 dev-local:
 	bash scripts/local_runtime.sh dev-local
 
-start-local:
-	bash scripts/start_local.sh
-
-local-stop:
-	bash scripts/local_runtime.sh local-stop
-
 local-photo-seed:
 	@test "$(CONFIRM)" = "YES" || (echo "Refusing local photo seed: run make local-photo-seed CONFIRM=YES" && exit 2)
 	CONFIRM=YES python3 scripts/seed_local_photos.py
 
 warm-ai:
 	bash scripts/warm_ai.sh
+
+prepare-search-eval:
+	python3 scripts/prepare_local_search_eval.py
+	python3 scripts/prepare_local_image_eval.py
+
+prepare-current-ai-eval:
+	python3 scripts/prepare_current_ai_eval.py
+
+compose-up:
+	$(COMPOSE) up -d --build --wait
+
+compose-reload-ai reload-ai:
+	$(COMPOSE) build ai-service
+	$(COMPOSE) up -d --force-recreate --no-deps --wait ai-service
+
+compose-down:
+	$(COMPOSE) down --remove-orphans
+
+compose-reset reset:
+	@test "$(CONFIRM)" = "YES" || (echo "Refusing reset: run make reset CONFIRM=YES" && exit 2)
+	$(COMPOSE) down -v --remove-orphans
+	$(COMPOSE) up -d --build --wait
+
+compose-logs:
+	$(COMPOSE) logs -f --tail=200 app ai-service
 
 check: check-go check-python check-shell check-docs
 	@echo "All checks passed."
@@ -76,9 +93,7 @@ check-docs:
 	python3 scripts/check_docs.py
 
 test-api:
-	@test -x scripts/test_api.sh || (echo "scripts/test_api.sh is required" && exit 2)
 	bash scripts/test_api.sh
-	@test -x scripts/test_api_ai.sh || (echo "scripts/test_api_ai.sh is required" && exit 2)
 	bash scripts/test_api_ai.sh
 
 test-integration:
@@ -90,32 +105,10 @@ test-integration:
 test-integration-auto:
 	bash scripts/test_integration_current.sh
 
-test-image-e2e:
-	bash scripts/test_image_search_e2e.sh
-
-test-ai-e2e:
-	@test -x scripts/test_ai_e2e.sh
-	bash scripts/test_ai_e2e.sh
-
-test-agent-e2e:
-	@test -x scripts/test_agent_e2e.sh
-	bash scripts/test_agent_e2e.sh
-
-test-agent-base: check test-image-e2e test-ai-e2e test-agent-e2e
-	@echo "Agent base automation passed."
-
 test-local-stack:
 	bash scripts/test_local_stack.sh
 
-test-agent-base-local: check test-local-stack
-	@echo "Native Agent base smoke checks passed."
-
-test-degradation:
-	@test -x scripts/test_degradation.sh
-	bash scripts/test_degradation.sh
-
 eval-ai:
-	@test -f ai-service/app/commands/eval_ai.py || (echo "eval-ai is implemented in stage 7" && exit 2)
 	cd ai-service && $(UV_ENV) uv run --frozen python -m app.commands.eval_ai \
 		$(if $(BASE_URL),--base-url $(BASE_URL),) \
 		$(if $(OUTPUT),--output $(abspath $(OUTPUT)),) \
@@ -125,10 +118,9 @@ eval-ai:
 		$(if $(filter 1,$(MACHINE_ONLY)),--machine-only,)
 
 eval-ai-machine:
-	$(MAKE) eval-ai MACHINE_ONLY=1 OUTPUT=$(if $(OUTPUT),$(OUTPUT),docs/eval/results/phase8a_rag_machine.json)
+	$(MAKE) eval-ai MACHINE_ONLY=1 OUTPUT=$(if $(OUTPUT),$(OUTPUT),.local/shareo/eval/rag-image.json)
 
 eval-agent:
-	@test -f ai-service/app/commands/eval_agent.py || (echo "eval-agent is implemented in phase 8" && exit 2)
 	cd ai-service && $(UV_ENV) uv run --frozen python -m app.commands.eval_agent \
 		$(if $(BASE_URL),--base-url $(BASE_URL),) \
 		$(if $(OUTPUT),--output $(abspath $(OUTPUT)),) \
@@ -138,14 +130,24 @@ eval-agent:
 		$(if $(filter 1,$(MACHINE_ONLY)),--machine-only,)
 
 eval-agent-machine:
-	$(MAKE) eval-agent MACHINE_ONLY=1 OUTPUT=$(if $(OUTPUT),$(OUTPUT),docs/eval/results/phase8a_agent_machine.json)
+	$(MAKE) eval-agent MACHINE_ONLY=1 OUTPUT=$(if $(OUTPUT),$(OUTPUT),.local/shareo/eval/agent.json)
 
-verify-agent-auto:
-	bash scripts/verify_agent_auto.sh
+eval-post-search:
+	cd ai-service && $(UV_ENV) uv run --frozen python -m app.commands.eval_post_search \
+		$(if $(BASE_URL),--base-url $(BASE_URL),) \
+		$(if $(AI_URL),--ai-url $(AI_URL),) \
+		$(if $(DATASET),--dataset $(abspath $(DATASET)),) \
+		$(if $(OUTPUT),--output $(abspath $(OUTPUT)),)
 
-demo-seed:
-	@test -x scripts/demo_seed.sh || (echo "demo-seed is implemented in stage 7" && exit 2)
-	bash scripts/demo_seed.sh
+eval-image-search-local:
+	cd ai-service && $(UV_ENV) uv run --frozen python -m app.commands.eval_image_search \
+		--dataset $(abspath $(if $(DATASET),$(DATASET),.local/shareo/eval/image_search_local_v1.jsonl)) \
+		$(if $(BASE_URL),--base-url $(BASE_URL),) \
+		$(if $(OUTPUT),--output $(abspath $(OUTPUT)),) \
+		$(if $(SCORE_THRESHOLD),--score-threshold $(SCORE_THRESHOLD),)
+
+final-evidence:
+	python3 scripts/collect_final_evidence.py
 
 backfill-index:
 	$(GO_ENV) go run ./cmd/backfill-index

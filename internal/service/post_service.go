@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"errors"
 
 	"github.com/zhoujianlin/ShareO/internal/model"
@@ -8,16 +9,18 @@ import (
 )
 
 type PostService struct {
-	postRepo *repository.PostRepo
-	likeRepo *repository.LikeRepo
-	feedSvc  *FeedService
+	postRepo     *repository.PostRepo
+	likeRepo     *repository.LikeRepo
+	favoriteRepo *repository.FavoriteRepo
+	feedSvc      *FeedService
 }
 
 func NewPostService() *PostService {
 	return &PostService{
-		postRepo: repository.NewPostRepo(),
-		likeRepo: repository.NewLikeRepo(),
-		feedSvc:  NewFeedService(),
+		postRepo:     repository.NewPostRepo(),
+		likeRepo:     repository.NewLikeRepo(),
+		favoriteRepo: repository.NewFavoriteRepo(),
+		feedSvc:      NewFeedService(),
 	}
 }
 
@@ -106,6 +109,7 @@ func (s *PostService) GetByID(postID int64, currentUserID int64) (*model.Post, e
 
 	if currentUserID > 0 {
 		post.IsLiked = s.likeRepo.IsLiked(currentUserID, postID)
+		post.IsFavorited = s.favoriteRepo.IsFavorited(context.Background(), currentUserID, postID)
 	}
 	return post, nil
 }

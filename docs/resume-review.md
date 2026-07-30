@@ -4,9 +4,9 @@
 
 ## 推荐定位
 
-ShareO 适合表述为“Go + Python 的可评测引用式 RAG 应用工程项目”，并可补充“同一私聊入口中的受限只读知识 Agent（Phase 8，工程和当前机器门禁已通过，人工验收状态见 TASK）”。当前仍不是通用 Agent：没有写入工具、外部工具、长期记忆、多 Agent 或独立 Agent 页面。默认 `shareo_bot` 消息仍是固定 RAG；只有用户显式打开深度分析后，才进入 LangGraph 状态图并在四个只读工具之间进行受限多步调用。
+ShareO 适合表述为“Go + Python 的可评测引用式 RAG 应用工程项目”，并可补充“同一私聊入口中的受限只读知识 Agent”。当前仍不是通用 Agent：没有写入工具、外部工具、长期记忆、多 Agent 或独立 Agent 页面。默认 `shareo_bot` 消息仍是固定 RAG；只有用户显式打开深度分析后，才进入 LangGraph 状态图并在四个只读工具之间进行受限多步调用。
 
-简历、项目介绍和面试讲解可以强调 RAG、受限 Agent 工具调用、LangGraph 状态图、可见性与引用安全、异步幂等、质量评测和故障降级；不得把项目描述成“自主 Agent 平台”“多 Agent 系统”或“生产级通用智能体”。历史测试 Provider、旧真实 DeepSeek 报告和人工评分不能替代干净提交上的当前复评；最近本机工作区复评工具选择率为 0.9167，但报告在仓库外且工作区为 dirty。独立搜图页面已实现，但用户人工验收、源码冷启动和最终 Docker 打包完成前，仍应标注为未最终发布。
+简历、项目介绍和面试讲解可以强调 RAG、受限 Agent 工具调用、LangGraph 状态图、可见性与引用安全、异步幂等、质量评测和故障降级；不得把项目描述成“自主 Agent 平台”“多 Agent 系统”或“生产级通用智能体”。当前 Final Freeze 运行使用本机 47 条语料和真实 Provider，工作区为 dirty，不能替代干净提交复评；当前机器结果和证据边界见 [`docs/evidence/final-freeze/README.md`](evidence/final-freeze/README.md)。
 
 ## 已由代码和测试支持的能力
 
@@ -15,25 +15,25 @@ ShareO 适合表述为“Go + Python 的可评测引用式 RAG 应用工程项�
 | 设计 Go 业务服务与 Python AI 服务的数据所有权边界 | MySQL 运行时只由 Go 写，Qdrant 只由 Python 写，MinIO 凭证只在 Go 侧 |
 | 实现帖子正文 RAG 与可访问引用 | 400/80 字符分块、BGE 512 维向量、Qdrant `post_chunks`、结构化回答和两级引用白名单 |
 | 实现中文语义搜图 | Chinese-CLIP、Qdrant `images`、候选过取、按帖去重和 Go 可见性复核 |
-| 实现受限只读社区知识 Agent（人工验收待完成） | LangGraph `StateGraph`、原生 tool calling、语义/关键词/帖子读取/图片四个只读工具、步骤轨迹和最终引用过滤；工程测试、真实集成和当前机器门禁均有证据，浏览器人工验收仍待进行 |
+| 实现受限只读社区知识 Agent | LangGraph `StateGraph`、原生 tool calling、语义/关键词/帖子读取/图片四个只读工具、步骤轨迹和最终引用过滤；工程测试、真实集成和当前机器门禁均有证据 |
 | 实现异步且幂等的 Bot 工作流 | Redis Streams at-least-once、重试、`XAUTOCLAIM`、`NOGROUP` 恢复、`source_message_id` 唯一约束 |
-| 建立 AI 质量评测 | 40 条搜图和 30 条 RAG 冻结集；最近归档结果 Recall@5 0.8125、MRR 0.7771、来源命中率 0.9667、引用可访问率 100%、虚假引用 0 |
-| 验证依赖故障降级 | 独立 Compose 项目覆盖 AI、Qdrant、MinIO、Redis 和测试 LLM provider，并记录恢复后的基线 |
+| 建立 AI 质量评测 | 当前 34 条搜图、32 条搜贴、30 条 RAG 和 36 条 Agent 机器评测；搜图 Recall@5 0.9222，RAG 来源命中率 0.8333，Agent 来源命中率和工具选择率 1.0 |
+| 验证依赖故障降级 | 代码和本机 readiness 定义了 AI、Qdrant、MinIO、Redis 和 LLM provider 的降级边界；本轮未重新执行 Compose 故障注入 |
 
-上述指标只适用于仓库内冻结 Demo 数据集和当次本地环境，不代表通用检索效果、线上 SLA 或第三方独立测评。人工 5.0 分来自项目方评分，不应写成外部评审结论。
+上述指标只适用于当前本机语料和当次本地环境，不代表通用检索效果、线上 SLA 或第三方独立测评。本次没有人工评分。
 
 ## 审查发现与证据等级
 
 ### 已确认问题
 
-1. Phase 8 之前产品只有固定 RAG Bot；当前已加入显式开启的受限只读 Agent，但文档和简历必须区分默认 RAG、受限 Agent 与通用 Agent，并保留未完成门禁。
+1. 产品默认是固定 RAG Bot，同时提供显式开启的受限只读 Agent；文档和简历必须区分默认 RAG、受限 Agent 与通用 Agent，并保留证据边界。
 2. RAG 设计把 API 默认 `top_k=8`、评测参数 `top_k=15`、候选上限 `max_sources=10` 和 Bot 回调最多 5 条引用混写成“top 8、最多 5 个来源”。
 3. README 和运行手册声称“200 倍 Demo 数据量可稳定运行”“5,200 帖不会成为瓶颈”，仓库没有压力测试或容量报告支持，应删除。
 4. `docs/standards.md` 仍描述不存在的 Python `api/` 目录；实际路由位于 `ai-service/app/main.py`。
 5. 所谓“五分钟演示”证据是 5.08 秒的 API 自动化冒烟流程，不是浏览器人工演示，不能证明页面操作、WebSocket 实时下行、引用点击和讲解节奏。
 6. `make reset CONFIRM=YES` 的镜像构建曾因 Docker 网络卡住；归档证据使用已有镜像启动新卷，因此不能称为“从源码完整冷启动已验证”。
-7. 真实 Demo 照片未进入 Git。公共克隆可运行不依赖照片的工程测试，但 `make demo-seed` 和 40/30 质量复现需要另行准备脚本列出的 26 张 JPEG。
-8. Phase 7B/7C 最终报告均记录 `git_dirty=true`。历史 Phase 7C 报告还把本地评测进程默认值 `deepseek-chat` 写成 LLM 模型，而实际 `.env` 配置为 `deepseek-v4-flash`；当前报告不能单独证明被测容器的精确模型和代码树。虽然当前 readiness 已增加运行时模型元数据和源码指纹，仍需干净提交复评关闭证据缺口。
+7. 当前 47 条本机真实图片未进入 Git。公共克隆可运行不依赖照片的工程测试，但完整质量评测需要另行准备本机图片语料。
+8. 本次报告记录 `git_dirty=true`，不能单独证明干净提交上的精确代码树复评；当前运行时模型和源码指纹已在 Final Freeze 记录。
 9. Git 分支与远程同步状态会随执行变化，不能写入固定简历结论；公开仓库作为简历证据前应实时检查分支、提交和敏感文件。
 10. 文档要求本地 RAG 检索 P95 和 DeepSeek 超时率，但 `eval_ai` 只记录端到端总延迟与失败数；现有报告不能证明这两项性能要求。
 
@@ -55,11 +55,11 @@ ShareO 适合表述为“Go + Python 的可评测引用式 RAG 应用工程项�
 ## 当前未完成项
 
 1. 用户人工浏览器验收，包括 WebSocket 实时下行、引用点击和页面错误状态。
-2. 干净提交上的 40/30 与 Agent 复评，以及运行时模型和源码指纹归档。
+2. 干净提交上的当前 34/32/30/36 评测复评，以及与运行时模型、源码指纹的完整绑定。
 3. 版权清晰、可公开分发的 Demo 图片素材；公共克隆目前只能复现不依赖个人照片的工程测试。
 
 ## 已批准的后续定位
 
-用户已选择继续建设 RAG + Agent 简历项目。Phase 8 已完成首轮代码、源码跨服务 E2E、真实集成、故障恢复矩阵和当前有效机器门禁；历史真实 DeepSeek 报告和人工评分仍保留作证据，但最终浏览器人工验收尚未完成。目标仍是同一私聊入口中的只读社区知识 Agent：默认走当前 RAG，用户显式开启深度分析后，LangGraph 状态图可选择语义检索、关键词检索、帖子读取和图片检索工具，并在最终消息中展示脱敏步骤卡片。证据边界见 [`docs/evidence/phase8-agent/host-source-e2e.md`](evidence/phase8-agent/host-source-e2e.md) 和 [`phase8a_native_agent_human_scoring_final.md`](eval/results/phase8a_native_agent_human_scoring_final.md)。
+项目已完成 RAG + Agent 主线建设。旧评测报告和人工评分材料已退役，当前运行结果统一见 [`docs/evidence/final-freeze/README.md`](evidence/final-freeze/README.md)。只读社区知识 Agent 位于同一私聊入口：默认走当前 RAG，用户显式开启深度分析后，LangGraph 状态图可选择语义检索、关键词检索、帖子读取和图片检索工具，并在最终消息中展示脱敏步骤卡片。
 
 该规划只有在真实代码、Agent 冻结数据集、自动化安全门禁、用户人工验收和浏览器演示全部完成后，才可写成最终发布口径。公开仓库只发布代码，不包含个人照片；因此公开克隆不能被描述成可直接复现完整真实图片质量评测。

@@ -85,6 +85,26 @@ func (r *ChatRepo) ListConversations(ctx context.Context, userID int64) ([]model
 	return conversations, err
 }
 
+// GetFollowedAt returns the current user's follow timestamps for the supplied
+// conversation peers. It deliberately keeps relationship metadata out of the
+// conversations table.
+func (r *ChatRepo) GetFollowedAt(ctx context.Context, followerID int64, followeeIDs []int64) (map[int64]time.Time, error) {
+	result := make(map[int64]time.Time)
+	if followerID <= 0 || len(followeeIDs) == 0 {
+		return result, nil
+	}
+	var follows []model.Follow
+	if err := r.db.WithContext(ctx).
+		Where("follower_id = ? AND followee_id IN ?", followerID, followeeIDs).
+		Find(&follows).Error; err != nil {
+		return nil, err
+	}
+	for _, follow := range follows {
+		result[follow.FolloweeID] = follow.CreatedAt
+	}
+	return result, nil
+}
+
 func (r *ChatRepo) IsMember(ctx context.Context, convID, userID int64) (bool, error) {
 	var count int64
 	err := r.db.WithContext(ctx).Model(&model.ConversationMember{}).

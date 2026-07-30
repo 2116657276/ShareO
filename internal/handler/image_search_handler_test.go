@@ -25,9 +25,11 @@ func TestImageSearchPageContract(t *testing.T) {
 	}
 	page := string(content)
 	for _, required := range []string{
+		"/api/v1/search",
 		"/api/v1/search/images",
 		"1–200",
-		"imageSearchResults",
+		"searchResults",
+		"mode",
 		"imageSearchEmpty",
 		"imageSearchUnavailable",
 		"/post/${postID}",

@@ -10,7 +10,7 @@
         {{ if $post.Images }}
         <div class="mb-3"><label class="form-label">作品图片</label>
             <div class="d-flex gap-2 flex-wrap">
-                {{ range $post.Images }}<img src="{{ .ImageURL }}" class="rounded" style="width:120px;height:120px;object-fit:cover">{{ end }}
+                {{ range $post.Images }}<img src="{{ .ImageURL }}" class="edit-image-thumb" alt="帖子图片">{{ end }}
             </div>
             <small class="text-muted">图片不可修改，需更换请删帖重发</small>
         </div>

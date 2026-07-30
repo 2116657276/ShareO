@@ -8,11 +8,11 @@ ShareO 是一个用于简历展示和毕业答辩的 Go + Python 全栈项目，
 
 ## 最终范围
 
-保留认证、资料、图文帖子、上传、Feed、全文搜索、管理员审核、点赞、关注、评论、通知、一对一私聊、WebSocket、中文语义搜图、正文 RAG 和私聊 Bot。
+保留认证、资料、图文帖子、上传、Feed、中文混合搜贴、管理员审核、点赞、关注、评论、通知、一对一私聊、WebSocket、中文语义搜图、正文 RAG 和私聊 Bot。搜贴融合正文 BGE/Qdrant 语义召回与 MySQL ngram FULLTEXT/LIKE 关键词召回；搜图只使用图片向量，两者不交叉计分。
 
 只读 Agent 作为私聊内的受限例外：默认消息仍走固定 RAG，用户显式开启深度分析后，Agent 只能使用语义检索、关键词检索、帖子读取和图片检索四个只读工具。
 
-不实现收藏、转帖、话题、群聊、写入型 Agent、外部工具、长期记忆、多 Agent、独立 Bot 页面、音视频和生产级多租户平台。
+不实现转帖、话题、群聊、写入型 Agent、外部工具、长期记忆、多 Agent、独立 Bot 页面、音视频和生产级多租户平台。私人收藏是登录用户自己的书签能力，不公开、不通知作者，也不参与热门排序。
 
 ## 架构边界
 
@@ -34,10 +34,10 @@ ShareO 是一个用于简历展示和毕业答辩的 Go + Python 全栈项目，
 
 ## 文档交接规则
 
-后续开发开始前读取本文件、`AGENTS.md`、[`TASK.md`](TASK.md)、[`docs/plan.md`](docs/plan.md)、[`docs/standards.md`](docs/standards.md)、相关 ADR 和目标阶段文档。
+后续开发开始前读取本文件、`AGENTS.md`、[`TASK.md`](TASK.md)、[`docs/REVIEW.md`](docs/REVIEW.md)、[`docs/standards.md`](docs/standards.md) 和相关 ADR。
 
 - 实时状态、阻塞和下一项任务：[`TASK.md`](TASK.md)。
-- 执行顺序、门禁和暂停条件：[`docs/plan.md`](docs/plan.md)。
+- 完工结论、证据等级和已接受缺口：[`docs/REVIEW.md`](docs/REVIEW.md)。
 - 架构、功能、接口和评测文档只维护稳定事实、设计约束和历史证据，不复制实时状态。
 - 代码、数据库 schema 和配置模板分别是运行行为、数据结构和配置细节的最终事实源。
 - 不把人工浏览器验收、已有镜像启动或 API 冒烟写成源码冷启动或最终发布完成。

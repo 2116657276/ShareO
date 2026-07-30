@@ -1,7 +1,7 @@
 {{ template "header" . }}
 <div class="row"><div class="col-lg-8 mx-auto" x-data="notifications()" x-init="fetchNotifs()">
     <div class="page-header align-items-center">
-        <div><div class="eyebrow">NOTIFICATIONS</div><h1>通知</h1><p>查看互动和审核状态变化。</p></div>
+        <div><div class="eyebrow">NOTIFICATIONS</div><h1>通知</h1><p>查看关注、点赞和评论互动。</p></div>
         <button class="btn btn-sm btn-outline-secondary" @click="markAllRead()" x-show="unreadCount > 0">全部已读</button>
     </div>
 
@@ -17,7 +17,7 @@
 
     <!-- Notification list -->
     <template x-for="n in items" :key="n.id">
-        <div class="surface-card clickable-card mb-2" :class="{ 'border-primary': n.is_read === 0 }" style="cursor:pointer"
+        <div class="surface-card clickable-card mb-2" :class="{ 'is-unread': n.is_read === 0 }"
              @click="openNotif(n)">
             <div class="card-body py-2 px-3 d-flex align-items-center">
                 <img :src="n.actor?.avatar_url || '/static/img/default-avatar.svg'" class="rounded-circle me-2" width="36" height="36" onerror="this.src='/static/img/default-avatar.svg'">
@@ -28,7 +28,7 @@
                     </small>
                     <div><small class="text-muted" x-text="timeAgo(n.created_at)"></small></div>
                 </div>
-                <span class="badge bg-primary rounded-pill" x-show="n.is_read === 0" style="width:8px;height:8px"></span>
+                <span class="unread-dot" x-show="n.is_read === 0" aria-label="未读"></span>
             </div>
         </div>
     </template>
@@ -88,6 +88,7 @@ function notifications() {
             await fetch('/api/v1/notifications/read-all', { method: 'PUT' });
             this.items.forEach(n => n.is_read = 1);
             this.unreadCount = 0;
+            window.dispatchEvent(new Event('shareo:unread-refresh'));
         },
 
         async openNotif(n) {
@@ -95,6 +96,7 @@ function notifications() {
                 await fetch('/api/v1/notifications/' + n.id + '/read', { method: 'PUT' });
                 n.is_read = 1;
                 this.unreadCount = Math.max(0, this.unreadCount - 1);
+                window.dispatchEvent(new Event('shareo:unread-refresh'));
             }
 			if (n.target_id > 0 && (n.type === 'like' || n.type === 'comment')) {
                 window.location.href = '/post/' + n.target_id;
@@ -104,7 +106,7 @@ function notifications() {
         },
 
         actionText(type) {
-			const m = { like: '赞了你的作品', comment: '评论了你的作品', follow: '关注了你', review: '审核了你的帖子' };
+			const m = { like: '赞了你的作品', comment: '评论了你的作品', follow: '关注了你' };
             return m[type] || '与你互动';
         },
 

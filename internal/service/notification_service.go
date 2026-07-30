@@ -15,7 +15,7 @@ type notifRepo interface {
 	List(userID int64, unreadOnly bool, page, pageSize int) ([]model.Notification, int64, error)
 	MarkRead(id, userID int64) error
 	MarkAllRead(userID int64) error
-	UnreadCount(userID int64) int64
+	UnreadCounts(userID int64) (int64, int64)
 }
 
 type NotificationService struct {
@@ -33,6 +33,9 @@ func NewNotificationService() *NotificationService {
 func (s *NotificationService) Send(userID, actorID int64, notifType string, targetID int64) {
 	if userID == actorID {
 		return // don't notify self
+	}
+	if notifType != model.NotifTypeLike && notifType != model.NotifTypeComment && notifType != model.NotifTypeFollow {
+		return
 	}
 	notif := &model.Notification{
 		UserID:   userID,
@@ -65,6 +68,6 @@ func (s *NotificationService) MarkAllRead(userID int64) error {
 	return s.repo.MarkAllRead(userID)
 }
 
-func (s *NotificationService) UnreadCount(userID int64) int64 {
-	return s.repo.UnreadCount(userID)
+func (s *NotificationService) UnreadCounts(userID int64) (int64, int64) {
+	return s.repo.UnreadCounts(userID)
 }

@@ -44,7 +44,7 @@ func TestLightweightBaselineSchema(t *testing.T) {
 	db := openChatIntegrationDB(t)
 	expected := []string{
 		"bot_replies", "comments", "conversation_members", "conversations",
-		"follows", "likes", "messages", "notifications", "post_images",
+		"favorites", "follows", "likes", "messages", "notifications", "post_images",
 		"posts", "system_logs", "users",
 	}
 	var tables []string
@@ -81,6 +81,55 @@ func TestLightweightBaselineSchema(t *testing.T) {
 	users, err := NewChatRepo(db).SearchActiveUsers(context.Background(), "shareo_bot", 0, 10)
 	if err != nil || len(users) != 1 || users[0].IsBot == 0 {
 		t.Fatalf("bot search result=%v err=%v", users, err)
+	}
+}
+
+func TestFavoriteRepoIsPrivateIdempotentAndFiltersInvisiblePosts(t *testing.T) {
+	db := openChatIntegrationDB(t)
+	previous := DB
+	DB = db
+	t.Cleanup(func() { DB = previous })
+
+	ctx := context.Background()
+	stamp := time.Now().UnixNano()
+	owner := model.User{Username: fmt.Sprintf("fav_owner_%d", stamp), PasswordHash: "test", Status: model.UserStatusActive}
+	viewer := model.User{Username: fmt.Sprintf("fav_viewer_%d", stamp), PasswordHash: "test", Status: model.UserStatusActive}
+	if err := db.Create(&owner).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Create(&viewer).Error; err != nil {
+		t.Fatal(err)
+	}
+	posts := []model.Post{
+		{UserID: owner.ID, Content: "可见收藏", Status: model.StatusApproved},
+		{UserID: owner.ID, Content: "不可见收藏", Status: model.StatusRejected},
+	}
+	if err := db.Create(&posts).Error; err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		db.Where("user_id IN ?", []int64{owner.ID, viewer.ID}).Delete(&model.Favorite{})
+		db.Delete(&posts)
+		db.Delete(&viewer)
+		db.Delete(&owner)
+	})
+
+	repo := NewFavoriteRepo()
+	for _, post := range posts {
+		if err := repo.Ensure(ctx, viewer.ID, post.ID); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := repo.Ensure(ctx, viewer.ID, posts[0].ID); err != nil {
+		t.Fatal(err)
+	}
+	list, total, err := repo.ListVisible(ctx, viewer.ID, 1, 20)
+	if err != nil || total != 1 || len(list) != 1 || list[0].ID != posts[0].ID {
+		t.Fatalf("visible favorites=%v total=%d err=%v", list, total, err)
+	}
+	otherList, otherTotal, err := repo.ListVisible(ctx, owner.ID, 1, 20)
+	if err != nil || otherTotal != 0 || len(otherList) != 0 {
+		t.Fatalf("other user's favorites leaked: list=%v total=%d err=%v", otherList, otherTotal, err)
 	}
 }
 

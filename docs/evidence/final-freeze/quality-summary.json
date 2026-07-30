@@ -1,0 +1,228 @@
+{
+  "run_id": "20260730T143316Z",
+  "generated_at": "2026-07-30T14:38:07.708Z",
+  "scope": "native local stack with real configured provider",
+  "dataset_counts": {
+    "image_search_current": 34,
+    "rag_current": 30,
+    "agent_current": 36,
+    "post_search_current": 32
+  },
+  "provenance": {
+    "git": {
+      "sha": "efdb049db89964128b7051ab2c7f2b4a6a7be4da",
+      "branch": "main",
+      "dirty": true
+    },
+    "dataset_hashes": {
+      "image_search_current": {
+        "path": ".local/shareo/eval/image_search_local_v1.jsonl",
+        "sha256": "ee2b68c49eeeb51ee45373c9cf517a54883f2e0b94480ef7a8b810b433d51017",
+        "record_count": 34
+      },
+      "rag_current": {
+        "path": ".local/shareo/eval/rag_qa_current_v1.jsonl",
+        "sha256": "522b7bbfa796ef35a25725010dacab946949de1d7402dabd84a8fe4589941ce7",
+        "record_count": 30
+      },
+      "agent_current": {
+        "path": ".local/shareo/eval/agent_tasks_current_v1.jsonl",
+        "sha256": "434ebb53ff95629aaecc9e2c9d5d279a0e6f7bedb7ea22a299a62ebc6774e1aa",
+        "record_count": 36
+      },
+      "post_search_current": {
+        "path": ".local/shareo/eval/post_search_v1.jsonl",
+        "sha256": "45b8bc56dc493c692e55e04d82dff1ffbaf4f3907917db5d5cb5e2fe941d7e9d",
+        "record_count": 32
+      }
+    },
+    "started_at": "2026-07-30T14:33:16.691Z",
+    "provider": {
+      "type": "configured real provider",
+      "model": "deepseek-v4-flash"
+    }
+  },
+  "sources": {
+    "post_search_local": "post-search.json",
+    "image_search_local": "image-search-local.json",
+    "rag_image": "rag-image.json",
+    "agent": "agent.json"
+  },
+  "reports": {
+    "post_search_local": {
+      "status": "available",
+      "metrics": {
+        "keyword.recall_5": 0.6510416666666666,
+        "keyword.mrr": 0.7552083333333334,
+        "keyword.ndcg_5": 0.6802508679244853,
+        "keyword.precision_3": 0.35416666666666663,
+        "keyword.no_match_accuracy": 0.25,
+        "keyword.latency_p50_ms": 1.8826250015990809,
+        "keyword.latency_p95_ms": 4.218624999339227,
+        "semantic.recall_5": 0.8333333333333334,
+        "semantic.mrr": 0.84375,
+        "semantic.ndcg_5": 0.8154491030362107,
+        "semantic.precision_3": 0.4895833333333333,
+        "semantic.no_match_accuracy": 0.0,
+        "semantic.latency_p50_ms": 9.820791998208733,
+        "semantic.latency_p95_ms": 12.65604199943482,
+        "hybrid.recall_5": 0.890625,
+        "hybrid.mrr": 0.96875,
+        "hybrid.ndcg_5": 0.9157516611638151,
+        "hybrid.precision_3": 0.5833333333333333,
+        "hybrid.no_match_accuracy": 1.0,
+        "hybrid.latency_p50_ms": 14.05216599960113,
+        "hybrid.latency_p95_ms": 19.065707998379366
+      }
+    },
+    "image_search_local": {
+      "status": "available",
+      "metrics": {
+        "semantic.recall_5": 0.9222222222222223,
+        "semantic.recall_10": 1.0,
+        "semantic.mrr": 0.975,
+        "semantic.precision_3": 0.3777777777777777,
+        "semantic.ndcg_5": 0.9418708724780629,
+        "semantic.no_match_accuracy": 0.0,
+        "semantic.latency_p50_ms": 57.587041999795474,
+        "semantic.latency_p95_ms": 61.82799999805866
+      }
+    },
+    "rag_image": {
+      "status": "available",
+      "metrics": {
+        "image_search.report.semantic.recall_5": 0.9222222222222223,
+        "image_search.report.semantic.recall_10": 1.0,
+        "image_search.report.semantic.mrr": 0.975,
+        "image_search.report.semantic.precision_3": 0.3777777777777777,
+        "image_search.report.semantic.ndcg_5": 0.9418708724780629,
+        "image_search.report.semantic.no_match_accuracy": 0.0,
+        "image_search.report.semantic.latency_p50_ms": 58.33558299855213,
+        "image_search.report.semantic.latency_p95_ms": 69.19283300157986,
+        "image_search.metrics.recall_5": 0.9222222222222223,
+        "image_search.metrics.recall_10": 1.0,
+        "image_search.metrics.mrr": 0.975,
+        "image_search.metrics.duplicate_queries": 0,
+        "image_search.metrics.latency_p50_ms": 58.33558299855213,
+        "image_search.metrics.latency_p95_ms": 69.19283300157986,
+        "rag.report.total_queries": 30,
+        "rag.report.failed_queries": 0,
+        "rag.report.source_hit_rate": 0.8333,
+        "rag.report.citation_accessible_rate": 1.0,
+        "rag.report.total_hallucinated": 0,
+        "rag.report.avg_sources_per_answer": 1.2,
+        "rag.report.latency_p50_ms": 2057.1,
+        "rag.report.latency_p95_ms": 3101.2,
+        "rag.report.no_answer_accuracy": 1.0,
+        "rag.metrics.source_hit_rate": 0.8333,
+        "rag.metrics.citation_accessible_rate": 1.0,
+        "rag.metrics.total_hallucinated": 0,
+        "rag.metrics.avg_sources_per_answer": 1.2,
+        "rag.metrics.latency_p50_ms": 2057.1,
+        "rag.metrics.latency_p95_ms": 3101.2,
+        "rag.metrics.total_queries": 30,
+        "rag.metrics.failed_queries": 0,
+        "rag.metrics.no_answer_accuracy": 1.0
+      },
+      "human_scoring": {
+        "status": "SKIPPED"
+      }
+    },
+    "agent": {
+      "status": "available",
+      "metrics": {
+        "agent.report.total_queries": 36,
+        "agent.report.failed_queries": 0,
+        "agent.report.timeout_queries": 0,
+        "agent.report.timeout_rate": 0.0,
+        "agent.report.source_hit_rate": 1.0,
+        "agent.report.required_tool_selection_rate": 1.0,
+        "agent.report.completed_required_tool_selection_rate": 1.0,
+        "agent.report.citation_accessible_rate": 1.0,
+        "agent.report.hallucinated_citations": 0,
+        "agent.report.forbidden_actions": 0,
+        "agent.report.budget_violations": 0,
+        "agent.report.injection_failures": 0,
+        "agent.report.provider_attempts": 86,
+        "agent.report.provider_retries": 0,
+        "agent.report.provider_retry_rate": 0.0,
+        "agent.report.no_answer_accuracy": 1.0,
+        "agent.report.latency_p50_ms": 4058.8,
+        "agent.report.latency_p95_ms": 8179.5,
+        "agent.report.human_scoring_count": 32
+      },
+      "human_scoring": {
+        "status": "SKIPPED",
+        "expected_count": 32
+      },
+      "failure_categories": {}
+    }
+  },
+  "metric_availability": {
+    "image_search": {
+      "available": [
+        "recall_5",
+        "recall_10",
+        "mrr",
+        "ndcg_5",
+        "precision_3",
+        "no_match_accuracy",
+        "duplicate_queries",
+        "latency_p50_ms",
+        "latency_p95_ms"
+      ],
+      "unavailable": [
+        "recall_1",
+        "invisible_results"
+      ],
+      "unavailable_reason": "现有评测报告未提供该字段；未估算或补写。"
+    },
+    "post_search": {
+      "available": [
+        "recall_5",
+        "mrr",
+        "ndcg_5",
+        "precision_3",
+        "no_match_accuracy",
+        "latency_p50_ms",
+        "latency_p95_ms"
+      ],
+      "unavailable": [],
+      "unavailable_reason": "现有评测报告未提供该字段；未估算或补写。"
+    },
+    "rag": {
+      "available": [
+        "source_hit_rate",
+        "citation_accessible_rate",
+        "total_hallucinated",
+        "failed_queries",
+        "avg_sources_per_answer",
+        "latency_p50_ms",
+        "latency_p95_ms",
+        "no_answer_accuracy"
+      ],
+      "unavailable": [
+        "fallback_count"
+      ],
+      "unavailable_reason": "现有评测报告未提供该字段；未估算或补写。"
+    },
+    "agent": {
+      "available": [
+        "source_hit_rate",
+        "required_tool_selection_rate",
+        "citation_accessible_rate",
+        "forbidden_actions",
+        "budget_violations",
+        "injection_failures",
+        "failed_queries",
+        "timeout_queries",
+        "provider_retries",
+        "latency_p50_ms",
+        "latency_p95_ms",
+        "no_answer_accuracy"
+      ],
+      "unavailable": [],
+      "unavailable_reason": "现有评测报告未提供该字段；未估算或补写。"
+    }
+  }
+}

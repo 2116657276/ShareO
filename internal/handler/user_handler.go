@@ -40,3 +40,11 @@ func (h *UserHandler) ProfilePage(c *gin.Context) {
 		"IsFollowing":  data.IsFollowing,
 	}))
 }
+
+// FollowingPage renders the authenticated following directory. It combines the
+// existing following list with the authenticated following-feed endpoint.
+func (h *UserHandler) FollowingPage(c *gin.Context) {
+	c.HTML(http.StatusOK, "following.html", userData(c, gin.H{
+		"title": "关注 - ShareO",
+	}))
+}

@@ -59,6 +59,19 @@ class ImageSearchRequest(BaseModel):
         return value
 
 
+class PostSearchRequest(BaseModel):
+    query: str = Field(min_length=1, max_length=200)
+    limit: int = Field(default=50, ge=1, le=200)
+
+    @field_validator("query")
+    @classmethod
+    def query_must_have_content(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("query must not be blank")
+        return value
+
+
 class HistoryMessage(BaseModel):
     role: Literal["user", "bot"]
     content: str = Field(min_length=1, max_length=2000)
@@ -378,3 +391,35 @@ async def search_images(
     except Exception as exc:
         logger.exception("image search failed: %s", exc)
         raise HTTPException(status_code=503, detail="image search unavailable") from exc
+
+
+@app.post("/v1/search/posts")
+async def search_posts(
+    payload: PostSearchRequest, x_internal_token: str | None = Header(default=None)
+):
+    require_internal_token(x_internal_token)
+    if text_embedder.state == "loading":
+        raise HTTPException(status_code=503, detail="text model is warming up")
+    if text_embedder.state == "failed":
+        raise HTTPException(status_code=503, detail="text model failed to load")
+    started = time.perf_counter()
+    try:
+        semaphore = getattr(app.state, "embedding_semaphore", None)
+        if semaphore is None:
+            semaphore = asyncio.Semaphore(max(1, settings.embedding_concurrency))
+        async with semaphore:
+            vector = await asyncio.to_thread(text_embedder.embed_query, payload.query)
+        results = await text_vector_store.search(vector, payload.limit)
+        logger.info(
+            "post semantic search complete query_length=%d requested=%d results=%d duration_ms=%.1f",
+            len(payload.query),
+            payload.limit,
+            len(results),
+            (time.perf_counter() - started) * 1000,
+        )
+        return {"results": results}
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.exception("post semantic search failed: %s", exc)
+        raise HTTPException(status_code=503, detail="post search unavailable") from exc

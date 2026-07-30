@@ -1,0 +1,99 @@
+{
+  "authoritative_run_id": "20260730T143316Z",
+  "dataset_scope": {
+    "posts": 47,
+    "image_search": 34,
+    "post_search": 32,
+    "rag": 30,
+    "agent": 36
+  },
+  "runs": [
+    {
+      "run_id": "20260730T140713Z",
+      "record_status": "full_bundle_retained",
+      "started_at": "2026-07-30T14:07:13.104Z",
+      "finished_at": "2026-07-30T14:12:05.711Z",
+      "duration_ms": 292607.3,
+      "git": {
+        "sha": "efdb049db89964128b7051ab2c7f2b4a6a7be4da",
+        "branch": "main",
+        "dirty": true
+      },
+      "provider": "deepseek-v4-flash",
+      "dataset_sha256": {
+        "image_search_current": "ee2b68c49eeeb51ee45373c9cf517a54883f2e0b94480ef7a8b810b433d51017",
+        "rag_current": "522b7bbfa796ef35a25725010dacab946949de1d7402dabd84a8fe4589941ce7",
+        "agent_current": "434ebb53ff95629aaecc9e2c9d5d279a0e6f7bedb7ea22a299a62ebc6774e1aa",
+        "post_search_current": "45b8bc56dc493c692e55e04d82dff1ffbaf4f3907917db5d5cb5e2fe941d7e9d"
+      },
+      "quality": {
+        "image_recall_at_5": 0.9222222222,
+        "image_mrr": 0.975,
+        "rag_source_hit_rate": 1.0,
+        "rag_citation_accessible_rate": 1.0,
+        "agent_source_hit_rate": 1.0,
+        "agent_required_tool_selection_rate": 1.0,
+        "agent_citation_accessible_rate": 1.0,
+        "agent_failed_queries": 0,
+        "agent_timeout_queries": 0
+      },
+      "latency_ms": {
+        "image_p50": 57.2522,
+        "image_p95": 68.1698,
+        "rag_p50": 2072.3,
+        "rag_p95": 3131.0,
+        "agent_p50": 4056.9,
+        "agent_p95": 9146.7
+      },
+      "command_status": {
+        "pass": 13,
+        "fail": 0,
+        "blocked": 0,
+        "not_run": 0
+      },
+      "raw_bundle": ".local/shareo/final-freeze/20260730T140713Z"
+    },
+    {
+      "run_id": "20260730T143316Z",
+      "record_status": "full_bundle_retained",
+      "git": {
+        "sha": "efdb049db89964128b7051ab2c7f2b4a6a7be4da",
+        "branch": "main",
+        "dirty": true
+      },
+      "provider": "deepseek-v4-flash",
+      "dataset_sha256": {
+        "image_search_current": "ee2b68c49eeeb51ee45373c9cf517a54883f2e0b94480ef7a8b810b433d51017",
+        "rag_current": "522b7bbfa796ef35a25725010dacab946949de1d7402dabd84a8fe4589941ce7",
+        "agent_current": "434ebb53ff95629aaecc9e2c9d5d279a0e6f7bedb7ea22a299a62ebc6774e1aa",
+        "post_search_current": "45b8bc56dc493c692e55e04d82dff1ffbaf4f3907917db5d5cb5e2fe941d7e9d"
+      },
+      "quality": {
+        "image_recall_at_5": 0.9222222222,
+        "image_mrr": 0.975,
+        "rag_source_hit_rate": 0.8333,
+        "rag_citation_accessible_rate": 1.0,
+        "agent_source_hit_rate": 1.0,
+        "agent_required_tool_selection_rate": 1.0,
+        "agent_citation_accessible_rate": 1.0,
+        "agent_failed_queries": 0,
+        "agent_timeout_queries": 0
+      },
+      "latency_ms": {
+        "image_p50": 58.3356,
+        "image_p95": 69.1928,
+        "rag_p50": 2057.1,
+        "rag_p95": 3101.2,
+        "agent_p50": 4058.8,
+        "agent_p95": 8179.5
+      },
+      "command_status": {
+        "pass": 13,
+        "fail": 0,
+        "blocked": 0,
+        "not_run": 0
+      },
+      "raw_bundle": ".local/shareo/final-freeze/20260730T143316Z"
+    }
+  ]
+}

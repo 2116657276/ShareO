@@ -202,6 +202,16 @@ check "点赞" '"code":0' "$LIKE"
 UNLIKE=$(curl -s -X POST "$BASE/api/v1/posts/$POSTID/like" -b "token=$TOKEN2")
 check "取消点赞" '"code":0' "$UNLIKE"
 
+# Private favorites are idempotent and never exposed through another user's profile.
+FAVORITE=$(curl -s -X PUT "$BASE/api/v1/posts/$POSTID/favorite" -b "token=$TOKEN2")
+check "收藏帖子" '"favorited":true' "$FAVORITE"
+FAVORITE_AGAIN=$(curl -s -X PUT "$BASE/api/v1/posts/$POSTID/favorite" -b "token=$TOKEN2")
+check "重复收藏保持幂等" '"favorited":true' "$FAVORITE_AGAIN"
+FAVORITES=$(curl -s "$BASE/api/v1/favorites?page=1&page_size=20" -b "token=$TOKEN2")
+check "私人收藏列表" "\"id\":$POSTID" "$FAVORITES"
+OTHER_FAVORITES_CODE=$(curl -s -o /dev/null -w "%{http_code}" "$BASE/api/v1/users/$USER2_ID/favorites" -b "token=$TOKEN")
+check_code "他人收藏列表不存在" "404" "$OTHER_FAVORITES_CODE"
+
 # Comment
 COMMENT=$(curl -s -X POST "$BASE/api/v1/posts/$POSTID/comments" -b "token=$TOKEN2" \
   -H 'Content-Type: application/json' \
@@ -221,6 +231,16 @@ check "删除评论" '"code":0' "$DELC"
 FOLLOW=$(curl -s -X POST "$BASE/api/v1/users/$USER1_ID/follow" -b "token=$TOKEN2")
 check "关注" '"code":0' "$FOLLOW"
 
+# Following directory retains follow metadata, and the authenticated following
+# feed only exposes approved posts from the caller's follow graph.
+FOLLOWING_LIST=$(curl -s "$BASE/api/v1/users/$USER2_ID/following?page=1&page_size=20" -b "token=$TOKEN2")
+check "关注列表含关注时间" '"followed_at"' "$FOLLOWING_LIST"
+FOLLOWING_FEED=$(curl -s "$BASE/api/v1/feed/following?page=1&page_size=12" -b "token=$TOKEN2")
+check "关注动态 Feed" '"code":0' "$FOLLOWING_FEED"
+check "关注动态仅返回已关注帖子" "\"id\":$POSTID" "$FOLLOWING_FEED"
+NOAUTH_FOLLOWING=$(curl -s -o /dev/null -w "%{http_code}" "$BASE/api/v1/feed/following")
+check_code "未登录访问关注动态" "401" "$NOAUTH_FOLLOWING"
+
 # Self-follow
 SELFF=$(curl -s -X POST "$BASE/api/v1/users/$USER1_ID/follow" -b "token=$TOKEN")
 check "拒绝关注自己" 'cannot follow yourself' "$SELFF"
@@ -237,6 +257,12 @@ check "通知列表" '"code":0' "$NOTIFS"
 
 UNREAD=$(curl -s "$BASE/api/v1/notifications/unread-count" -b "token=$TOKEN")
 check "未读通知数" '"code":0' "$UNREAD"
+check "评论未读数" '"comment_count":1' "$UNREAD"
+
+UNFAVORITE=$(curl -s -X DELETE "$BASE/api/v1/posts/$POSTID/favorite" -b "token=$TOKEN2")
+check "取消收藏" '"favorited":false' "$UNFAVORITE"
+UNFAVORITE_AGAIN=$(curl -s -X DELETE "$BASE/api/v1/posts/$POSTID/favorite" -b "token=$TOKEN2")
+check "重复取消收藏保持幂等" '"favorited":false' "$UNFAVORITE_AGAIN"
 
 echo ""
 echo "=== 5. 管理员测试 ==="
@@ -258,15 +284,15 @@ echo "=== 6. 边界测试 ==="
 
 # Empty search
 EMPTYS=$(curl -s "$BASE/api/v1/search?q=")
-check "空搜索" '搜索关键词不能为空' "$EMPTYS"
+check "空搜索" '搜索内容长度必须为 1-200 个字符' "$EMPTYS"
 
 # Feed with invalid params (clamping test)
 FEED2=$(curl -s "$BASE/api/v1/feed?page=-1&page_size=1000")
 check "无效分页参数" '"code":0' "$FEED2"
 
-# Removed feature routes stay absent.
+# Removed legacy toggle routes stay absent; favorites use explicit idempotent PUT/DELETE.
 FAVORITE_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$BASE/api/v1/posts/$POSTID/favorite" -b "token=$TOKEN2")
-check_code "收藏路由已删除" "404" "$FAVORITE_CODE"
+check_code "旧收藏切换路由不存在" "404" "$FAVORITE_CODE"
 REPOST_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$BASE/api/v1/posts/$POSTID/repost" -b "token=$TOKEN2")
 check_code "转帖路由已删除" "404" "$REPOST_CODE"
 GROUP_MEMBERS_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$BASE/api/v1/conversations/1/members" -b "token=$TOKEN2")

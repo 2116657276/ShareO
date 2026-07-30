@@ -30,7 +30,7 @@ Handler → Service → Repository → DB/Redis
 
 - **工具链**: Python 固定 3.12；uv dependency group 管理 dev 依赖（lock 文件提交）；CI 和检查用 locked/frozen；`ruff check` + `ruff format` + `pytest` 必须可离线跑。
 - **类型**: 全量 type hints；对外数据结构一律 pydantic v2 model，不裸传 dict。
-- **结构**: 当前路由集中在 `app/main.py`；其余代码按 `core/`（模型/存储客户端）→ `rag/`（管线）→ `agent/`（Phase 8 状态图、工具和轨迹）→ `workers/`（消费者）分责。`agent/` 只能通过现有 RAG/向量客户端和受保护 Go 内部只读接口取数，不直接访问 MySQL 或 MinIO；模型加载保持懒加载和进程内单例。
+- **结构**: 当前路由集中在 `app/main.py`；其余代码按 `core/`（模型/存储客户端）→ `rag/`（管线）→ `agent/`（状态图、工具和轨迹）→ `workers/`（消费者）分责。`agent/` 只能通过现有 RAG/向量客户端和受保护 Go 内部只读接口取数，不直接访问 MySQL 或 MinIO；模型加载保持懒加载和进程内单例。
 - **配置**: pydantic-settings 读 `SHAREO_AI_*` 环境变量，禁止硬编码密钥/地址。
 
 ## 4. API 设计规范
@@ -52,7 +52,7 @@ Handler → Service → Repository → DB/Redis
 ## 6. 测试规范
 
 - 新功能最低要求：Service 层核心逻辑单测；跨服务能力增加隔离 `scripts/test_*.sh` E2E。
-- 当前行为证据由 Go/Python 单测、真实 MySQL/Redis 集成、`test-image-e2e` 和 `test-ai-e2e` 组成；API 自动化只能证明链路，最终页面演示仍需按 `docs/demo.md` 人工验证 WebSocket 实时下行和引用点击。
+- 当前行为证据由 Go/Python 单测、真实 MySQL/Redis/Qdrant 集成、本机 API 回归、当前评测和 Final Freeze 归档组成；浏览器体验不替代后端门禁，WebSocket 实时下行和引用点击属于已接受的人工证据缺口。
 - 涉及并发的代码（ws Hub、队列消费）必须过 `go test -race`。
 - 无外部服务的门禁统一 `make check`；真实 MySQL/Redis 放 `make test-integration`。该目标强制要求 `SHAREO_TEST_MYSQL_DSN`（库名以 `_test` 结尾）与 `SHAREO_TEST_REDIS_URL`，避免把 skip 算作通过。
 - AI 效果不写断言式单测，走 `docs/eval/` 评测集 + 指标（见 [eval/README.md](eval/README.md)）；工程部分（编码维度、upsert 幂等、检索 top-k 形状）写常规单测。
@@ -72,8 +72,8 @@ Handler → Service → Repository → DB/Redis
 
 ## 8. 文档职责
 
-- 当前状态只写 `TASK.md`，执行顺序只写 `docs/plan.md`。
-- 阶段边界、门禁和证据写 `docs/phases/`；接口与数据流写 design/reference，不在设计文档重复状态。
+- 当前状态只写 `TASK.md`，完工结论和证据边界写 `docs/REVIEW.md` 与 `docs/evidence/final-freeze/`。
+- 接口与数据流写 design/reference，不在设计文档重复实时状态。
 - 选型先写 ADR；被替代决定保留历史并明确 successor。
 - 功能合入更新 `docs/features.md`；实验当天追加 `docs/eval/experiments.md`。
 - 完成项必须引用真实提交 SHA 和真实环境证据，禁止使用“当前工作区”或硬编码长期测试/文档数量。

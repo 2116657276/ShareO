@@ -1,58 +1,71 @@
 {{ template "header" . }}
-<section class="image-search-page" data-image-search>
-    <div class="image-search-hero">
+<section class="search-workspace" data-search-workspace data-image-search>
+    <header class="search-hero">
         <div>
-            <span class="eyebrow"><i class="bi bi-stars"></i> 社区语义检索</span>
-            <h1 class="image-search-title">用一句话找到相似作品</h1>
-            <p class="image-search-intro">描述你想看的画面，ShareO 会从已审核的社区作品中寻找相似图片。</p>
+            <span class="eyebrow"><i class="bi bi-stars"></i> DISCOVER</span>
+            <h1>搜索社区灵感</h1>
+            <p>按文字查找帖子，或用一句中文描述进行语义搜图。结果只包含已审核、可见的社区内容。</p>
         </div>
-        <div class="image-search-hero-icon" aria-hidden="true"><i class="bi bi-image"></i></div>
+        <div class="search-hero-icon" aria-hidden="true"><i class="bi bi-search-heart"></i></div>
+    </header>
+
+    <div class="search-mode-row mb-3">
+        <div class="search-tabs" role="tablist" aria-label="搜索类型">
+            <button id="postSearchTab" class="search-tab" type="button" role="tab" data-mode="posts" aria-controls="searchResults"><i class="bi bi-card-text me-1"></i>搜贴</button>
+            <button id="imageSearchTab" class="search-tab" type="button" role="tab" data-mode="images" aria-controls="searchResults"><i class="bi bi-images me-1"></i>搜图</button>
+        </div>
+        <a class="search-agent-entry" href="/chat?bot=agent"><i class="bi bi-stars" aria-hidden="true"></i><span>问问小O</span></a>
     </div>
 
-    <form id="imageSearchForm" class="image-search-form" novalidate>
-        <label for="imageSearchQuery" class="visually-hidden">图片描述</label>
-        <div class="image-search-input-wrap">
+    <form id="searchWorkspaceForm" class="search-workspace-form" novalidate>
+        <label for="searchWorkspaceQuery" class="visually-hidden">搜索内容</label>
+        <div class="search-input-wrap">
             <i class="bi bi-search" aria-hidden="true"></i>
-            <input id="imageSearchQuery" name="q" type="search" maxlength="200"
-                   autocomplete="off" placeholder="例如：雨后的城市街道，暖色灯光"
-                   aria-describedby="imageSearchHint imageSearchStatus">
-            <button id="imageSearchSubmit" class="btn btn-primary" type="submit">
-                <span class="search-submit-label">开始搜图</span>
+            <input id="searchWorkspaceQuery" name="q" type="search" maxlength="200" autocomplete="off"
+                   placeholder="例如：雨后的城市街道，暖色灯光"
+                   aria-describedby="searchWorkspaceHint searchWorkspaceStatus">
+            <button id="searchWorkspaceSubmit" class="btn btn-primary" type="submit">
+                <span class="search-submit-label">开始搜索</span>
                 <span class="search-submit-loading" hidden><span class="spinner-border spinner-border-sm me-1" aria-hidden="true"></span>搜索中</span>
             </button>
         </div>
-        <div id="imageSearchHint" class="image-search-hint">请输入 1–200 个字符。结果只包含可见的已审核帖子。</div>
+        <div id="searchWorkspaceHint" class="search-hint">请输入 1–200 个字符。</div>
     </form>
 
-    <div id="imageSearchStatus" class="image-search-status" role="status" aria-live="polite" hidden></div>
-    <div id="imageSearchResults" class="image-search-results" aria-live="polite"></div>
+    <div id="searchWorkspaceStatus" class="search-status" role="status" aria-live="polite" hidden></div>
+    <div id="searchResults" class="search-results-grid" aria-live="polite"></div>
 
-    <div id="imageSearchEmpty" class="image-search-empty" hidden>
-        <div class="image-search-empty-icon" aria-hidden="true"><i class="bi bi-image"></i></div>
-        <h2>没有找到相似作品</h2>
-        <p>换一种描述试试，例如补充场景、颜色或拍摄风格。</p>
+    <div id="imageSearchEmpty" class="search-empty" hidden>
+        <div class="search-empty-icon" aria-hidden="true"><i class="bi bi-search"></i></div>
+        <h2>没有找到相关内容</h2>
+        <p>换一种描述，或补充场景、颜色、作者和作品细节后再试。</p>
     </div>
 
-    <div id="imageSearchUnavailable" class="image-search-empty image-search-unavailable" hidden>
-        <div class="image-search-empty-icon" aria-hidden="true"><i class="bi bi-cloud-slash"></i></div>
-        <h2>语义搜图暂不可用</h2>
-        <p>图片检索服务正在恢复，请稍后重试；社区浏览和普通私聊不受影响。</p>
+    <div id="imageSearchUnavailable" class="search-empty" hidden>
+        <div class="search-empty-icon" aria-hidden="true"><i class="bi bi-cloud-slash"></i></div>
+        <h2>搜索服务暂时不可用</h2>
+        <p id="searchUnavailableMessage">服务正在恢复，请稍后重试。</p>
         <button id="imageSearchRetry" class="btn btn-outline-secondary" type="button">重新尝试</button>
     </div>
 </section>
 
 <script>
 (() => {
-    const form = document.getElementById('imageSearchForm');
-    const queryInput = document.getElementById('imageSearchQuery');
-    const submitButton = document.getElementById('imageSearchSubmit');
+    const form = document.getElementById('searchWorkspaceForm');
+    const queryInput = document.getElementById('searchWorkspaceQuery');
+    const submitButton = document.getElementById('searchWorkspaceSubmit');
     const submitLabel = submitButton.querySelector('.search-submit-label');
     const submitLoading = submitButton.querySelector('.search-submit-loading');
-    const status = document.getElementById('imageSearchStatus');
-    const results = document.getElementById('imageSearchResults');
+    const hint = document.getElementById('searchWorkspaceHint');
+    const status = document.getElementById('searchWorkspaceStatus');
+    const results = document.getElementById('searchResults');
     const empty = document.getElementById('imageSearchEmpty');
     const unavailable = document.getElementById('imageSearchUnavailable');
+    const unavailableMessage = document.getElementById('searchUnavailableMessage');
     const retry = document.getElementById('imageSearchRetry');
+    const tabs = [...document.querySelectorAll('.search-tab[data-mode]')];
+    const params = new URLSearchParams(window.location.search);
+    let mode = params.get('mode') === 'posts' ? 'posts' : 'images';
 
     function escapeHTML(value) {
         const node = document.createElement('div');
@@ -60,9 +73,18 @@
         return node.innerHTML;
     }
 
+    function safeID(value) {
+        const id = Number(value);
+        return Number.isInteger(id) && id > 0 ? id : 0;
+    }
+
+    function displayImageURL(value) {
+        return String(value || '').replace(/\/posts\/(original|thumb)\//, '/posts/medium/');
+    }
+
     function setStatus(message, kind = '') {
         status.textContent = message || '';
-        status.className = `image-search-status ${kind}`.trim();
+        status.className = `search-status ${kind}`.trim();
         status.hidden = !message;
     }
 
@@ -79,78 +101,125 @@
         unavailable.hidden = true;
     }
 
-    function renderResult(item) {
-        const post = item && item.post ? item.post : {};
+    function updateURL(query = queryInput.value.trim()) {
+        const next = new URLSearchParams();
+        if (query) next.set('q', query);
+        next.set('mode', mode);
+        window.history.replaceState(null, '', `/search/images?${next.toString()}`);
+    }
+
+    function syncModeUI() {
+        tabs.forEach(tab => {
+            const active = tab.dataset.mode === mode;
+            tab.classList.toggle('active', active);
+            tab.setAttribute('aria-selected', active ? 'true' : 'false');
+        });
+        const isPosts = mode === 'posts';
+        queryInput.placeholder = isPosts ? '搜索帖子内容，例如：西湖夜景' : '描述画面，例如：雨后的城市街道，暖色灯光';
+        hint.textContent = isPosts ? '按帖子正文搜索，结果支持分页。' : '用中文描述画面，结果按语义相似度排序。';
+        results.classList.toggle('is-post-mode', isPosts);
+    }
+
+    function renderImageResult(item) {
+        const post = item?.post || {};
         const author = post.user || {};
-        const postID = Number(item && item.post_id);
-        const imageURL = item && item.image_url ? item.image_url : '/static/img/placeholder.svg';
+        const postID = safeID(item?.post_id);
+        if (!postID) return '';
+        const imageURL = displayImageURL(item?.image_url) || '/static/img/placeholder.svg';
         const avatarURL = author.avatar_url || '/static/img/default-avatar.svg';
         const content = post.content || '无描述';
-        const score = Number(item && item.score);
+        const score = Number(item?.score);
         const scoreLabel = Number.isFinite(score) ? `相似度 ${(score * 100).toFixed(1)}%` : '语义匹配';
-        return `<article class="image-result-card">
-            <a class="image-result-media" href="/post/${postID}" aria-label="查看帖子 #${postID}">
-                <img src="${escapeHTML(imageURL)}" alt="${escapeHTML(content)}" loading="lazy" onerror="this.classList.add('image-result-error')">
+        return `<article class="search-result-card">
+            <a class="search-result-media" href="/post/${postID}" aria-label="查看帖子 #${postID}">
+                <img src="${escapeHTML(imageURL)}" alt="${escapeHTML(content)}" loading="lazy" onerror="this.closest('.search-result-media').classList.add('img-error');this.remove()">
             </a>
-            <div class="image-result-body">
-                <div class="image-result-score"><i class="bi bi-magic"></i> ${escapeHTML(scoreLabel)}</div>
-                <a class="image-result-content" href="/post/${postID}">${escapeHTML(content)}</a>
-                <div class="image-result-author">
-                    <img src="${escapeHTML(avatarURL)}" alt="" onerror="this.src='/static/img/default-avatar.svg'">
-                    <span>${escapeHTML(author.username || 'ShareO 用户')}</span>
-                </div>
+            <div class="search-result-body">
+                <div class="search-result-score"><i class="bi bi-magic"></i> ${escapeHTML(scoreLabel)}</div>
+                <a class="search-result-content" href="/post/${postID}">${escapeHTML(content)}</a>
+                <div class="search-result-author"><img src="${escapeHTML(avatarURL)}" alt="" onerror="this.src='/static/img/default-avatar.svg'"><span>${escapeHTML(author.username || 'ShareO 用户')}</span></div>
             </div>
         </article>`;
     }
 
-    function renderResults(items) {
+    function renderPostResult(post) {
+        const postID = safeID(post?.id);
+        if (!postID) return '';
+        const author = post.user || {};
+        const imageURL = displayImageURL(post.cover_image) || '/static/img/placeholder.svg';
+        return `<article class="post-search-card">
+            <a class="post-search-card-media" href="/post/${postID}"><img src="${escapeHTML(imageURL)}" alt="" loading="lazy" onerror="this.closest('.post-search-card-media').classList.add('img-error');this.remove()"></a>
+            <div class="post-search-card-body">
+                <div class="search-result-author mt-0"><img src="${escapeHTML(author.avatar_url || '/static/img/default-avatar.svg')}" alt="" onerror="this.src='/static/img/default-avatar.svg'"><span>${escapeHTML(author.username || 'ShareO 用户')}</span></div>
+                <a class="post-search-card-title text-decoration-none mt-2" href="/post/${postID}">${escapeHTML(post.content || '无描述')}</a>
+                <div class="muted-caption mt-2"><i class="bi bi-heart"></i> ${Number(post.like_count) || 0}<span class="ms-3"><i class="bi bi-chat"></i> ${Number(post.comment_count) || 0}</span></div>
+            </div>
+        </article>`;
+    }
+
+    function renderItems(items) {
         resetStates();
         if (!Array.isArray(items) || items.length === 0) {
             empty.hidden = false;
             return;
         }
-        results.innerHTML = items.map(renderResult).join('');
+        const render = mode === 'posts' ? renderPostResult : renderImageResult;
+        results.innerHTML = items.map(render).filter(Boolean).join('');
+        if (!results.children.length) empty.hidden = false;
     }
 
     async function search() {
         const query = queryInput.value.trim();
-        if (!query || query.length > 200) {
+        if (!query || [...query].length > 200) {
             resetStates();
-            setStatus('搜索描述必须为 1–200 个字符。', 'is-error');
+            setStatus('搜索内容必须为 1–200 个字符。', 'is-error');
             queryInput.focus();
             return;
         }
         setLoading(true);
         resetStates();
-        setStatus('正在查找相似作品…');
-        const url = `/api/v1/search/images?q=${encodeURIComponent(query)}&limit=20`;
-        window.history.replaceState(null, '', `/search/images?q=${encodeURIComponent(query)}`);
+        setStatus(mode === 'posts' ? '正在搜索帖子…' : '正在查找相似作品…');
+        updateURL(query);
+        const url = mode === 'posts'
+            ? `/api/v1/search?q=${encodeURIComponent(query)}&page=1&page_size=20`
+            : `/api/v1/search/images?q=${encodeURIComponent(query)}&limit=20`;
         try {
             const response = await fetch(url, { headers: { Accept: 'application/json' } });
             let body = {};
             try { body = await response.json(); } catch (_) { body = {}; }
             if (response.status === 503) {
                 unavailable.hidden = false;
-                setStatus('图片检索服务暂不可用。', 'is-error');
+                unavailableMessage.textContent = mode === 'images' ? '语义搜图服务正在恢复，社区浏览和普通私聊不受影响。' : '帖子搜索服务正在恢复，请稍后重试。';
+                setStatus('搜索服务暂时不可用。', 'is-error');
                 return;
             }
-            if (!response.ok || body.code !== 0) {
-                setStatus(body.message || '搜索失败，请稍后重试。', 'is-error');
-                return;
-            }
-            const items = body.data && Array.isArray(body.data.results) ? body.data.results : [];
-            renderResults(items);
-            setStatus(`已找到 ${items.length} 条相关作品。`);
-        } catch (_) {
-            setStatus('网络连接失败，请稍后重试。', 'is-error');
+            if (!response.ok || body.code !== 0) throw new Error(body.message || '搜索失败，请稍后重试');
+            const items = mode === 'posts'
+                ? (Array.isArray(body.data?.list) ? body.data.list : [])
+                : (Array.isArray(body.data?.results) ? body.data.results : []);
+            renderItems(items);
+            setStatus(`已找到 ${items.length} 条相关内容。`);
+        } catch (error) {
+            unavailable.hidden = false;
+            unavailableMessage.textContent = error.message || '网络连接失败，请稍后重试。';
+            setStatus(error.message || '网络连接失败，请稍后重试。', 'is-error');
         } finally {
             setLoading(false);
         }
     }
 
+    tabs.forEach(tab => tab.addEventListener('click', () => {
+        mode = tab.dataset.mode;
+        syncModeUI();
+        resetStates();
+        setStatus('');
+        updateURL();
+        if (queryInput.value.trim()) search();
+    }));
     form.addEventListener('submit', event => { event.preventDefault(); search(); });
     retry.addEventListener('click', search);
-    const initialQuery = new URLSearchParams(window.location.search).get('q');
+    syncModeUI();
+    const initialQuery = params.get('q');
     if (initialQuery) {
         queryInput.value = initialQuery;
         search();

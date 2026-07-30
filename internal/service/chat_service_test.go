@@ -27,6 +27,7 @@ type fakeChatRepo struct {
 	messageByID   *model.Message
 	botReply      *model.Message
 	botCreated    bool
+	followedAt    map[int64]time.Time
 }
 
 func (f *fakeChatRepo) ValidateActiveUsers(_ context.Context, ids []int64) error {
@@ -44,6 +45,9 @@ func (f *fakeChatRepo) GetConversation(context.Context, int64) (*model.Conversat
 }
 func (f *fakeChatRepo) ListConversations(context.Context, int64) ([]model.Conversation, error) {
 	return nil, nil
+}
+func (f *fakeChatRepo) GetFollowedAt(context.Context, int64, []int64) (map[int64]time.Time, error) {
+	return f.followedAt, nil
 }
 func (f *fakeChatRepo) IsMember(context.Context, int64, int64) (bool, error) { return f.isMember, nil }
 func (f *fakeChatRepo) GetMembers(context.Context, int64) ([]model.ConversationMember, error) {
@@ -138,6 +142,26 @@ func TestPaginationConflictAndUnreadDelegation(t *testing.T) {
 	unread, err := svc.UnreadCount(context.Background(), 2)
 	if err != nil || unread != 7 {
 		t.Fatalf("unread=%d err=%v", unread, err)
+	}
+}
+
+func TestConversationSortUsesLastMessageThenFollowedAt(t *testing.T) {
+	now := time.Now()
+	followedEarlier := now.Add(-2 * time.Hour)
+	followedLater := now.Add(-30 * time.Minute)
+	conversations := []ConversationWithMeta{
+		{Conversation: model.Conversation{ID: 1, CreatedAt: now}, FollowedAt: &followedEarlier},
+		{Conversation: model.Conversation{ID: 2, CreatedAt: now.Add(-3 * time.Hour)}, FollowedAt: &followedLater},
+		{Conversation: model.Conversation{ID: 3, CreatedAt: now.Add(-4 * time.Hour)}, LastMessage: &model.Message{CreatedAt: now.Add(-10 * time.Minute)}, FollowedAt: &followedEarlier},
+	}
+
+	sortConversationPreviews(conversations)
+	got := []int64{conversations[0].ID, conversations[1].ID, conversations[2].ID}
+	want := []int64{3, 2, 1}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("sorted IDs=%v, want %v", got, want)
+		}
 	}
 }
 

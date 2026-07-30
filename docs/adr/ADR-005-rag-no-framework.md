@@ -23,4 +23,4 @@ RAG 使用 FastEmbed + Qdrant Client + `httpx` OpenAI-compatible 调用 + 自研
 
 ## 后续关系
 
-本 ADR 继续约束已实现的 RAG 快速路径；Phase 8 的只读 Agent 例外由 [ADR-008](ADR-008-readonly-agent.md) 单独定义，不改变 RAG pipeline 的实现边界。
+本 ADR 继续约束已实现的 RAG 快速路径；只读 Agent 例外由 [ADR-008](ADR-008-readonly-agent.md) 单独定义，不改变 RAG pipeline 的实现边界。

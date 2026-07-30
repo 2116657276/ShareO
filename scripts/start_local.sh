@@ -42,6 +42,8 @@ pass() { echo "[PASS] $1"; }
 fail() { echo "[FAIL] $1" >&2; }
 
 echo "Starting native ShareO services..."
+# Always reload application code. Infrastructure and data remain untouched.
+bash scripts/local_runtime.sh app-stop
 bash scripts/local_runtime.sh dev-local
 
 echo "Warming AI models and checking Provider/Qdrant readiness..."
