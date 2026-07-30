@@ -1,7 +1,7 @@
 # AGENTS.md
 
 本文件用于指导 AI 编程代理在 ShareO 中进行代码修改。开始工作前，先阅读
-`README.md`、`CONTEXT.md`、`TASK.md`、`docs/REVIEW.md` 以及与目标模块相关的文档；
+`README.md`、`TASK.md`、`docs/REVIEW.md` 以及与目标模块相关的文档；
 不要仅根据文件名或任务描述猜测现有行为。
 
 ## 项目原则
@@ -23,7 +23,7 @@
 - 新增或修改的 Repository、Service 方法优先以 `context.Context` 作为第一个参数；新 Service 使用构造函数注入依赖。
 - Python 路由当前由 `app/main.py` 承载；其余代码遵循 `core/ → rag/ → workers/` 的职责边界。对外数据结构使用 Pydantic v2 model，模型加载保持懒加载和进程内单例。
 
-更完整的分层、API、安全和测试规范见 [`docs/standards.md`](docs/standards.md)；已有技术决策以 [`docs/adr/`](docs/adr/) 为准。
+分层、API、安全和测试约束以本文件、实际代码和 [`docs/adr/`](docs/adr/) 为准。
 
 ## 编码与接口规范
 

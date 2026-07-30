@@ -107,7 +107,7 @@ make eval-agent MACHINE_ONLY=1
 - [Final Freeze 证据](docs/evidence/final-freeze/README.md)：当前两次运行的脱敏归档入口。
 - [架构](docs/architecture.md)、[功能矩阵](docs/features.md)、[API 参考](docs/reference/api.md)、[数据模型](docs/reference/data-model.md)。
 - [当前评测规范](docs/eval/README.md)与[运行记录](docs/eval/experiments.md)。
-- [运行手册](docs/operations/runbook.md)、[开发规范](docs/standards.md)、[ADR](docs/adr/)。
+- [运行手册](docs/operations/runbook.md)、[ADR](docs/adr/)。
 - [简历项目审查](docs/resume-review.md)：简历和答辩中的推荐表述。
 
 历史过程由 Git 提交记录追溯；当前文档只保留稳定设计、最终状态和可复核证据。
