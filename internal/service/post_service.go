@@ -1,1 +1,198 @@
-cGFja2FnZSBzZXJ2aWNlCgppbXBvcnQgKAoJImNvbnRleHQiCgkiZXJyb3JzIgoJIm5ldC91cmwiCgkic3RyaW5ncyIKCgkiZ2l0aHViLmNvbS96aG91amlhbmxpbi9TaGFyZU8vaW50ZXJuYWwvbW9kZWwiCgkiZ2l0aHViLmNvbS96aG91amlhbmxpbi9TaGFyZU8vaW50ZXJuYWwvcmVwb3NpdG9yeSIKKQoKdHlwZSBQb3N0U2VydmljZSBzdHJ1Y3QgewoJcG9zdFJlcG8gICAgICpyZXBvc2l0b3J5LlBvc3RSZXBvCglsaWtlUmVwbyAgICAgKnJlcG9zaXRvcnkuTGlrZVJlcG8KCWZhdm9yaXRlUmVwbyAqcmVwb3NpdG9yeS5GYXZvcml0ZVJlcG8KCWZlZWRTdmMgICAgICAqRmVlZFNlcnZpY2UKfQoKY29uc3QgKAoJTWF4UG9zdENvbnRlbnRMZW5ndGggPSA1MDAKCU1heFBvc3RJbWFnZXMgICAgICAgID0gOQopCgp2YXIgRXJyUG9zdEludmFsaWQgPSBlcnJvcnMuTmV3KCLluJblrZDlj4LmlbDml6DmlYgiKQoKZnVuYyBOZXdQb3N0U2VydmljZSgpICpQb3N0U2VydmljZSB7CglyZXR1cm4gJlBvc3RTZXJ2aWNlewoJCXBvc3RSZXBvOiAgICAgcmVwb3NpdG9yeS5OZXdQb3N0UmVwbygpLAoJCWxpa2VSZXBvOiAgICAgcmVwb3NpdG9yeS5OZXdMaWtlUmVwbygpLAoJCWZhdm9yaXRlUmVwbzogcmVwb3NpdG9yeS5OZXdGYXZvcml0ZVJlcG8oKSwKCQlmZWVkU3ZjOiAgICAgIE5ld0ZlZWRTZXJ2aWNlKCksCgl9Cn0KCnR5cGUgQ3JlYXRlUG9zdFJlcSBzdHJ1Y3QgewoJQ29udGVudCBzdHJpbmcgICBganNvbjoiY29udGVudCJgCglJbWFnZXMgIFtdc3RyaW5nIGBqc29uOiJpbWFnZXMiYCAvLyBpbWFnZSBVUkxzIGZyb20gdXBsb2FkCn0KCmZ1bmMgKHMgKlBvc3RTZXJ2aWNlKSBDcmVhdGUodXNlcklEIGludDY0LCByZXEgQ3JlYXRlUG9zdFJlcSkgKCptb2RlbC5Qb3N0LCBlcnJvcikgewoJY29udGVudCwgaW1hZ2VzLCBlcnIgOj0gdmFsaWRhdGVQb3N0SW5wdXQocmVxLkNvbnRlbnQsIHJlcS5JbWFnZXMpCglpZiBlcnIgIT0gbmlsIHsKCQlyZXR1cm4gbmlsLCBlcnIKCX0KCglwb3N0IDo9ICZtb2RlbC5Qb3N0ewoJCVVzZXJJRDogICAgIHVzZXJJRCwKCQlDb250ZW50OiAgICBjb250ZW50LAoJCUNvdmVySW1hZ2U6IGltYWdlc1swXSwKCQlTdGF0dXM6ICAgICBtb2RlbC5TdGF0dXNQZW5kaW5nLCAvLyDpnIDopoHnrqHnkIblkZjlrqHmoLgKCX0KCgkvLyDmnoTlu7rlm77niYflhbPogZQKCWZvciBpLCBpbWFnZVVSTCA6PSByYW5nZSBpbWFnZXMgewoJCXBvc3QuSW1hZ2VzID0gYXBwZW5kKHBvc3QuSW1hZ2VzLCBtb2RlbC5Qb3N0SW1hZ2V7CgkJCUltYWdlVVJMOiAgaW1hZ2VVUkwsCgkJCVNvcnRPcmRlcjogaSwKCQl9KQoJfQoKCWlmIGVyciA6PSBzLnBvc3RSZXBvLkNyZWF0ZShwb3N0KTsgZXJyICE9IG5pbCB7CgkJcmV0dXJuIG5pbCwgZXJyCgl9CgoJcy5mZWVkU3ZjLkludmFsaWRhdGVDYWNoZSgpCglyZXR1cm4gcy5wb3N0UmVwby5GaW5kQnlJRChwb3N0LklEKQp9CgpmdW5jIChzICpQb3N0U2VydmljZSkgVXBkYXRlKHVzZXJJRCwgcG9zdElEIGludDY0LCBjb250ZW50IHN0cmluZykgKCptb2RlbC5Qb3N0LCBlcnJvcikgewoJcG9zdCwgZXJyIDo9IHMucG9zdFJlcG8uRmluZEJ5SUQocG9zdElEKQoJaWYgZXJyICE9IG5pbCB7CgkJcmV0dXJuIG5pbCwgZXJyCgl9CglpZiBwb3N0ID09IG5pbCB7CgkJcmV0dXJuIG5pbCwgRXJyUG9zdE5vdEZvdW5kCgl9CglpZiBwb3N0LlVzZXJJRCAhPSB1c2VySUQgewoJCXJldHVybiBuaWwsIEVyclBlcm1pc3Npb25EZW5pZWQKCX0KCWNvbnRlbnQsIGVyciA9IHZhbGlkYXRlUG9zdENvbnRlbnQoY29udGVudCkKCWlmIGVyciAhPSBuaWwgewoJCXJldHVybiBuaWwsIGVycgoJfQoKCXBvc3QuQ29udGVudCA9IGNvbnRlbnQKCXBvc3QuU3RhdHVzID0gbW9kZWwuU3RhdHVzUGVuZGluZwoJaWYgZXJyIDo9IHMucG9zdFJlcG8uVXBkYXRlKHBvc3QpOyBlcnIgIT0gbmlsIHsKCQlyZXR1cm4gbmlsLCBlcnIKCX0KCXB1Ymxpc2hJbmRleEFjdGlvbigiZGVsZXRlIiwgcG9zdElEKQoKCS8vIFJlLWZldGNoIHRvIGdldCBmcmVzaCBkYXRhICh1cGRhdGVkX2F0LCBldGMuKQoJcmV0dXJuIHMucG9zdFJlcG8uRmluZEJ5SUQocG9zdElEKQp9CgpmdW5jIChzICpQb3N0U2VydmljZSkgRGVsZXRlKHVzZXJJRCwgcG9zdElEIGludDY0KSBlcnJvciB7Cglwb3N0LCBlcnIgOj0gcy5wb3N0UmVwby5GaW5kQnlJRChwb3N0SUQpCglpZiBlcnIgIT0gbmlsIHsKCQlyZXR1cm4gZXJyCgl9CglpZiBwb3N0ID09IG5pbCB7CgkJcmV0dXJuIEVyclBvc3ROb3RGb3VuZAoJfQoJaWYgcG9zdC5Vc2VySUQgIT0gdXNlcklEIHsKCQlyZXR1cm4gRXJyUGVybWlzc2lvbkRlbmllZAoJfQoJZXJyID0gcy5wb3N0UmVwby5Tb2Z0RGVsZXRlKHBvc3RJRCwgdXNlcklEKQoJaWYgZXJyID09IG5pbCB7CgkJcHVibGlzaEluZGV4QWN0aW9uKCJkZWxldGUiLCBwb3N0SUQpCgkJcy5mZWVkU3ZjLkludmFsaWRhdGVDYWNoZSgpCgl9CglyZXR1cm4gZXJyCn0KCmZ1bmMgKHMgKlBvc3RTZXJ2aWNlKSBHZXRCeUlEKHBvc3RJRCBpbnQ2NCwgY3VycmVudFVzZXJJRCBpbnQ2NCkgKCptb2RlbC5Qb3N0LCBlcnJvcikgewoJcG9zdCwgZXJyIDo9IHMucG9zdFJlcG8uRmluZEJ5SUQocG9zdElEKQoJaWYgZXJyICE9IG5pbCB7CgkJcmV0dXJuIG5pbCwgZXJyCgl9CglpZiBwb3N0ID09IG5pbCB7CgkJcmV0dXJuIG5pbCwgRXJyUG9zdE5vdEZvdW5kCgl9CglpZiBwb3N0LklzRGVsZXRlZCA9PSAxIHsKCQlyZXR1cm4gbmlsLCBFcnJQb3N0Tm90Rm91bmQKCX0KCgkvLyBIaWRlIHBlbmRpbmcvcmVqZWN0ZWQgcG9zdHMgZnJvbSBub24tb3duZXIgbm9uLWFkbWluIHVzZXJzCglpZiBwb3N0LlN0YXR1cyAhPSBtb2RlbC5TdGF0dXNBcHByb3ZlZCAmJiBwb3N0LlVzZXJJRCAhPSBjdXJyZW50VXNlcklEIHsKCQlyZXR1cm4gbmlsLCBFcnJQb3N0Tm90Rm91bmQKCX0KCglpZiBjdXJyZW50VXNlcklEID4gMCB7CgkJcG9zdC5Jc0xpa2VkID0gcy5saWtlUmVwby5Jc0xpa2VkKGN1cnJlbnRVc2VySUQsIHBvc3RJRCkKCQlwb3N0LklzRmF2b3JpdGVkID0gcy5mYXZvcml0ZVJlcG8uSXNGYXZvcml0ZWQoY29udGV4dC5CYWNrZ3JvdW5kKCksIGN1cnJlbnRVc2VySUQsIHBvc3RJRCkKCX0KCXJldHVybiBwb3N0LCBuaWwKfQoKZnVuYyB2YWxpZGF0ZVBvc3RJbnB1dChjb250ZW50IHN0cmluZywgaW1hZ2VzIFtdc3RyaW5nKSAoc3RyaW5nLCBbXXN0cmluZywgZXJyb3IpIHsKCWNvbnRlbnQsIGVyciA6PSB2YWxpZGF0ZVBvc3RDb250ZW50KGNvbnRlbnQpCglpZiBlcnIgIT0gbmlsIHsKCQlyZXR1cm4gIiIsIG5pbCwgZXJyCgl9CglpZiBsZW4oaW1hZ2VzKSA9PSAwIHx8IGxlbihpbWFnZXMpID4gTWF4UG9zdEltYWdlcyB7CgkJcmV0dXJuICIiLCBuaWwsIEVyclBvc3RJbnZhbGlkCgl9CgoJbm9ybWFsaXplZCA6PSBtYWtlKFtdc3RyaW5nLCBsZW4oaW1hZ2VzKSkKCXNlZW4gOj0gbWFrZShtYXBbc3RyaW5nXXN0cnVjdHt9LCBsZW4oaW1hZ2VzKSkKCWZvciBpLCByYXcgOj0gcmFuZ2UgaW1hZ2VzIHsKCQlpbWFnZVVSTCA6PSBzdHJpbmdzLlRyaW1TcGFjZShyYXcpCgkJaWYgIXZhbGlkVXBsb2FkZWRJbWFnZVVSTChpbWFnZVVSTCkgewoJCQlyZXR1cm4gIiIsIG5pbCwgRXJyUG9zdEludmFsaWQKCQl9CgkJaWYgXywgZXhpc3RzIDo9IHNlZW5baW1hZ2VVUkxdOyBleGlzdHMgewoJCQlyZXR1cm4gIiIsIG5pbCwgRXJyUG9zdEludmFsaWQKCQl9CgkJc2VlbltpbWFnZVVSTF0gPSBzdHJ1Y3R7fXt9CgkJbm9ybWFsaXplZFtpXSA9IGltYWdlVVJMCgl9CglyZXR1cm4gY29udGVudCwgbm9ybWFsaXplZCwgbmlsCn0KCmZ1bmMgdmFsaWRhdGVQb3N0Q29udGVudChjb250ZW50IHN0cmluZykgKHN0cmluZywgZXJyb3IpIHsKCWNvbnRlbnQgPSBzdHJpbmdzLlRyaW1TcGFjZShjb250ZW50KQoJaWYgbGVuKFtdcnVuZShjb250ZW50KSkgPiBNYXhQb3N0Q29udGVudExlbmd0aCB7CgkJcmV0dXJuICIiLCBFcnJQb3N0SW52YWxpZAoJfQoJcmV0dXJuIGNvbnRlbnQsIG5pbAp9CgpmdW5jIHZhbGlkVXBsb2FkZWRJbWFnZVVSTChyYXcgc3RyaW5nKSBib29sIHsKCWlmIHJhdyA9PSAiIiB8fCBzdHJpbmdzLkNvbnRhaW5zQW55KHJhdywgIlxcXHgwMCIpIHsKCQlyZXR1cm4gZmFsc2UKCX0KCXBhcnNlZCwgZXJyIDo9IHVybC5QYXJzZShyYXcpCglpZiBlcnIgIT0gbmlsIHx8IHBhcnNlZC5Jc0FicygpIHx8IHBhcnNlZC5Ib3N0ICE9ICIiIHx8IHBhcnNlZC5SYXdRdWVyeSAhPSAiIiB8fCBwYXJzZWQuRnJhZ21lbnQgIT0gIiIgewoJCXJldHVybiBmYWxzZQoJfQoJcGF0aCA6PSBwYXJzZWQuRXNjYXBlZFBhdGgoKQoJcmV0dXJuIHN0cmluZ3MuSGFzUHJlZml4KHBhdGgsICIvYXBpL3YxL2ltYWdlcy9wb3N0cy8iKSAmJgoJCSFzdHJpbmdzLkNvbnRhaW5zKHBhdGgsICIuLiIpICYmIGxlbihwYXRoKSA+IGxlbigiL2FwaS92MS9pbWFnZXMvcG9zdHMvIikKfQoKLy8gUmVjb3JkVmlldyBpcyBkZWxpYmVyYXRlbHkgc2VwYXJhdGUgZnJvbSBHRVQgc28gdGhhdCByZW5kZXJpbmcgYW5kIEFQSSByZWFkcwovLyByZW1haW4gc2lkZS1lZmZlY3QgZnJlZS4gUmVwZWF0ZWQgdmlld3MgYXJlIHN0aWxsIGNvdW50ZWQgYnkgdGhlIGV4aXN0aW5nCi8vIHByb2R1Y3QgcG9saWN5LCBleGNlcHQgZm9yIGFuIGF1dGhvcidzIG93biBwb3N0LgpmdW5jIChzICpQb3N0U2VydmljZSkgUmVjb3JkVmlldyhwb3N0SUQsIGN1cnJlbnRVc2VySUQgaW50NjQpIGVycm9yIHsKCXBvc3QsIGVyciA6PSBzLkdldEJ5SUQocG9zdElELCBjdXJyZW50VXNlcklEKQoJaWYgZXJyICE9IG5pbCB7CgkJcmV0dXJuIGVycgoJfQoJaWYgcG9zdC5Vc2VySUQgIT0gY3VycmVudFVzZXJJRCB7CgkJcy5wb3N0UmVwby5JbmNyZW1lbnRWaWV3KHBvc3RJRCkKCX0KCXJldHVybiBuaWwKfQo=
+package service
+
+import (
+	"context"
+	"errors"
+	"net/url"
+	"strings"
+
+	"github.com/zhoujianlin/ShareO/internal/model"
+	"github.com/zhoujianlin/ShareO/internal/repository"
+)
+
+type PostService struct {
+	postRepo     *repository.PostRepo
+	likeRepo     *repository.LikeRepo
+	favoriteRepo *repository.FavoriteRepo
+	feedSvc      *FeedService
+}
+
+const (
+	MaxPostContentLength = 500
+	MaxPostImages        = 9
+)
+
+var ErrPostInvalid = errors.New("帖子参数无效")
+
+func NewPostService() *PostService {
+	return &PostService{
+		postRepo:     repository.NewPostRepo(),
+		likeRepo:     repository.NewLikeRepo(),
+		favoriteRepo: repository.NewFavoriteRepo(),
+		feedSvc:      NewFeedService(),
+	}
+}
+
+type CreatePostReq struct {
+	Content string   `json:"content"`
+	Images  []string `json:"images"` // image URLs from upload
+}
+
+func (s *PostService) Create(userID int64, req CreatePostReq) (*model.Post, error) {
+	content, images, err := validatePostInput(req.Content, req.Images)
+	if err != nil {
+		return nil, err
+	}
+
+	post := &model.Post{
+		UserID:     userID,
+		Content:    content,
+		CoverImage: images[0],
+		Status:     model.StatusPending, // 需要管理员审核
+	}
+
+	// 构建图片关联
+	for i, imageURL := range images {
+		post.Images = append(post.Images, model.PostImage{
+			ImageURL:  imageURL,
+			SortOrder: i,
+		})
+	}
+
+	if err := s.postRepo.Create(post); err != nil {
+		return nil, err
+	}
+
+	s.feedSvc.InvalidateCache()
+	return s.postRepo.FindByID(post.ID)
+}
+
+func (s *PostService) Update(userID, postID int64, content string) (*model.Post, error) {
+	post, err := s.postRepo.FindByID(postID)
+	if err != nil {
+		return nil, err
+	}
+	if post == nil {
+		return nil, ErrPostNotFound
+	}
+	if post.UserID != userID {
+		return nil, ErrPermissionDenied
+	}
+	content, err = validatePostContent(content)
+	if err != nil {
+		return nil, err
+	}
+
+	post.Content = content
+	post.Status = model.StatusPending
+	if err := s.postRepo.Update(post); err != nil {
+		return nil, err
+	}
+	publishIndexAction("delete", postID)
+
+	// Re-fetch to get fresh data (updated_at, etc.)
+	return s.postRepo.FindByID(postID)
+}
+
+func (s *PostService) Delete(userID, postID int64) error {
+	post, err := s.postRepo.FindByID(postID)
+	if err != nil {
+		return err
+	}
+	if post == nil {
+		return ErrPostNotFound
+	}
+	if post.UserID != userID {
+		return ErrPermissionDenied
+	}
+	err = s.postRepo.SoftDelete(postID, userID)
+	if err == nil {
+		publishIndexAction("delete", postID)
+		s.feedSvc.InvalidateCache()
+	}
+	return err
+}
+
+func (s *PostService) GetByID(postID int64, currentUserID int64) (*model.Post, error) {
+	post, err := s.postRepo.FindByID(postID)
+	if err != nil {
+		return nil, err
+	}
+	if post == nil {
+		return nil, ErrPostNotFound
+	}
+	if post.IsDeleted == 1 {
+		return nil, ErrPostNotFound
+	}
+
+	// Hide pending/rejected posts from non-owner non-admin users
+	if post.Status != model.StatusApproved && post.UserID != currentUserID {
+		return nil, ErrPostNotFound
+	}
+
+	if currentUserID > 0 {
+		post.IsLiked = s.likeRepo.IsLiked(currentUserID, postID)
+		post.IsFavorited = s.favoriteRepo.IsFavorited(context.Background(), currentUserID, postID)
+	}
+	return post, nil
+}
+
+func validatePostInput(content string, images []string) (string, []string, error) {
+	content, err := validatePostContent(content)
+	if err != nil {
+		return "", nil, err
+	}
+	if len(images) == 0 || len(images) > MaxPostImages {
+		return "", nil, ErrPostInvalid
+	}
+
+	normalized := make([]string, len(images))
+	seen := make(map[string]struct{}, len(images))
+	for i, raw := range images {
+		imageURL := strings.TrimSpace(raw)
+		if !validUploadedImageURL(imageURL) {
+			return "", nil, ErrPostInvalid
+		}
+		if _, exists := seen[imageURL]; exists {
+			return "", nil, ErrPostInvalid
+		}
+		seen[imageURL] = struct{}{}
+		normalized[i] = imageURL
+	}
+	return content, normalized, nil
+}
+
+func validatePostContent(content string) (string, error) {
+	content = strings.TrimSpace(content)
+	if len([]rune(content)) > MaxPostContentLength {
+		return "", ErrPostInvalid
+	}
+	return content, nil
+}
+
+func validUploadedImageURL(raw string) bool {
+	if raw == "" || strings.ContainsAny(raw, "\\\x00") {
+		return false
+	}
+	parsed, err := url.Parse(raw)
+	if err != nil || parsed.IsAbs() || parsed.Host != "" || parsed.RawQuery != "" || parsed.Fragment != "" {
+		return false
+	}
+	path := parsed.EscapedPath()
+	return strings.HasPrefix(path, "/api/v1/images/posts/") &&
+		!strings.Contains(path, "..") && len(path) > len("/api/v1/images/posts/")
+}
+
+// RecordView is deliberately separate from GET so that rendering and API reads
+// remain side-effect free. Repeated views are still counted by the existing
+// product policy, except for an author's own post.
+func (s *PostService) RecordView(postID, currentUserID int64) error {
+	post, err := s.GetByID(postID, currentUserID)
+	if err != nil {
+		return err
+	}
+	if post.UserID != currentUserID {
+		s.postRepo.IncrementView(postID)
+	}
+	return nil
+}
