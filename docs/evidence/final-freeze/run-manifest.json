@@ -1,30 +1,30 @@
 {
-  "run_id": "20260730T143316Z",
-  "started_at": "2026-07-30T14:33:16.691Z",
-  "finished_at": "2026-07-30T14:38:07.711Z",
-  "duration_ms": 291020.6,
+  "run_id": "20260808T151704Z",
+  "started_at": "2026-08-08T15:17:04.453Z",
+  "finished_at": "2026-08-08T15:31:46.892Z",
+  "duration_ms": 882439.1,
   "scope": "native local stack; real configured provider; no Compose fault injection",
-  "raw_dir": ".local/shareo/final-freeze/20260730T143316Z",
+  "raw_dir": ".local/shareo/final-freeze/20260808T151704Z",
   "evidence_dir": "docs/evidence/final-freeze",
   "git": {
-    "sha": "efdb049db89964128b7051ab2c7f2b4a6a7be4da",
+    "sha": "833b58a4ffab7e5906d786b41ad5b5ee835b89ac",
     "branch": "main",
     "dirty": true
   },
   "dataset_hashes": {
     "image_search_current": {
       "path": ".local/shareo/eval/image_search_local_v1.jsonl",
-      "sha256": "ee2b68c49eeeb51ee45373c9cf517a54883f2e0b94480ef7a8b810b433d51017",
-      "record_count": 34
+      "sha256": "df31bacf91885e2f0034241424f01fd453f4bf248200d67844176812432350f8",
+      "record_count": 38
     },
     "rag_current": {
       "path": ".local/shareo/eval/rag_qa_current_v1.jsonl",
-      "sha256": "522b7bbfa796ef35a25725010dacab946949de1d7402dabd84a8fe4589941ce7",
+      "sha256": "039a7f4e0f50624e4705f41fc7d0672055c6e787e00d28fa4578a00945de50c4",
       "record_count": 30
     },
     "agent_current": {
       "path": ".local/shareo/eval/agent_tasks_current_v1.jsonl",
-      "sha256": "434ebb53ff95629aaecc9e2c9d5d279a0e6f7bedb7ea22a299a62ebc6774e1aa",
+      "sha256": "b8c14fac188eb4d0c48c6c3ab6f404328a3704f7a672561111e979b504ab1e39",
       "record_count": 36
     },
     "post_search_current": {
@@ -37,9 +37,9 @@
     {
       "scenario_id": "publish-approve-index-search-visibility",
       "status": "pass",
-      "started_at": "2026-07-30T14:33:47.299Z",
-      "finished_at": "2026-07-30T14:34:18.456Z",
-      "duration_ms": 31157.0,
+      "started_at": "2026-08-08T15:17:27.778Z",
+      "finished_at": "2026-08-08T15:17:52.461Z",
+      "duration_ms": 24682.6,
       "relevant_record_ids": [],
       "citation_count": 0,
       "tool_sequence": [],
@@ -55,14 +55,14 @@
     {
       "scenario_id": "private-chat-bot-rag-citation-websocket",
       "status": "pass",
-      "started_at": "2026-07-30T14:33:53.942Z",
-      "finished_at": "2026-07-30T14:35:29.215Z",
-      "duration_ms": 92016.1,
+      "started_at": "2026-08-08T15:17:35.049Z",
+      "finished_at": "2026-08-08T15:20:08.892Z",
+      "duration_ms": 150151.7,
       "relevant_record_ids": [],
       "citation_count": {
         "status": "unavailable",
         "reason": "RAG 汇总只提供平均引用数",
-        "average_sources_per_answer": 1.2
+        "average_sources_per_answer": 1.53
       },
       "tool_sequence": [],
       "retry_count": {
@@ -70,7 +70,7 @@
         "reason": "RAG 汇总没有逐题 Provider 重试字段"
       },
       "failure_category": null,
-      "final_assertion": "RAG 请求执行完成；来源命中率 0.8333、引用可访问率 1.0、失败请求 0。",
+      "final_assertion": "RAG 请求执行完成；来源命中率 0.9333、完整来源覆盖率 0.9333、引用可访问率 1.0、失败请求 0。",
       "source_commands": [
         "api",
         "eval-ai-real-provider"
@@ -79,9 +79,9 @@
     {
       "scenario_id": "explicit-agent-tools-trace-citation",
       "status": "pass",
-      "started_at": "2026-07-30T14:33:53.942Z",
-      "finished_at": "2026-07-30T14:38:07.651Z",
-      "duration_ms": 182950.4,
+      "started_at": "2026-08-08T15:17:35.049Z",
+      "finished_at": "2026-08-08T15:24:26.183Z",
+      "duration_ms": 274701.5,
       "relevant_record_ids": [
         "02d20bbd7e39",
         "031b4af5197e",
@@ -103,38 +103,35 @@
         "6208ef0f7750",
         "71ee45a3c0db",
         "73475cb40a56",
-        "7688b6ef5255",
         "76a50887d8f1",
         "7a61b53701be",
         "811786ad1ae7",
         "81b8a03f97e8",
         "86e501496586",
+        "96061e92f58e",
         "98010bd9270f",
         "9f14025af006",
         "a68b412c4282",
         "aea92132c4cb",
         "c6f3ac57944a",
+        "c75cb66ae28d",
         "c837649cce43",
         "d029fa3a95e1",
         "d59eced1ded0",
         "da4ea2a5506f",
         "e29c9c180c62"
       ],
-      "citation_count": 36,
+      "citation_count": 38,
       "tool_sequence": {
-        "keyword_search_posts>read_posts": 4,
-        "keyword_search_posts>semantic_search_posts": 7,
-        "keyword_search_posts": 13,
-        "keyword_search_posts>search_images>semantic_search_posts": 1,
-        "search_images": 4,
-        "read_posts>search_images": 1,
-        "keyword_search_posts>read_posts>search_images": 4,
-        "read_posts>semantic_search_posts": 1,
-        "semantic_search_posts": 1
+        "keyword_search_posts>read_posts>semantic_search_posts": 21,
+        "keyword_search_posts>semantic_search_posts": 5,
+        "read_posts>search_images": 5,
+        "read_posts>search_images>semantic_search_posts": 1,
+        "keyword_search_posts>read_posts": 4
       },
       "retry_count": 0,
       "failure_category": null,
-      "final_assertion": "36 条 Agent 请求均完成；来源命中率 1.0、必需工具选择率 1.0、引用可访问率 1.0；安全门禁通过。",
+      "final_assertion": "36 条 Agent 请求均完成；来源命中率 1.0、完整来源覆盖率 0.9722、额外工具调用 0、引用可访问率 1.0；安全门禁通过。",
       "source_commands": [
         "api",
         "eval-agent-real-provider"
@@ -153,14 +150,15 @@
       "failure_category": "not_run: local-only scope",
       "final_assertion": "Compose 故障注入和恢复本轮未运行；不据此宣称发布级故障验证完成。",
       "source_commands": [
-        "test-degradation"
+        "compose-fault-injection"
       ]
     }
   ],
   "status_counts": {
-    "pass": 13,
+    "pass": 14,
     "fail": 0,
     "blocked": 0,
+    "needs_human_review": 1,
     "not_run": 0
   }
 }

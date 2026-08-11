@@ -1,0 +1,711 @@
+{
+  "generated_at": "2026-08-08T15:54:23+00:00",
+  "git": {
+    "sha": "833b58a4ffab7e5906d786b41ad5b5ee835b89ac",
+    "branch": "main",
+    "dirty": true,
+    "diff_sha256": "50dff0afc03a42b1924ace2089cdf6316b9f755055429fbaca384d27469639e9"
+  },
+  "scope_policy": {
+    "ai_action": "inventory_only",
+    "unknown_files": "requires_human_scope_confirmation",
+    "destructive_cleanup": "not_performed",
+    "commit": "not_performed"
+  },
+  "summary": {
+    "total_entries": 95,
+    "temporary_evidence": 1,
+    "authoritative_evidence": 11,
+    "scope_confirmation_required": 83,
+    "possible_sensitive_files": 12
+  },
+  "entries": [
+    {
+      "path": ".env.example",
+      "status": " M",
+      "classification": "source_or_docs_requires_scope_confirmation",
+      "bytes": 1767
+    },
+    {
+      "path": "Makefile",
+      "status": " M",
+      "classification": "source_or_docs_requires_scope_confirmation",
+      "bytes": 7283
+    },
+    {
+      "path": "README.md",
+      "status": " M",
+      "classification": "source_or_docs_requires_scope_confirmation",
+      "bytes": 7075,
+      "possible_sensitive_fields": []
+    },
+    {
+      "path": "TASK.md",
+      "status": " M",
+      "classification": "source_or_docs_requires_scope_confirmation",
+      "bytes": 2272,
+      "possible_sensitive_fields": []
+    },
+    {
+      "path": "ai-service/app/agent/graph.py",
+      "status": " M",
+      "classification": "source_or_docs_requires_scope_confirmation",
+      "bytes": 20543,
+      "possible_sensitive_fields": []
+    },
+    {
+      "path": "ai-service/app/agent/tools.py",
+      "status": " M",
+      "classification": "source_or_docs_requires_scope_confirmation",
+      "bytes": 14730,
+      "possible_sensitive_fields": []
+    },
+    {
+      "path": "ai-service/app/commands/eval_agent.py",
+      "status": " M",
+      "classification": "source_or_docs_requires_scope_confirmation",
+      "bytes": 42151,
+      "possible_sensitive_fields": [
+        "api_key",
+        "password",
+        "token"
+      ]
+    },
+    {
+      "path": "ai-service/app/commands/eval_ai.py",
+      "status": " M",
+      "classification": "source_or_docs_requires_scope_confirmation",
+      "bytes": 41621,
+      "possible_sensitive_fields": [
+        "password",
+        "token"
+      ]
+    },
+    {
+      "path": "ai-service/app/config.py",
+      "status": " M",
+      "classification": "source_or_docs_requires_scope_confirmation",
+      "bytes": 3476,
+      "possible_sensitive_fields": []
+    },
+    {
+      "path": "ai-service/app/rag/pipeline.py",
+      "status": " M",
+      "classification": "source_or_docs_requires_scope_confirmation",
+      "bytes": 5767,
+      "possible_sensitive_fields": []
+    },
+    {
+      "path": "ai-service/tests/test_agent.py",
+      "status": " M",
+      "classification": "source_or_docs_requires_scope_confirmation",
+      "bytes": 13242,
+      "possible_sensitive_fields": []
+    },
+    {
+      "path": "ai-service/tests/test_eval_agent.py",
+      "status": " M",
+      "classification": "source_or_docs_requires_scope_confirmation",
+      "bytes": 8962,
+      "possible_sensitive_fields": []
+    },
+    {
+      "path": "ai-service/tests/test_eval_ai.py",
+      "status": " M",
+      "classification": "source_or_docs_requires_scope_confirmation",
+      "bytes": 5363,
+      "possible_sensitive_fields": [
+        "password",
+        "token"
+      ]
+    },
+    {
+      "path": "deploy/mysql-init/001_schema.sh",
+      "status": " M",
+      "classification": "source_or_docs_requires_scope_confirmation",
+      "bytes": 482,
+      "possible_sensitive_fields": []
+    },
+    {
+      "path": "docs/REVIEW.md",
+      "status": " M",
+      "classification": "source_or_docs_requires_scope_confirmation",
+      "bytes": 11676,
+      "possible_sensitive_fields": []
+    },
+    {
+      "path": "docs/adr/ADR-002-task-queue.md",
+      "status": " M",
+      "classification": "source_or_docs_requires_scope_confirmation",
+      "bytes": 1864,
+      "possible_sensitive_fields": []
+    },
+    {
+      "path": "docs/adr/ADR-003-vector-db.md",
+      "status": " M",
+      "classification": "source_or_docs_requires_scope_confirmation",
+      "bytes": 1549,
+      "possible_sensitive_fields": []
+    },
+    {
+      "path": "docs/adr/ADR-004-inference-strategy.md",
+      "status": " M",
+      "classification": "source_or_docs_requires_scope_confirmation",
+      "bytes": 2238,
+      "possible_sensitive_fields": []
+    },
+    {
+      "path": "docs/adr/ADR-006-lightweight-scope-runtime.md",
+      "status": " M",
+      "classification": "source_or_docs_requires_scope_confirmation",
+      "bytes": 1730,
+      "possible_sensitive_fields": []
+    },
+    {
+      "path": "docs/adr/ADR-007-provider-evaluation.md",
+      "status": " M",
+      "classification": "source_or_docs_requires_scope_confirmation",
+      "bytes": 1931,
+      "possible_sensitive_fields": []
+    },
+    {
+      "path": "docs/adr/ADR-008-readonly-agent.md",
+      "status": " M",
+      "classification": "source_or_docs_requires_scope_confirmation",
+      "bytes": 2693,
+      "possible_sensitive_fields": []
+    },
+    {
+      "path": "docs/adr/ADR-009-private-favorites-navigation.md",
+      "status": " M",
+      "classification": "source_or_docs_requires_scope_confirmation",
+      "bytes": 1255,
+      "possible_sensitive_fields": []
+    },
+    {
+      "path": "docs/architecture.md",
+      "status": " M",
+      "classification": "source_or_docs_requires_scope_confirmation",
+      "bytes": 6472,
+      "possible_sensitive_fields": []
+    },
+    {
+      "path": "docs/design/agent.md",
+      "status": " M",
+      "classification": "source_or_docs_requires_scope_confirmation",
+      "bytes": 2707,
+      "possible_sensitive_fields": []
+    },
+    {
+      "path": "docs/design/im.md",
+      "status": " M",
+      "classification": "source_or_docs_requires_scope_confirmation",
+      "bytes": 3355,
+      "possible_sensitive_fields": []
+    },
+    {
+      "path": "docs/design/image-search.md",
+      "status": " M",
+      "classification": "source_or_docs_requires_scope_confirmation",
+      "bytes": 2756,
+      "possible_sensitive_fields": []
+    },
+    {
+      "path": "docs/design/rag.md",
+      "status": " M",
+      "classification": "source_or_docs_requires_scope_confirmation",
+      "bytes": 3459,
+      "possible_sensitive_fields": []
+    },
+    {
+      "path": "docs/eval/README.md",
+      "status": " M",
+      "classification": "source_or_docs_requires_scope_confirmation",
+      "bytes": 5076,
+      "possible_sensitive_fields": []
+    },
+    {
+      "path": "docs/eval/experiments.md",
+      "status": " M",
+      "classification": "source_or_docs_requires_scope_confirmation",
+      "bytes": 2587,
+      "possible_sensitive_fields": []
+    },
+    {
+      "path": "docs/evidence/final-freeze/README.md",
+      "status": " M",
+      "classification": "authoritative_evidence",
+      "bytes": 3702,
+      "possible_sensitive_fields": []
+    },
+    {
+      "path": "docs/evidence/final-freeze/command-results.json",
+      "status": " M",
+      "classification": "authoritative_evidence",
+      "bytes": 6731,
+      "possible_sensitive_fields": []
+    },
+    {
+      "path": "docs/evidence/final-freeze/failure-matrix.md",
+      "status": " M",
+      "classification": "authoritative_evidence",
+      "bytes": 1184,
+      "possible_sensitive_fields": []
+    },
+    {
+      "path": "docs/evidence/final-freeze/latency-summary.json",
+      "status": " M",
+      "classification": "authoritative_evidence",
+      "bytes": 5233,
+      "possible_sensitive_fields": []
+    },
+    {
+      "path": "docs/evidence/final-freeze/quality-summary.json",
+      "status": " M",
+      "classification": "authoritative_evidence",
+      "bytes": 126026,
+      "possible_sensitive_fields": []
+    },
+    {
+      "path": "docs/evidence/final-freeze/retained-runs.json",
+      "status": " M",
+      "classification": "authoritative_evidence",
+      "bytes": 7100,
+      "possible_sensitive_fields": []
+    },
+    {
+      "path": "docs/evidence/final-freeze/run-manifest.json",
+      "status": " M",
+      "classification": "authoritative_evidence",
+      "bytes": 5236,
+      "possible_sensitive_fields": []
+    },
+    {
+      "path": "docs/evidence/final-freeze/runtime-snapshot.json",
+      "status": " M",
+      "classification": "authoritative_evidence",
+      "bytes": 8344,
+      "possible_sensitive_fields": []
+    },
+    {
+      "path": "docs/features.md",
+      "status": " M",
+      "classification": "source_or_docs_requires_scope_confirmation",
+      "bytes": 5553,
+      "possible_sensitive_fields": []
+    },
+    {
+      "path": "docs/operations/runbook.md",
+      "status": " M",
+      "classification": "source_or_docs_requires_scope_confirmation",
+      "bytes": 6335,
+      "possible_sensitive_fields": [
+        "token"
+      ]
+    },
+    {
+      "path": "docs/reference/api.md",
+      "status": " M",
+      "classification": "source_or_docs_requires_scope_confirmation",
+      "bytes": 7901,
+      "possible_sensitive_fields": []
+    },
+    {
+      "path": "docs/reference/data-model.md",
+      "status": " M",
+      "classification": "source_or_docs_requires_scope_confirmation",
+      "bytes": 3953,
+      "possible_sensitive_fields": []
+    },
+    {
+      "path": "docs/resume-review.md",
+      "status": " M",
+      "classification": "source_or_docs_requires_scope_confirmation",
+      "bytes": 6494,
+      "possible_sensitive_fields": []
+    },
+    {
+      "path": "internal/handler/admin_handler.go",
+      "status": " M",
+      "classification": "source_or_docs_requires_scope_confirmation",
+      "bytes": 6178,
+      "possible_sensitive_fields": []
+    },
+    {
+      "path": "internal/handler/auth_handler.go",
+      "status": " M",
+      "classification": "source_or_docs_requires_scope_confirmation",
+      "bytes": 8505,
+      "possible_sensitive_fields": [
+        "password"
+      ]
+    },
+    {
+      "path": "internal/handler/feed_handler.go",
+      "status": " M",
+      "classification": "source_or_docs_requires_scope_confirmation",
+      "bytes": 3318,
+      "possible_sensitive_fields": []
+    },
+    {
+      "path": "internal/handler/image_search_handler.go",
+      "status": " M",
+      "classification": "source_or_docs_requires_scope_confirmation",
+      "bytes": 5405,
+      "possible_sensitive_fields": [
+        "token"
+      ]
+    },
+    {
+      "path": "internal/handler/image_search_handler_test.go",
+      "status": " M",
+      "classification": "source_or_docs_requires_scope_confirmation",
+      "bytes": 4751,
+      "possible_sensitive_fields": []
+    },
+    {
+      "path": "internal/handler/notification_handler.go",
+      "status": " M",
+      "classification": "source_or_docs_requires_scope_confirmation",
+      "bytes": 2119,
+      "possible_sensitive_fields": []
+    },
+    {
+      "path": "internal/handler/post_handler.go",
+      "status": " M",
+      "classification": "source_or_docs_requires_scope_confirmation",
+      "bytes": 6792,
+      "possible_sensitive_fields": []
+    },
+    {
+      "path": "internal/handler/social_handler.go",
+      "status": " M",
+      "classification": "source_or_docs_requires_scope_confirmation",
+      "bytes": 6225,
+      "possible_sensitive_fields": []
+    },
+    {
+      "path": "internal/handler/web_page_contract_test.go",
+      "status": " M",
+      "classification": "source_or_docs_requires_scope_confirmation",
+      "bytes": 7872,
+      "possible_sensitive_fields": []
+    },
+    {
+      "path": "internal/model/chat.go",
+      "status": " M",
+      "classification": "source_or_docs_requires_scope_confirmation",
+      "bytes": 5756,
+      "possible_sensitive_fields": []
+    },
+    {
+      "path": "internal/model/comment.go",
+      "status": " M",
+      "classification": "source_or_docs_requires_scope_confirmation",
+      "bytes": 1012,
+      "possible_sensitive_fields": []
+    },
+    {
+      "path": "internal/model/post.go",
+      "status": " M",
+      "classification": "source_or_docs_requires_scope_confirmation",
+      "bytes": 1625,
+      "possible_sensitive_fields": []
+    },
+    {
+      "path": "internal/repository/chat_integration_test.go",
+      "status": " M",
+      "classification": "source_or_docs_requires_scope_confirmation",
+      "bytes": 12579,
+      "possible_sensitive_fields": []
+    },
+    {
+      "path": "internal/repository/chat_repo.go",
+      "status": " M",
+      "classification": "source_or_docs_requires_scope_confirmation",
+      "bytes": 17854,
+      "possible_sensitive_fields": []
+    },
+    {
+      "path": "internal/repository/comment_repo.go",
+      "status": " M",
+      "classification": "source_or_docs_requires_scope_confirmation",
+      "bytes": 7146,
+      "possible_sensitive_fields": []
+    },
+    {
+      "path": "internal/router/router.go",
+      "status": " M",
+      "classification": "source_or_docs_requires_scope_confirmation",
+      "bytes": 7789,
+      "possible_sensitive_fields": [
+        "token"
+      ]
+    },
+    {
+      "path": "internal/service/ai_bridge.go",
+      "status": " M",
+      "classification": "source_or_docs_requires_scope_confirmation",
+      "bytes": 2690,
+      "possible_sensitive_fields": []
+    },
+    {
+      "path": "internal/service/ai_bridge_test.go",
+      "status": " M",
+      "classification": "source_or_docs_requires_scope_confirmation",
+      "bytes": 5733,
+      "possible_sensitive_fields": []
+    },
+    {
+      "path": "internal/service/chat_service.go",
+      "status": " M",
+      "classification": "source_or_docs_requires_scope_confirmation",
+      "bytes": 22463,
+      "possible_sensitive_fields": []
+    },
+    {
+      "path": "internal/service/feed_service.go",
+      "status": " M",
+      "classification": "source_or_docs_requires_scope_confirmation",
+      "bytes": 5422,
+      "possible_sensitive_fields": []
+    },
+    {
+      "path": "internal/service/post_service.go",
+      "status": " M",
+      "classification": "source_or_docs_requires_scope_confirmation",
+      "bytes": 4895,
+      "possible_sensitive_fields": []
+    },
+    {
+      "path": "internal/service/social_service.go",
+      "status": " M",
+      "classification": "source_or_docs_requires_scope_confirmation",
+      "bytes": 6207,
+      "possible_sensitive_fields": []
+    },
+    {
+      "path": "scripts/check_docs.py",
+      "status": " M",
+      "classification": "source_or_docs_requires_scope_confirmation",
+      "bytes": 4045,
+      "possible_sensitive_fields": []
+    },
+    {
+      "path": "scripts/collect_final_evidence.py",
+      "status": " M",
+      "classification": "source_or_docs_requires_scope_confirmation",
+      "bytes": 47753,
+      "possible_sensitive_fields": [
+        "token"
+      ]
+    },
+    {
+      "path": "scripts/local_runtime.sh",
+      "status": " M",
+      "classification": "source_or_docs_requires_scope_confirmation",
+      "bytes": 19760,
+      "possible_sensitive_fields": [
+        "secret"
+      ]
+    },
+    {
+      "path": "scripts/prepare_current_ai_eval.py",
+      "status": " M",
+      "classification": "source_or_docs_requires_scope_confirmation",
+      "bytes": 12408,
+      "possible_sensitive_fields": []
+    },
+    {
+      "path": "scripts/prepare_local_image_eval.py",
+      "status": " M",
+      "classification": "source_or_docs_requires_scope_confirmation",
+      "bytes": 6049,
+      "possible_sensitive_fields": []
+    },
+    {
+      "path": "scripts/start_local.sh",
+      "status": " M",
+      "classification": "source_or_docs_requires_scope_confirmation",
+      "bytes": 2662,
+      "possible_sensitive_fields": []
+    },
+    {
+      "path": "scripts/test_integration_current.sh",
+      "status": " M",
+      "classification": "source_or_docs_requires_scope_confirmation",
+      "bytes": 4004,
+      "possible_sensitive_fields": [
+        "password"
+      ]
+    },
+    {
+      "path": "web/static/css/style.css",
+      "status": " M",
+      "classification": "source_or_docs_requires_scope_confirmation",
+      "bytes": 84761,
+      "possible_sensitive_fields": []
+    },
+    {
+      "path": "web/templates/chat/chat.html",
+      "status": " M",
+      "classification": "source_or_docs_requires_scope_confirmation",
+      "bytes": 19543,
+      "possible_sensitive_fields": []
+    },
+    {
+      "path": "web/templates/feed/feed.html",
+      "status": " M",
+      "classification": "source_or_docs_requires_scope_confirmation",
+      "bytes": 12786,
+      "possible_sensitive_fields": []
+    },
+    {
+      "path": "web/templates/layout/footer.html",
+      "status": " M",
+      "classification": "source_or_docs_requires_scope_confirmation",
+      "bytes": 3171,
+      "possible_sensitive_fields": []
+    },
+    {
+      "path": "web/templates/layout/header.html",
+      "status": " M",
+      "classification": "source_or_docs_requires_scope_confirmation",
+      "bytes": 3574,
+      "possible_sensitive_fields": []
+    },
+    {
+      "path": "web/templates/post/post_detail.html",
+      "status": " M",
+      "classification": "source_or_docs_requires_scope_confirmation",
+      "bytes": 11511,
+      "possible_sensitive_fields": []
+    },
+    {
+      "path": "web/templates/user/following.html",
+      "status": " M",
+      "classification": "source_or_docs_requires_scope_confirmation",
+      "bytes": 8377,
+      "possible_sensitive_fields": []
+    },
+    {
+      "path": "web/templates/user/settings.html",
+      "status": " M",
+      "classification": "source_or_docs_requires_scope_confirmation",
+      "bytes": 8518,
+      "possible_sensitive_fields": []
+    },
+    {
+      "path": "web/templates/user/user_profile.html",
+      "status": " M",
+      "classification": "source_or_docs_requires_scope_confirmation",
+      "bytes": 8786,
+      "possible_sensitive_fields": []
+    },
+    {
+      "path": "ai-service/app/commands/ai_judge.py",
+      "status": "??",
+      "classification": "source_or_docs_requires_scope_confirmation",
+      "bytes": 18257,
+      "possible_sensitive_fields": [
+        "api_key"
+      ]
+    },
+    {
+      "path": "ai-service/tests/test_ai_judge.py",
+      "status": "??",
+      "classification": "source_or_docs_requires_scope_confirmation",
+      "bytes": 3710,
+      "possible_sensitive_fields": [
+        "api_key"
+      ]
+    },
+    {
+      "path": "ai-service/tests/test_config.py",
+      "status": "??",
+      "classification": "source_or_docs_requires_scope_confirmation",
+      "bytes": 400,
+      "possible_sensitive_fields": []
+    },
+    {
+      "path": "docs/evidence/final-freeze/ai-judge-human-handoff.json",
+      "status": "??",
+      "classification": "authoritative_evidence",
+      "bytes": 14534,
+      "possible_sensitive_fields": []
+    },
+    {
+      "path": "docs/evidence/final-freeze/manual-ui-check.md",
+      "status": "??",
+      "classification": "authoritative_evidence",
+      "bytes": 2596,
+      "possible_sensitive_fields": []
+    },
+    {
+      "path": "docs/evidence/final-freeze/runs/",
+      "status": "??",
+      "classification": "temporary_evidence"
+    },
+    {
+      "path": "docs/evidence/final-freeze/worktree-manifest.json",
+      "status": "??",
+      "classification": "authoritative_evidence",
+      "bytes": 20020,
+      "possible_sensitive_fields": []
+    },
+    {
+      "path": "internal/model/comment_like.go",
+      "status": "??",
+      "classification": "source_or_docs_requires_scope_confirmation",
+      "bytes": 572,
+      "possible_sensitive_fields": []
+    },
+    {
+      "path": "internal/repository/comment_integration_test.go",
+      "status": "??",
+      "classification": "source_or_docs_requires_scope_confirmation",
+      "bytes": 2120,
+      "possible_sensitive_fields": []
+    },
+    {
+      "path": "internal/repository/comment_like_repo.go",
+      "status": "??",
+      "classification": "source_or_docs_requires_scope_confirmation",
+      "bytes": 2070,
+      "possible_sensitive_fields": []
+    },
+    {
+      "path": "internal/service/post_service_validation_test.go",
+      "status": "??",
+      "classification": "source_or_docs_requires_scope_confirmation",
+      "bytes": 1489,
+      "possible_sensitive_fields": []
+    },
+    {
+      "path": "migrations/003_comment_likes.sql",
+      "status": "??",
+      "classification": "source_or_docs_requires_scope_confirmation",
+      "bytes": 1724,
+      "possible_sensitive_fields": []
+    },
+    {
+      "path": "migrations/004_bot_task_outbox.sql",
+      "status": "??",
+      "classification": "source_or_docs_requires_scope_confirmation",
+      "bytes": 1083,
+      "possible_sensitive_fields": []
+    },
+    {
+      "path": "scripts/collect_worktree_manifest.py",
+      "status": "??",
+      "classification": "source_or_docs_requires_scope_confirmation",
+      "bytes": 4921,
+      "possible_sensitive_fields": []
+    },
+    {
+      "path": "web/static/js/",
+      "status": "??",
+      "classification": "source_or_docs_requires_scope_confirmation"
+    }
+  ]
+}

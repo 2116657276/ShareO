@@ -17,6 +17,8 @@
 | `image-search-local-eval` | `pass` | 0 |  |
 | `eval-ai-real-provider` | `pass` | 0 |  |
 | `eval-agent-real-provider` | `pass` | 0 |  |
+| `ai-judge` | `needs_human_review` | 2 |  |
+| `worktree-manifest` | `pass` | 0 |  |
 | `compose-image-e2e` | `not_run` | — | local-only scope；Compose 图片链路未纳入本轮 |
 | `compose-bot-e2e` | `not_run` | — | local-only scope；Compose Bot 链路未纳入本轮 |
 | `compose-agent-e2e` | `not_run` | — | local-only scope；Compose Agent 链路未纳入本轮 |

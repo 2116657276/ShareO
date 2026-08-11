@@ -53,6 +53,9 @@ func TestImageSearchDeduplicatesPostsAndHidesObjectKey(t *testing.T) {
 	defer ai.Close()
 
 	h := NewImageSearchHandler(&fakeImageSearchPosts{posts: []model.Post{{ID: 1}, {ID: 2}}})
+	if h.scoreThreshold != defaultImageSearchScoreThreshold {
+		t.Fatalf("score threshold=%v, want %v", h.scoreThreshold, defaultImageSearchScoreThreshold)
+	}
 	h.aiBaseURL = ai.URL
 	h.client = ai.Client()
 	router := gin.New()
@@ -83,6 +86,40 @@ func TestImageSearchDeduplicatesPostsAndHidesObjectKey(t *testing.T) {
 	}
 	if bytes.Contains(recorder.Body.Bytes(), []byte("object_key")) {
 		t.Fatal("public response must not expose object_key")
+	}
+}
+
+func TestImageSearchFiltersLowConfidenceResults(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	ai := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"results":[{"image_id":11,"post_id":1,"object_key":"posts/medium/a.jpg","score":0.42},{"image_id":21,"post_id":2,"object_key":"posts/medium/b.jpg","score":0.38}]}`))
+	}))
+	defer ai.Close()
+
+	h := NewImageSearchHandler(&fakeImageSearchPosts{posts: []model.Post{{ID: 1}, {ID: 2}}})
+	h.aiBaseURL = ai.URL
+	h.client = ai.Client()
+	router := gin.New()
+	router.GET("/api/v1/search/images", h.Search)
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/api/v1/search/images?q=月球", nil))
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", recorder.Code, recorder.Body.String())
+	}
+	var response struct {
+		Data struct {
+			Results []struct {
+				PostID int64 `json:"post_id"`
+			} `json:"results"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
+		t.Fatal(err)
+	}
+	if len(response.Data.Results) != 1 || response.Data.Results[0].PostID != 1 {
+		t.Fatalf("low-confidence result was not filtered: %+v", response.Data.Results)
 	}
 }
 

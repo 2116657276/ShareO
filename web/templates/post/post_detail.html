@@ -49,11 +49,15 @@
 
         <section id="comments" class="mt-4">
             <h2 class="h5">评论</h2>
+            {{ if .CommentError }}
+            <div class="state-panel is-error py-3 mb-3" role="alert"><i class="bi bi-exclamation-circle" aria-hidden="true"></i><p class="mb-0">{{ .CommentError }}</p></div>
+            {{ end }}
             <form method="post" action="/post/{{ $post.ID }}/comment" class="d-flex gap-2 mb-3">
                 <label class="visually-hidden" for="comment-content">评论内容</label>
                 <input id="comment-content" name="content" class="form-control" maxlength="500" required placeholder="写下你的评论…">
                 <button type="submit" class="btn btn-primary">发送</button>
             </form>
+            <div class="state-panel is-error py-3 mb-3" x-show="commentActionError" x-cloak role="alert"><i class="bi bi-exclamation-circle" aria-hidden="true"></i><p class="mb-0" x-text="commentActionError"></p></div>
             <div class="loading-block" x-show="commentsLoading" x-cloak role="status"><span class="spinner-border" aria-label="评论加载中"></span></div>
             <div class="state-panel is-error py-4" x-show="commentsError" x-cloak role="alert"><i class="bi bi-cloud-slash" aria-hidden="true"></i><p class="mb-2" x-text="commentsError"></p><button type="button" class="btn btn-sm btn-outline-secondary" @click="loadComments()">重新加载</button></div>
             <template x-if="!commentsLoading && !commentsError && comments.length === 0"><div class="empty-block py-4"><i class="bi bi-chat-square-text" aria-hidden="true"></i><p class="mb-0">还没有评论</p></div></template>
@@ -64,6 +68,31 @@
                         <strong x-text="comment.user?.username || '用户'"></strong>
                     </a>
                     <span class="comment-content" x-text="comment.content"></span>
+                    {{ if .user_id }}
+                    <button type="button" class="comment-like-btn" :class="{ liked: comment.is_liked }" @click="toggleCommentLike(comment)" :disabled="comment.likeBusy" :aria-pressed="comment.is_liked" :aria-label="comment.is_liked ? '取消评论点赞' : '点赞评论'">
+                        <i class="bi" :class="comment.is_liked ? 'bi-heart-fill' : 'bi-heart'"></i>
+                        <span x-text="comment.like_count || 0"></span>
+                    </button>
+                    {{ else }}
+                    <span class="comment-like-count"><i class="bi bi-heart"></i> <span x-text="comment.like_count || 0"></span></span>
+                    {{ end }}
+                    <template x-for="reply in (comment.children || [])" :key="reply.id">
+                        <div class="comment-item comment-reply">
+                            <a class="comment-author-link" :href="reply.user?.id ? '/user/' + reply.user.id : null">
+                                <img class="comment-avatar" :src="reply.user?.avatar_url || '/static/img/default-avatar.svg'" alt="" onerror="this.src='/static/img/default-avatar.svg'">
+                                <strong x-text="reply.user?.username || '用户'"></strong>
+                            </a>
+                            <span class="comment-content" x-text="reply.content"></span>
+                            {{ if .user_id }}
+                            <button type="button" class="comment-like-btn" :class="{ liked: reply.is_liked }" @click="toggleCommentLike(reply)" :disabled="reply.likeBusy" :aria-pressed="reply.is_liked" :aria-label="reply.is_liked ? '取消评论点赞' : '点赞评论'">
+                                <i class="bi" :class="reply.is_liked ? 'bi-heart-fill' : 'bi-heart'"></i>
+                                <span x-text="reply.like_count || 0"></span>
+                            </button>
+                            {{ else }}
+                            <span class="comment-like-count"><i class="bi bi-heart"></i> <span x-text="reply.like_count || 0"></span></span>
+                            {{ end }}
+                        </div>
+                    </template>
                 </div>
             </template>
         </section>
@@ -73,7 +102,7 @@
 <script>
 function postDetail(postId, initialLiked, initialCount) {
     return {
-        liked: Boolean(initialLiked), likeCount: initialCount, busy: false, comments: [], commentsLoading: true, commentsError: '',
+        liked: Boolean(initialLiked), likeCount: initialCount, busy: false, comments: [], commentsLoading: true, commentsError: '', commentActionError: '',
         favorited: {{ if $post.IsFavorited }}true{{ else }}false{{ end }}, favoriteBusy: false,
         async init() {
             fetch(`/api/v1/posts/${postId}/view`, {method: 'POST'}).catch(() => {});
@@ -85,7 +114,11 @@ function postDetail(postId, initialLiked, initialCount) {
                 const r = await fetch(`/api/v1/posts/${postId}/comments?page=1&page_size=50`);
                 const d = await r.json();
                 if (!r.ok || d.code !== 0) throw new Error(d.message || '评论加载失败');
-                this.comments = d.data?.list || [];
+                this.comments = (d.data?.list || []).map(comment => ({
+                    ...comment,
+                    likeBusy: false,
+                    children: (comment.children || []).map(reply => ({...reply, likeBusy: false}))
+                }));
             } catch (e) { this.commentsError = e.message || '评论服务暂时不可用'; }
             finally { this.commentsLoading = false; }
         },
@@ -115,6 +148,22 @@ function postDetail(postId, initialLiked, initialCount) {
                 this.favorited = previous;
             } finally {
                 this.favoriteBusy = false;
+            }
+        },
+        async toggleCommentLike(comment) {
+            if (!comment || comment.likeBusy) return;
+            comment.likeBusy = true;
+            this.commentActionError = '';
+            try {
+                const r = await fetch(`/api/v1/comments/${comment.id}/like`, {method: 'POST'});
+                const d = await r.json();
+                if (!r.ok || d.code !== 0) throw new Error(d.message || '评论点赞操作失败');
+                comment.is_liked = Boolean(d.data?.liked);
+                comment.like_count = Number(d.data?.like_count) || 0;
+            } catch (error) {
+                this.commentActionError = error.message || '评论点赞操作失败，请稍后重试';
+            } finally {
+                comment.likeBusy = false;
             }
         },
         async startDM(userId) {

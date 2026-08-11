@@ -7,7 +7,8 @@ dependencies = [
     "uvicorn[standard]>=0.34",
     "pydantic-settings>=2.7",
     "redis>=5.2",
-    "qdrant-client>=1.13",
+    "psycopg[binary,pool]>=3.2",
+    "pgvector>=0.3",
     "httpx>=0.28",
     "numpy>=1.26",
     "Pillow>=10.4",
@@ -37,4 +38,4 @@ quote-style = "double"
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
-markers = ["integration: requires live Redis/Qdrant services"]
+markers = ["integration: requires live Redis/PostgreSQL services"]

@@ -51,9 +51,9 @@ func main() {
 	}
 	slog.SetDefault(slog.New(slogHandler))
 
-	// Init MySQL
-	if err := initWithRetry("MySQL", func() error { return repository.InitDB(cfg.Database, cfg.Server.Mode) }); err != nil {
-		log.Fatalf("Failed to init MySQL: %v", err)
+	// Init PostgreSQL
+	if err := initWithRetry("PostgreSQL", func() error { return repository.InitDB(cfg.Database, cfg.Server.Mode) }); err != nil {
+		log.Fatalf("Failed to init PostgreSQL: %v", err)
 	}
 
 	// Init Redis

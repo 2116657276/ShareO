@@ -4,6 +4,8 @@ set -euo pipefail
 
 PROJECT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$PROJECT_DIR"
+# This entry point is always native; the legacy Compose targets are retired.
+export SHAREO_RUNTIME=local
 
 env_file_value() {
     local key="$1" line name value
@@ -46,7 +48,7 @@ echo "Starting native ShareO services..."
 bash scripts/local_runtime.sh app-stop
 bash scripts/local_runtime.sh dev-local
 
-echo "Warming AI models and checking Provider/Qdrant readiness..."
+echo "Warming AI models and checking Provider/pgvector readiness..."
 bash scripts/warm_ai.sh
 
 echo "Running final local readiness checks..."

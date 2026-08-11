@@ -8,9 +8,18 @@
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
     <title>{{ .title }}</title>
+    <script>
+        (() => {
+            try {
+                if (window.localStorage.getItem('shareo.theme') === 'mono') {
+                    document.documentElement.dataset.theme = 'mono';
+                }
+            } catch (_) {}
+        })();
+    </script>
     <link href="/static/vendor/bootstrap/css/bootstrap.min.css?v=5.3.3" rel="stylesheet">
     <link href="/static/vendor/bootstrap-icons/font/bootstrap-icons.css?v=1.11.3" rel="stylesheet">
-    <link href="/static/css/style.css?v=20260729-2" rel="stylesheet">
+    <link href="/static/css/style.css?v=20260801-4" rel="stylesheet">
     <script defer src="/static/vendor/alpinejs/alpine.min.js?v=3.14.1"></script>
 </head>
 <body class="{{ if .user_id }}app-body app-authenticated{{ else }}public-body{{ end }}">

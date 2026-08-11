@@ -9,6 +9,7 @@ type Comment struct {
 	ParentID   *int64    `gorm:"index:idx_comments_parent" json:"parent_id"`
 	ReplyToUID *int64    `json:"reply_to_uid"`
 	Content    string    `gorm:"type:text;not null" json:"content"`
+	LikeCount  int       `gorm:"default:0" json:"like_count"`
 	IsDeleted  int8      `gorm:"default:0" json:"is_deleted"`
 	CreatedAt  time.Time `gorm:"autoCreateTime" json:"created_at"`
 
@@ -16,6 +17,7 @@ type Comment struct {
 	User     *User      `gorm:"foreignKey:UserID" json:"user,omitempty"`
 	ReplyTo  *User      `gorm:"foreignKey:ReplyToUID" json:"reply_to,omitempty"`
 	Children []*Comment `gorm:"foreignKey:ParentID" json:"children,omitempty"`
+	IsLiked  bool       `gorm:"-" json:"is_liked"`
 }
 
 func (Comment) TableName() string { return "comments" }

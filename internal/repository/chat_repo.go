@@ -42,14 +42,11 @@ func (r *ChatRepo) EnsureDM(ctx context.Context, user1ID, user2ID int64) (*model
 	key := dmKey(user1ID, user2ID)
 	conv := model.Conversation{DmKey: key}
 	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		// The duplicate branch returns the existing primary key through MySQL's
-		// LAST_INSERT_ID. Unlike "insert-ignore then select", this waits for the
-		// winning transaction and cannot observe a not-yet-committed gap.
+		// PostgreSQL waits for a concurrent conflicting insert before resolving
+		// DO NOTHING, so the following select cannot observe an uncommitted gap.
 		if err := tx.Clauses(clause.OnConflict{
-			Columns: []clause.Column{{Name: "dm_key"}},
-			DoUpdates: clause.Assignments(map[string]any{
-				"id": gorm.Expr("LAST_INSERT_ID(id)"),
-			}),
+			Columns:   []clause.Column{{Name: "dm_key"}},
+			DoNothing: true,
 		}).Create(&conv).Error; err != nil {
 			return err
 		}
@@ -121,6 +118,13 @@ func (r *ChatRepo) GetMembers(ctx context.Context, convID int64) ([]model.Conver
 }
 
 func (r *ChatRepo) CreateMessage(ctx context.Context, msg *model.Message) error {
+	return r.CreateMessageWithBotTask(ctx, msg, false)
+}
+
+// CreateMessageWithBotTask writes the message and, when requested, its durable
+// bot task in one transaction. Redis publication is deliberately outside this
+// transaction and can therefore be replayed from bot_task_outbox.
+func (r *ChatRepo) CreateMessageWithBotTask(ctx context.Context, msg *model.Message, enqueueBotTask bool) error {
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := tx.Create(msg).Error; err != nil {
 			return err
@@ -138,8 +142,74 @@ func (r *ChatRepo) CreateMessage(ctx context.Context, msg *model.Message) error 
 		if result.RowsAffected == 0 {
 			return gorm.ErrRecordNotFound
 		}
+		if enqueueBotTask {
+			if err := tx.Create(&model.BotTaskOutbox{
+				ConversationID: msg.ConversationID,
+				MessageID:      msg.ID,
+				Status:         "pending",
+				NextAttemptAt:  time.Now(),
+			}).Error; err != nil {
+				return err
+			}
+		}
 		return nil
 	})
+}
+
+func (r *ChatRepo) ListPendingBotTasks(ctx context.Context, limit int) ([]model.BotTaskOutbox, error) {
+	if r.db == nil {
+		return nil, nil
+	}
+	if limit <= 0 || limit > 100 {
+		limit = 20
+	}
+	var tasks []model.BotTaskOutbox
+	err := r.db.WithContext(ctx).
+		Where("status = ? AND next_attempt_at <= ?", "pending", time.Now()).
+		Order("next_attempt_at ASC, id ASC").Limit(limit).Find(&tasks).Error
+	return tasks, err
+}
+
+func (r *ChatRepo) MarkBotTaskPublished(ctx context.Context, taskID int64) error {
+	if r.db == nil {
+		return nil
+	}
+	now := time.Now()
+	return r.db.WithContext(ctx).Model(&model.BotTaskOutbox{}).
+		Where("id = ? AND status = ?", taskID, "pending").Updates(map[string]any{
+		"status":       "published",
+		"published_at": &now,
+	}).Error
+}
+
+func (r *ChatRepo) MarkBotTaskFailed(ctx context.Context, taskID int64, publishErr string) error {
+	if r.db == nil {
+		return nil
+	}
+	var task model.BotTaskOutbox
+	if err := r.db.WithContext(ctx).First(&task, taskID).Error; err != nil {
+		return err
+	}
+	if task.Status != "pending" {
+		return nil
+	}
+	attempts := task.Attempts + 1
+	backoff := time.Second * time.Duration(1<<minInt(attempts, 8))
+	if len(publishErr) > 500 {
+		publishErr = publishErr[:500]
+	}
+	return r.db.WithContext(ctx).Model(&model.BotTaskOutbox{}).Where("id = ? AND status = ?", taskID, "pending").Updates(map[string]any{
+		"attempts":        attempts,
+		"next_attempt_at": time.Now().Add(backoff),
+		"last_error":      publishErr,
+	}).Error
+}
+
+func minInt(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }
 
 func (r *ChatRepo) GetMessageByID(ctx context.Context, messageID int64) (*model.Message, error) {
@@ -164,6 +234,51 @@ func (r *ChatRepo) VisiblePostIDs(ctx context.Context, postIDs []int64) (map[int
 		visible[id] = struct{}{}
 	}
 	return visible, err
+}
+
+// VisiblePostPreviews loads the small amount of approved post data needed by
+// the authenticated chat citation cards. Images and authors are preloaded in
+// batches so a Bot reply never performs one query per citation.
+func (r *ChatRepo) VisiblePostPreviews(ctx context.Context, postIDs []int64) (map[int64]model.CitationPreview, error) {
+	previews := make(map[int64]model.CitationPreview)
+	if len(postIDs) == 0 {
+		return previews, nil
+	}
+	var posts []model.Post
+	err := r.db.WithContext(ctx).
+		Where("id IN ? AND status = ? AND is_deleted = 0", postIDs, model.StatusApproved).
+		Preload("User").
+		Preload("Images", func(db *gorm.DB) *gorm.DB { return db.Order("sort_order ASC, id ASC") }).
+		Find(&posts).Error
+	if err != nil {
+		return nil, err
+	}
+	for _, post := range posts {
+		preview := model.CitationPreview{Content: truncateCitationContent(post.Content)}
+		if post.User != nil {
+			preview.Author = model.CitationAuthor{
+				ID: post.User.ID, Username: post.User.Username, AvatarURL: post.User.AvatarURL,
+			}
+		}
+		if len(post.Images) > 0 {
+			preview.ImageURL = mediumCitationImageURL(post.Images[0].ImageURL)
+		}
+		previews[post.ID] = preview
+	}
+	return previews, nil
+}
+
+func mediumCitationImageURL(value string) string {
+	return strings.NewReplacer("/posts/original/", "/posts/medium/", "/posts/thumb/", "/posts/medium/").Replace(value)
+}
+
+func truncateCitationContent(value string) string {
+	value = strings.Join(strings.Fields(value), " ")
+	runes := []rune(value)
+	if len(runes) > 120 {
+		return string(runes[:120]) + "…"
+	}
+	return value
 }
 
 func validChunkID(postID int64, chunkID string) bool {
@@ -209,7 +324,9 @@ func filterBotCitations(tx *gorm.DB, citations []model.BotCitation) ([]model.Bot
 			continue
 		}
 		seenChunks[citation.ChunkID] = struct{}{}
-		filtered = append(filtered, citation)
+		// Citation previews are response-only and must never be accepted from
+		// the worker into persisted message metadata.
+		filtered = append(filtered, model.BotCitation{PostID: citation.PostID, ChunkID: citation.ChunkID})
 	}
 	return filtered, nil
 }
@@ -411,7 +528,7 @@ func (r *ChatRepo) SearchActiveUsers(ctx context.Context, query string, excludeU
 	var users []model.User
 	pattern := "%" + strings.NewReplacer("\\", "\\\\", "%", "\\%", "_", "\\_").Replace(query) + "%"
 	err := r.db.WithContext(ctx).Select("id", "username", "avatar_url", "is_bot").
-		Where("status = ? AND id <> ? AND username LIKE ? ESCAPE '\\\\'", model.UserStatusActive, excludeUserID, pattern).
+		Where("status = ? AND id <> ? AND username LIKE ? ESCAPE '\\'", model.UserStatusActive, excludeUserID, pattern).
 		Order("username ASC").Limit(limit).Find(&users).Error
 	return users, err
 }

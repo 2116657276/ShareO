@@ -2,7 +2,7 @@
 
 - 日期：2026-07-26
 - 状态：已接受并实现
-- 取代：ADR-005 仅针对已实现 RAG 快速路径；ADR-006 关于“最终范围不包含 Agent”的条款由本 ADR 的受限例外部分取代
+- 取代：ADR-005 仅针对已实现 RAG 快速路径；ADR-006 关于“阶段范围不包含 Agent”的条款由本 ADR 的受限例外部分取代
 
 ## 背景
 
@@ -14,13 +14,13 @@
 - Python 使用 LangGraph `StateGraph` 编排有限状态图，保留自定义节点、预算和错误语义，不使用黑盒通用 Agent 运行时。
 - 模型使用 OpenAI-compatible function calling；服务端仍执行工具名、JSON Schema、长度、数量、超时和可见性校验。
 - 只提供 `semantic_search_posts`、`keyword_search_posts`、`read_posts`、`search_images` 四个只读工具；不提供写工具、外部工具、长期记忆、多 Agent 或独立页面。
-- Go 仍是 MySQL 唯一业务写者，Python 仍是 Qdrant 唯一写者，MinIO 凭证仍只在 Go 侧；Agent 只能通过内部 Token 接口读取已审核数据。
+- Go 仍是 PostgreSQL `public` 唯一业务写者，Python 仍是 PostgreSQL `ai` schema 的 pgvector 唯一写者，MinIO 凭证仍只在 Go 侧；Agent 只能通过内部 Token 接口读取已审核数据。
 - 最终 Bot 消息持久化脱敏 `agent_trace`，只展示完成后的步骤卡片，不保存思维链或完整工具上下文；不启用 LangGraph checkpoint。
 
 ## 预算与门禁
 
-每次运行最多 4 个决策轮次、6 次工具调用、每轮最多 2 个并行调用、12,000 字符观察文本和 45 秒总时长。机器质量门禁为来源命中率 ≥ 0.80、必需工具选择率 ≥ 0.85、引用可访问率 100%、虚假引用/越权/预算越界/提示词注入成功均为 0。当前版本以 36 条 Agent 机器评测和当前评测规范为准；本次没有人工评分，不把机器报告写成人工结论。
+每次运行最多 4 个决策轮次、6 次工具调用、每轮最多 2 个并行调用、12,000 字符观察文本和 45 秒总时长。机器质量门禁为来源命中率 ≥ 0.80、完整来源覆盖率 ≥ 0.80、引用 precision ≥ 0.80、必需工具选择率 ≥ 0.85、引用可访问率 100%、额外/禁止工具为 0、虚假引用/预算越界/提示词注入拒答失败均为 0。工具面按问题意图收窄：明确图片问题才暴露搜图，多来源比较优先关键词检索后读取。当前报告版本以 36 条 Agent v1 机器评测和两轮 AI judge 为准；AI judge 未达到最低分或无法可靠判断的答案进入人工复核，不把机器或 AI 评分写成人工结论。
 
 ## 后果
 
-项目可以真实展示 RAG 与 Agent 的差异：RAG 负责低延迟固定路径，Agent 负责可审计的多步只读研究。代价是新增 provider tool-call 解析、内部批量读取接口、工具安全测试、LangGraph 依赖和 Agent 评测集；这些成本通过不引入写工具、持久 checkpoint 和独立页面控制在可演示范围内。
+项目可以真实展示 RAG 与 Agent 的差异：RAG 负责低延迟固定路径，Agent 负责可审计的多步只读研究。代价是新增 Provider tool-call 解析、内部批量读取接口、工具安全测试、LangGraph 依赖和 Agent 评测集；这些成本通过不引入写工具、持久 checkpoint 和独立页面控制在可演示范围内。

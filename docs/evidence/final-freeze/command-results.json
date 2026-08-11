@@ -1,5 +1,5 @@
 {
-  "run_id": "20260730T143316Z",
+  "run_id": "20260808T151704Z",
   "results": [
     {
       "label": "local-doctor",
@@ -9,9 +9,9 @@
       ],
       "status": "pass",
       "exit_code": 0,
-      "started_at": "2026-07-30T14:33:16.691Z",
-      "finished_at": "2026-07-30T14:33:22.313Z",
-      "duration_ms": 5622.5,
+      "started_at": "2026-08-08T15:17:04.453Z",
+      "finished_at": "2026-08-08T15:17:07.437Z",
+      "duration_ms": 2983.4,
       "raw_log": "commands/01-local-doctor.log"
     },
     {
@@ -22,9 +22,9 @@
       ],
       "status": "pass",
       "exit_code": 0,
-      "started_at": "2026-07-30T14:33:22.313Z",
-      "finished_at": "2026-07-30T14:33:36.816Z",
-      "duration_ms": 14502.5,
+      "started_at": "2026-08-08T15:17:07.437Z",
+      "finished_at": "2026-08-08T15:17:12.790Z",
+      "duration_ms": 5352.8,
       "raw_log": "commands/02-up.log"
     },
     {
@@ -35,9 +35,9 @@
       ],
       "status": "pass",
       "exit_code": 0,
-      "started_at": "2026-07-30T14:33:36.816Z",
-      "finished_at": "2026-07-30T14:33:38.462Z",
-      "duration_ms": 1646.2,
+      "started_at": "2026-08-08T15:17:12.790Z",
+      "finished_at": "2026-08-08T15:17:15.463Z",
+      "duration_ms": 2673.3,
       "raw_log": "commands/03-warm-ai.log"
     },
     {
@@ -48,9 +48,9 @@
       ],
       "status": "pass",
       "exit_code": 0,
-      "started_at": "2026-07-30T14:33:38.462Z",
-      "finished_at": "2026-07-30T14:33:38.505Z",
-      "duration_ms": 43.0,
+      "started_at": "2026-08-08T15:17:15.464Z",
+      "finished_at": "2026-08-08T15:17:15.516Z",
+      "duration_ms": 52.4,
       "raw_log": "commands/04-prepare-current-ai-eval.log"
     },
     {
@@ -61,9 +61,9 @@
       ],
       "status": "pass",
       "exit_code": 0,
-      "started_at": "2026-07-30T14:33:38.645Z",
-      "finished_at": "2026-07-30T14:33:46.377Z",
-      "duration_ms": 7731.4,
+      "started_at": "2026-08-08T15:17:15.716Z",
+      "finished_at": "2026-08-08T15:17:25.748Z",
+      "duration_ms": 10031.9,
       "raw_log": "commands/05-check.log"
     },
     {
@@ -76,9 +76,9 @@
       ],
       "status": "pass",
       "exit_code": 0,
-      "started_at": "2026-07-30T14:33:46.377Z",
-      "finished_at": "2026-07-30T14:33:47.299Z",
-      "duration_ms": 921.6,
+      "started_at": "2026-08-08T15:17:25.748Z",
+      "finished_at": "2026-08-08T15:17:27.778Z",
+      "duration_ms": 2029.7,
       "raw_log": "commands/06-go-race.log"
     },
     {
@@ -89,9 +89,9 @@
       ],
       "status": "pass",
       "exit_code": 0,
-      "started_at": "2026-07-30T14:33:47.299Z",
-      "finished_at": "2026-07-30T14:33:53.829Z",
-      "duration_ms": 6530.1,
+      "started_at": "2026-08-08T15:17:27.778Z",
+      "finished_at": "2026-08-08T15:17:34.929Z",
+      "duration_ms": 7151.0,
       "raw_log": "commands/07-integration.log"
     },
     {
@@ -102,9 +102,9 @@
       ],
       "status": "pass",
       "exit_code": 0,
-      "started_at": "2026-07-30T14:33:53.829Z",
-      "finished_at": "2026-07-30T14:33:53.941Z",
-      "duration_ms": 112.4,
+      "started_at": "2026-08-08T15:17:34.929Z",
+      "finished_at": "2026-08-08T15:17:35.049Z",
+      "duration_ms": 119.9,
       "raw_log": "commands/08-local-stack.log"
     },
     {
@@ -115,9 +115,9 @@
       ],
       "status": "pass",
       "exit_code": 0,
-      "started_at": "2026-07-30T14:33:53.942Z",
-      "finished_at": "2026-07-30T14:34:18.456Z",
-      "duration_ms": 24514.5,
+      "started_at": "2026-08-08T15:17:35.049Z",
+      "finished_at": "2026-08-08T15:17:52.461Z",
+      "duration_ms": 17411.7,
       "raw_log": "commands/09-api.log"
     },
     {
@@ -128,13 +128,13 @@
       ],
       "status": "pass",
       "exit_code": 0,
-      "started_at": "2026-07-30T14:34:18.456Z",
-      "finished_at": "2026-07-30T14:34:19.567Z",
-      "duration_ms": 1110.9,
+      "started_at": "2026-08-08T15:17:52.461Z",
+      "finished_at": "2026-08-08T15:17:53.670Z",
+      "duration_ms": 1208.9,
       "raw_log": "commands/10-post-search-eval.log",
       "safe_env_overrides": {
         "DATASET": ".local/shareo/eval/post_search_v1.jsonl",
-        "OUTPUT": "final-freeze/20260730T143316Z/post-search.json"
+        "OUTPUT": "final-freeze/20260808T151704Z/post-search.json"
       }
     },
     {
@@ -145,13 +145,13 @@
       ],
       "status": "pass",
       "exit_code": 0,
-      "started_at": "2026-07-30T14:34:19.567Z",
-      "finished_at": "2026-07-30T14:34:21.713Z",
-      "duration_ms": 2145.6,
+      "started_at": "2026-08-08T15:17:53.671Z",
+      "finished_at": "2026-08-08T15:17:56.152Z",
+      "duration_ms": 2481.6,
       "raw_log": "commands/11-image-search-local-eval.log",
       "safe_env_overrides": {
         "DATASET": ".local/shareo/eval/image_search_local_v1.jsonl",
-        "OUTPUT": "final-freeze/20260730T143316Z/image-search-local.json"
+        "OUTPUT": "final-freeze/20260808T151704Z/image-search-local.json"
       }
     },
     {
@@ -163,13 +163,13 @@
       ],
       "status": "pass",
       "exit_code": 0,
-      "started_at": "2026-07-30T14:34:21.713Z",
-      "finished_at": "2026-07-30T14:35:29.215Z",
-      "duration_ms": 67501.6,
+      "started_at": "2026-08-08T15:17:56.153Z",
+      "finished_at": "2026-08-08T15:20:08.892Z",
+      "duration_ms": 132740.0,
       "raw_log": "commands/12-eval-ai-real-provider.log",
       "safe_env_overrides": {
         "MACHINE_ONLY": "1",
-        "OUTPUT": "final-freeze/20260730T143316Z/rag-image.json",
+        "OUTPUT": "final-freeze/20260808T151704Z/rag-image.json",
         "IMAGE_DATASET": ".local/shareo/eval/image_search_local_v1.jsonl",
         "RAG_DATASET": ".local/shareo/eval/rag_qa_current_v1.jsonl"
       }
@@ -183,14 +183,63 @@
       ],
       "status": "pass",
       "exit_code": 0,
-      "started_at": "2026-07-30T14:35:29.215Z",
-      "finished_at": "2026-07-30T14:38:07.651Z",
-      "duration_ms": 158435.9,
+      "started_at": "2026-08-08T15:20:08.893Z",
+      "finished_at": "2026-08-08T15:24:26.183Z",
+      "duration_ms": 257289.8,
       "raw_log": "commands/13-eval-agent-real-provider.log",
       "safe_env_overrides": {
         "MACHINE_ONLY": "1",
-        "OUTPUT": "final-freeze/20260730T143316Z/agent.json",
+        "OUTPUT": "final-freeze/20260808T151704Z/agent.json",
         "AGENT_DATASET": ".local/shareo/eval/agent_tasks_current_v1.jsonl"
+      }
+    },
+    {
+      "label": "ai-judge",
+      "command": [
+        "make",
+        "eval-ai-judge"
+      ],
+      "status": "needs_human_review",
+      "exit_code": 2,
+      "started_at": "2026-08-08T15:24:26.183Z",
+      "finished_at": "2026-08-08T15:31:46.562Z",
+      "duration_ms": 440378.7,
+      "raw_log": "commands/14-ai-judge.log",
+      "review_summary": {
+        "quality_gate_passed": false,
+        "rag": {
+          "status": "needs_human_review",
+          "average": 4.1667,
+          "minimum": 1,
+          "human_fallback_count": 8
+        },
+        "agent": {
+          "status": "needs_human_review",
+          "average": 4.8056,
+          "minimum": 1,
+          "human_fallback_count": 2
+        }
+      },
+      "safe_env_overrides": {
+        "RAG_REPORT": "final-freeze/20260808T151704Z/rag-image.json",
+        "AGENT_REPORT": "final-freeze/20260808T151704Z/agent.json",
+        "OUTPUT": "final-freeze/20260808T151704Z/quality-judgement.json"
+      }
+    },
+    {
+      "label": "worktree-manifest",
+      "command": [
+        "make",
+        "worktree-manifest"
+      ],
+      "status": "pass",
+      "exit_code": 0,
+      "started_at": "2026-08-08T15:31:46.564Z",
+      "finished_at": "2026-08-08T15:31:46.815Z",
+      "duration_ms": 251.1,
+      "raw_log": "commands/15-worktree-manifest.log",
+      "safe_env_overrides": {
+        "OUTPUT": "final-freeze/20260808T151704Z/worktree-manifest.json"
       }
     }
   ]

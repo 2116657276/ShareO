@@ -93,6 +93,10 @@ QUERY_SPECS = [
     ("no-match-02", "地铁站里驶来的列车", "no-match", {}),
     ("no-match-03", "厨房里正在炒菜的厨师", "no-match", {}),
     ("no-match-04", "雪山上滑雪的人", "no-match", {}),
+    ("no-match-05", "火车站月台驶入的列车", "no-match", {}),
+    ("no-match-06", "水族馆玻璃后的鲨鱼", "no-match", {}),
+    ("no-match-07", "城市地铁车厢里的乘客", "no-match", {}),
+    ("no-match-08", "沙漠里骑骆驼的游客", "no-match", {}),
 ]
 
 

@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"log/slog"
 	"net/http"
 	"strconv"
 
@@ -25,7 +26,8 @@ func (h *NotificationHandler) List(c *gin.Context) {
 
 	list, total, err := h.svc.List(userID, unreadOnly, page, pageSize)
 	if err != nil {
-		response.InternalError(c, err.Error())
+		slog.Warn("notification list failed", "user_id", userID, "err", err)
+		response.InternalError(c, "通知暂时无法加载，请稍后重试")
 		return
 	}
 	response.Success(c, response.PageResponse{
@@ -37,7 +39,8 @@ func (h *NotificationHandler) MarkRead(c *gin.Context) {
 	userID := c.GetInt64("user_id")
 	notifID := getInt64Param(c, "id")
 	if err := h.svc.MarkRead(notifID, userID); err != nil {
-		response.InternalError(c, err.Error())
+		slog.Warn("notification read failed", "user_id", userID, "notification_id", notifID, "err", err)
+		response.InternalError(c, "通知暂时无法更新，请稍后重试")
 		return
 	}
 	response.Success(c, nil)
@@ -46,7 +49,8 @@ func (h *NotificationHandler) MarkRead(c *gin.Context) {
 func (h *NotificationHandler) MarkAllRead(c *gin.Context) {
 	userID := c.GetInt64("user_id")
 	if err := h.svc.MarkAllRead(userID); err != nil {
-		response.InternalError(c, err.Error())
+		slog.Warn("notifications read-all failed", "user_id", userID, "err", err)
+		response.InternalError(c, "通知暂时无法更新，请稍后重试")
 		return
 	}
 	response.Success(c, nil)

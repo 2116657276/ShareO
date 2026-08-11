@@ -5,7 +5,7 @@
 
 ## 决定
 
-RAG 使用 FastEmbed + Qdrant Client + `httpx` OpenAI-compatible 调用 + 自研受限 pipeline，不引入 LangChain、LlamaIndex、RAGFlow 或 Agent 框架。
+RAG 使用 FastEmbed + Psycopg 3/pgvector + `httpx` OpenAI-compatible 调用 + 自研受限 pipeline，不引入 LangChain、LlamaIndex、RAGFlow 或 Agent 框架。本决定只约束默认 RAG 路径；同一 Bot 私聊中的受限只读 Agent 由 [ADR-008](ADR-008-readonly-agent.md) 单独定义。
 
 ## 理由
 

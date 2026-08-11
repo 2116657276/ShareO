@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -31,15 +32,35 @@ type DatabaseConfig struct {
 	User            string `mapstructure:"user"`
 	Password        string `mapstructure:"password"`
 	DBName          string `mapstructure:"dbname"`
-	Charset         string `mapstructure:"charset"`
+	SSLMode         string `mapstructure:"sslmode"`
+	Timezone        string `mapstructure:"timezone"`
 	MaxIdleConns    int    `mapstructure:"max_idle_conns"`
 	MaxOpenConns    int    `mapstructure:"max_open_conns"`
 	ConnMaxLifetime int    `mapstructure:"conn_max_lifetime"`
 }
 
 func (d DatabaseConfig) DSN() string {
-	return fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?charset=%s&parseTime=True&loc=Local",
-		d.User, d.Password, d.Host, d.Port, d.DBName, d.Charset)
+	sslMode := d.SSLMode
+	if sslMode == "" {
+		sslMode = "disable"
+	}
+	timezone := d.Timezone
+	if timezone == "" {
+		timezone = "Asia/Shanghai"
+	}
+	// gorm.io/driver/postgres inspects the raw TimeZone query value before
+	// pgx parses the URL. Keep the IANA slash unescaped so its timezone
+	// registration receives "Asia/Shanghai", not "Asia%2FShanghai".
+	encodedTimezone := strings.ReplaceAll(url.QueryEscape(timezone), "%2F", "/")
+	query := "TimeZone=" + encodedTimezone + "&sslmode=" + url.QueryEscape(sslMode)
+	dsn := url.URL{
+		Scheme:   "postgres",
+		User:     url.UserPassword(d.User, d.Password),
+		Host:     fmt.Sprintf("%s:%d", d.Host, d.Port),
+		Path:     "/" + d.DBName,
+		RawQuery: query,
+	}
+	return dsn.String()
 }
 
 type RedisConfig struct {
@@ -104,6 +125,9 @@ func Load(path string) (*Config, error) {
 // applyEnvOverrides allows environment variables to override sensitive config values.
 // Supported env vars:
 //
+//	SHAREO_DB_USER           — PostgreSQL application role
+//	SHAREO_PG_HOST/PORT      — PostgreSQL endpoint
+//	SHAREO_PG_DATABASE       — PostgreSQL database name
 //	SHAREO_DB_PASSWORD       — database password
 //	SHAREO_JWT_SECRET        — JWT signing secret
 //	SHAREO_MINIO_ACCESS_KEY  — MinIO access key
@@ -111,8 +135,28 @@ func Load(path string) (*Config, error) {
 //	SHAREO_REDIS_PASSWORD    — Redis password
 //	SHAREO_TRUSTED_ORIGINS   — comma-separated exact origins for browser/WS requests
 func applyEnvOverrides(cfg *Config) {
+	if v := os.Getenv("SHAREO_DB_USER"); v != "" {
+		cfg.Database.User = v
+	}
+	if v := os.Getenv("SHAREO_PG_HOST"); v != "" {
+		cfg.Database.Host = v
+	}
+	if v := os.Getenv("SHAREO_PG_PORT"); v != "" {
+		if port, err := strconv.Atoi(v); err == nil {
+			cfg.Database.Port = port
+		}
+	}
+	if v := os.Getenv("SHAREO_PG_DATABASE"); v != "" {
+		cfg.Database.DBName = v
+	}
 	if v := os.Getenv("SHAREO_DB_PASSWORD"); v != "" {
 		cfg.Database.Password = v
+	}
+	if v := os.Getenv("SHAREO_DB_SSLMODE"); v != "" {
+		cfg.Database.SSLMode = v
+	}
+	if v := os.Getenv("SHAREO_DB_TIMEZONE"); v != "" {
+		cfg.Database.Timezone = v
 	}
 	if v := os.Getenv("SHAREO_JWT_SECRET"); v != "" {
 		cfg.JWT.Secret = v
@@ -163,6 +207,12 @@ func (c *Config) Validate() error {
 	}
 	if c.Database.DBName == "" {
 		return fmt.Errorf("database.dbname is required")
+	}
+	if c.Database.SSLMode == "" {
+		c.Database.SSLMode = "disable"
+	}
+	if c.Database.Timezone == "" {
+		c.Database.Timezone = "Asia/Shanghai"
 	}
 	if c.Database.ConnMaxLifetime < 60 {
 		c.Database.ConnMaxLifetime = 300 // 默认 5 分钟，防止连接永不过期

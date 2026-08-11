@@ -11,7 +11,7 @@
                 <button type="button" :class="{ 'is-active': layout === 'single' }" @click="setLayout('single')" aria-label="单列布局" title="单列布局"><i class="bi bi-view-stacked"></i></button>
                 <button type="button" :class="{ 'is-active': layout === 'two' }" @click="setLayout('two')" aria-label="双列布局" title="双列布局"><i class="bi bi-view-stacked rotate-90"></i></button>
             </div>
-            <a href="/post/create" class="btn btn-primary"><i class="bi bi-plus-square me-1" aria-hidden="true"></i>发布作品</a>
+            <a href="/post/create" class="btn btn-primary" aria-label="发布作品" title="发布作品"><i class="bi bi-plus-square me-1" aria-hidden="true"></i><span class="label-full">发布作品</span><span class="label-compact" aria-hidden="true">发布</span></a>
         </div>
     </div>
 
@@ -38,31 +38,57 @@
 
     <div class="feed-grid is-single-column" id="feedGrid" :class="layout === 'two' ? 'is-two-column' : 'is-single-column'">
         {{ range $idx, $p := .Posts }}
-        <a href="/post/{{ $p.ID }}" class="text-decoration-none feed-item">
-            <div class="feed-card">
-                <div class="card-img-container skeleton-bg">
-                    <img src="{{ mediumURL $p.CoverImage }}" alt="cover" decoding="async"
-                         {{ if lt $idx 12 }}loading="eager"{{ else }}loading="lazy"{{ end }}
-                         {{ if lt $idx 4 }}fetchpriority="high"{{ end }}
-                         onload="this.parentElement.classList.remove('skeleton-bg')"
-                         onerror="this.parentElement.classList.remove('skeleton-bg');this.parentElement.classList.add('img-error')">
-                    {{ if gt (len $p.Images) 1 }}<span class="card-img-badge"><i class="bi bi-images"></i> {{ len $p.Images }}</span>{{ end }}
-                </div>
-                <div class="card-body">
-                    <div class="card-title">{{ if $p.Content }}{{ $p.Content }}{{ else }}无标题{{ end }}</div>
-                    <div class="card-meta">
-                        <img src="{{ if $p.User }}{{ $p.User.AvatarURL }}{{ end }}" class="author-avatar" onerror="this.src='/static/img/default-avatar.svg'">
-                        <span>{{ if $p.User }}{{ $p.User.Username }}{{ end }}</span>
-                        <span class="ms-auto"><i class="bi {{ if $p.IsLiked }}bi-heart-fill liked{{ else }}bi-heart{{ end }}"></i> {{ $p.LikeCount }}</span>
+        <div class="feed-item">
+            <article class="feed-card">
+                <header class="feed-card-author">
+                    <a href="/user/{{ $p.UserID }}" class="feed-author-link">
+                        <img src="{{ if $p.User }}{{ $p.User.AvatarURL }}{{ else }}/static/img/default-avatar.svg{{ end }}" class="feed-author-avatar" alt="" loading="lazy" onerror="this.src='/static/img/default-avatar.svg'">
+                        <strong>{{ if $p.User }}{{ $p.User.Username }}{{ else }}社区成员{{ end }}</strong>
+                    </a>
+                    <a href="/post/{{ $p.ID }}" class="feed-card-more" aria-label="查看帖子"><i class="bi bi-three-dots"></i></a>
+                </header>
+                <div class="post-media-carousel" data-carousel data-carousel-count="{{ if gt (len $p.Images) 0 }}{{ len $p.Images }}{{ else }}1{{ end }}">
+                    <div class="post-media-track">
+                        {{ if $p.Images }}
+                        {{ range $imageIndex, $image := $p.Images }}
+                        <div class="post-media-slide">
+                            <a href="/post/{{ $p.ID }}" aria-label="查看帖子图片 {{ add $imageIndex 1 }}"><img src="{{ mediumURL $image.ImageURL }}" alt="帖子图片 {{ add $imageIndex 1 }}" decoding="async" {{ if lt $idx 4 }}loading="eager" fetchpriority="high"{{ else }}loading="lazy"{{ end }} onerror="this.parentElement.classList.add('img-error')"></a>
+                        </div>
+                        {{ end }}
+                        {{ else }}
+                        <div class="post-media-slide"><a href="/post/{{ $p.ID }}" aria-label="查看帖子图片"><img src="{{ mediumURL (or $p.CoverImage "/static/img/placeholder.svg") }}" alt="帖子图片" decoding="async" loading="lazy" onerror="this.parentElement.classList.add('img-error')"></a></div>
+                        {{ end }}
                     </div>
+                    {{ if gt (len $p.Images) 1 }}
+                    <button type="button" class="post-carousel-arrow post-carousel-prev" data-carousel-prev aria-label="上一张图片"><i class="bi bi-chevron-left"></i></button>
+                    <button type="button" class="post-carousel-arrow post-carousel-next" data-carousel-next aria-label="下一张图片"><i class="bi bi-chevron-right"></i></button>
+                    <div class="post-carousel-dots" aria-label="图片页码">
+                        {{ range $imageIndex, $_ := $p.Images }}<button type="button" data-carousel-index="{{ $imageIndex }}" aria-label="查看第 {{ add $imageIndex 1 }} 张图片"{{ if eq $imageIndex 0 }} aria-current="true"{{ end }}></button>{{ end }}
+                    </div>
+                    {{ end }}
                 </div>
-            </div>
-        </a>
+                <div class="feed-card-body">
+                    <div class="post-card-actions">
+                        <a href="/post/{{ $p.ID }}" class="post-action-link {{ if $p.IsLiked }}is-liked{{ end }}"><i class="bi {{ if $p.IsLiked }}bi-heart-fill{{ else }}bi-heart{{ end }}"></i><span>{{ $p.LikeCount }}</span></a>
+                        <a href="/post/{{ $p.ID }}#comments" class="post-action-link"><i class="bi bi-chat"></i><span>{{ $p.CommentCount }}</span></a>
+                    </div>
+                    <a href="/post/{{ $p.ID }}" class="post-caption">{{ if $p.Content }}{{ $p.Content }}{{ else }}无标题{{ end }}</a>
+                    {{ if $p.FeaturedComment }}
+                    <a class="featured-comment" href="/post/{{ $p.ID }}#comments">
+                        <img src="{{ if $p.FeaturedComment.User }}{{ $p.FeaturedComment.User.AvatarURL }}{{ else }}/static/img/default-avatar.svg{{ end }}" alt="" loading="lazy" onerror="this.src='/static/img/default-avatar.svg'">
+                        <span class="featured-comment-label">高赞</span>
+                        <span class="featured-comment-copy"><strong>{{ if $p.FeaturedComment.User }}{{ $p.FeaturedComment.User.Username }}{{ else }}用户{{ end }}</strong><span>{{ $p.FeaturedComment.Content }}</span></span>
+                        <span class="featured-comment-count"><i class="bi bi-heart-fill"></i> {{ $p.FeaturedComment.LikeCount }}</span>
+                    </a>
+                    {{ end }}
+                </div>
+            </article>
+        </div>
         {{ end }}
     </div>
 
     <!-- Empty state (shown via Alpine when grid is cleared and no results) -->
-    <div class="state-panel" id="emptyState" hidden>
+    <div class="state-panel" id="emptyState"{{ if .Posts }} hidden{{ end }}>
         <i class="bi bi-images" aria-hidden="true"></i>
         <h4 class="text-muted mt-3">还没有作品</h4>
         <p class="text-muted">成为第一个分享作品的人吧</p>
@@ -87,40 +113,10 @@
     </div>
 </div>
 
+<script src="/static/js/post-card.js?v=20260801-2"></script>
 <script>
-function escapeHTML(str) {
-    const div = document.createElement('div');
-    div.appendChild(document.createTextNode(str || ''));
-    return div.innerHTML;
-}
-function displayImageUrl(url) { return url ? url.replace(/\/posts\/(original|thumb)\//, '/posts/medium/') : url; }
-
 function renderPostCard(post) {
-    const imgCount = post.images ? post.images.length : 1;
-    const content = escapeHTML(post.content || '');
-    const username = escapeHTML(post.user ? post.user.username : '');
-    const avatar = escapeHTML(post.user && post.user.avatar_url ? post.user.avatar_url : '/static/img/default-avatar.svg');
-    const coverImg = escapeHTML(displayImageUrl(post.cover_image || ''));
-    const likeIcon = post.is_liked ? 'bi-heart-fill liked' : 'bi-heart';
-    const badgeHtml = imgCount > 1 ? `<span class="card-img-badge"><i class="bi bi-images"></i> ${imgCount}</span>` : '';
-
-    return `<a href="/post/${post.id}" class="text-decoration-none feed-item">
-        <div class="feed-card">
-            <div class="card-img-container skeleton-bg">
-                <img src="${coverImg}" alt="cover" decoding="async" loading="eager"
-                     onload="this.parentElement.classList.remove('skeleton-bg')"
-                     onerror="this.parentElement.classList.remove('skeleton-bg');this.parentElement.classList.add('img-error')">
-                ${badgeHtml}
-            </div>
-            <div class="card-body">
-                <div class="card-title">${content || '无标题'}</div>
-                <div class="card-meta">
-                    <img src="${avatar}" class="author-avatar" onerror="this.src='/static/img/default-avatar.svg'">
-                    <span>${username}</span>
-                    <span class="ms-auto"><i class="bi ${likeIcon}"></i> ${post.like_count}</span>
-                </div>
-            </div>
-        </div></a>`;
+    return window.ShareOPostCards.renderPostCard(post, {loading: 'lazy'});
 }
 
 function feedPage(currentPage, totalCount, sort) {
@@ -176,6 +172,7 @@ function feedPage(currentPage, totalCount, sort) {
             }
             document.getElementById('emptyState').hidden = true;
             list.forEach(p => { grid.insertAdjacentHTML('beforeend', renderPostCard(p)); });
+            window.ShareOPostCards.init(grid);
         },
 
         async loadMore() {
@@ -202,6 +199,7 @@ function feedPage(currentPage, totalCount, sort) {
                 document.getElementById('emptyState').hidden = true;
                 const grid = document.getElementById('feedGrid');
                 d.data.list.forEach(p => { grid.insertAdjacentHTML('beforeend', renderPostCard(p)); });
+                window.ShareOPostCards.init(grid);
                 if (this.searchActive) {
                     this.searchHasMore = this.searchPage * pageSize < this.searchTotal;
                 } else {

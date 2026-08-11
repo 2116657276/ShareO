@@ -3,6 +3,9 @@ server:
   mode: release
   trusted_origins: []
 
+# RETIRED legacy container configuration. Native PostgreSQL/pgvector is the
+# only supported runtime; this file is not loaded by local scripts.
+
 database:
   host: mysql
   port: 3306

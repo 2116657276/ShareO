@@ -43,13 +43,16 @@
                 responseData('/api/v1/conversations/unread-count')
             ]);
             const comments = Number(notifications.comment_count) || 0;
-            const messages = Number(conversations.count) || 0;
+                    const messages = Number(conversations.total) || 0;
             document.querySelectorAll('[data-comment-unread]').forEach(node => {
                 node.hidden = comments < 1;
             });
             document.querySelectorAll('[data-chat-unread]').forEach(node => {
                 node.hidden = messages < 1;
-                node.textContent = messages > 99 ? '99+' : String(messages);
+                const label = messages > 99 ? '99+' : String(messages);
+                node.textContent = label;
+                node.setAttribute('aria-label', `${messages} 条未读私聊`);
+                node.setAttribute('title', `${messages} 条未读私聊`);
             });
         }
         window.addEventListener('shareo:unread-refresh', refreshNavigationUnread);

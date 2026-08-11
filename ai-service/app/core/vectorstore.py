@@ -1,19 +1,12 @@
-"""Qdrant collection operations for image embeddings."""
+"""PostgreSQL/pgvector operations for image embeddings."""
 
 from collections.abc import Sequence
 from datetime import datetime
 from typing import Any
 
-from qdrant_client import AsyncQdrantClient
-from qdrant_client.models import (
-    Distance,
-    FieldCondition,
-    Filter,
-    MatchValue,
-    PayloadSchemaType,
-    PointStruct,
-    VectorParams,
-)
+from pgvector import Vector
+
+from app.core.pgvector import PostgresVectorDatabase
 
 
 COLLECTION_NAME = "images"
@@ -21,43 +14,36 @@ VECTOR_SIZE = 512
 
 
 class ImageVectorStore:
-    def __init__(self, url: str, collection_name: str = COLLECTION_NAME):
-        self.client = AsyncQdrantClient(url=url, check_compatibility=False)
+    def __init__(self, database: PostgresVectorDatabase, collection_name: str = COLLECTION_NAME):
+        self.database = database
         self.collection_name = collection_name
+        self._schema_validated = False
 
     async def ensure_collection(self) -> None:
-        collections = await self.client.get_collections()
-        exists = any(item.name == self.collection_name for item in collections.collections)
-        if not exists:
-            await self.client.create_collection(
-                collection_name=self.collection_name,
-                vectors_config=VectorParams(size=VECTOR_SIZE, distance=Distance.COSINE),
-            )
+        if self._schema_validated:
+            return
         await self.validate_schema()
-        await self.ensure_payload_indexes()
+        self._schema_validated = True
 
     async def validate_schema(self) -> None:
-        info = await self.client.get_collection(self.collection_name)
-        vectors = info.config.params.vectors
-        if isinstance(vectors, dict):
-            raise RuntimeError("images collection must use one unnamed vector")
-        if vectors.size != VECTOR_SIZE or vectors.distance != Distance.COSINE:
+        row = await self.database.fetch_one(
+            """
+            SELECT format_type(a.atttypid, a.atttypmod) AS type_name
+            FROM pg_attribute AS a
+            WHERE a.attrelid = 'ai.image_embeddings'::regclass
+              AND a.attname = 'embedding'
+              AND NOT a.attisdropped
+            """
+        )
+        if row is None or str(row.get("type_name", "")) != f"vector({VECTOR_SIZE})":
             raise RuntimeError(
-                "incompatible images collection: "
-                f"expected size={VECTOR_SIZE} distance={Distance.COSINE.value}, "
-                f"got size={vectors.size} distance={vectors.distance.value}"
+                "incompatible images vector column: "
+                f"expected vector({VECTOR_SIZE}), got {row.get('type_name') if row else 'missing'}"
             )
 
     async def ensure_payload_indexes(self) -> None:
-        info = await self.client.get_collection(self.collection_name)
-        if "post_id" in (info.payload_schema or {}):
-            return
-        await self.client.create_payload_index(
-            collection_name=self.collection_name,
-            field_name="post_id",
-            field_schema=PayloadSchemaType.INTEGER,
-            wait=True,
-        )
+        """Compatibility name retained; indexes are created by migrations."""
+        await self.ensure_collection()
 
     async def upsert(
         self,
@@ -66,82 +52,102 @@ class ImageVectorStore:
         if not points:
             return
         await self.ensure_collection()
-        structs = [
-            PointStruct(id=int(point["image_id"]), vector=point["vector"], payload=point["payload"])
-            for point in points
-        ]
-        await self.client.upsert(self.collection_name, points=structs, wait=True)
+        async with self.database.transaction() as connection:
+            async with connection.cursor() as cursor:
+                for point in points:
+                    payload = point["payload"]
+                    await cursor.execute(
+                        """
+                        INSERT INTO ai.image_embeddings
+                            (image_id, post_id, object_key, created_at, model_revision, embedding)
+                        VALUES (%s, %s, %s, %s, %s, %s)
+                        ON CONFLICT (image_id) DO UPDATE SET
+                            post_id = EXCLUDED.post_id,
+                            object_key = EXCLUDED.object_key,
+                            created_at = EXCLUDED.created_at,
+                            model_revision = EXCLUDED.model_revision,
+                            embedding = EXCLUDED.embedding
+                        """,
+                        (
+                            int(point["image_id"]),
+                            int(payload["post_id"]),
+                            str(payload["object_key"]),
+                            payload["created_at"],
+                            str(payload.get("model_revision", "")),
+                            Vector(list(point["vector"])),
+                        ),
+                    )
 
     async def delete_post(self, post_id: int) -> None:
         await self.ensure_collection()
-        await self.client.delete(
-            self.collection_name,
-            points_selector=Filter(
-                must=[FieldCondition(key="post_id", match=MatchValue(value=int(post_id)))]
-            ),
-            wait=True,
+        await self.database.execute(
+            "DELETE FROM ai.image_embeddings WHERE post_id = %s", (int(post_id),)
         )
 
     async def search(self, vector: Sequence[float], limit: int) -> list[dict[str, Any]]:
         await self.ensure_collection()
-        response = await self.client.query_points(
-            self.collection_name,
-            query=list(vector),
-            limit=limit,
-            with_payload=True,
+        query_vector = Vector(list(vector))
+        rows = await self.database.fetch_all(
+            """
+            SELECT image_id, post_id, object_key, created_at,
+                   1 - (embedding <=> %s) AS score
+            FROM ai.image_embeddings
+            ORDER BY embedding <=> %s
+            LIMIT %s
+            """,
+            (query_vector, query_vector, int(limit)),
         )
-        results = []
-        for point in response.points:
-            payload = dict(point.payload or {})
-            results.append(
-                {
-                    "image_id": int(point.id),
-                    "post_id": int(payload.get("post_id", 0)),
-                    "object_key": payload.get("object_key", ""),
-                    "created_at": payload.get("created_at", ""),
-                    "score": float(point.score),
-                }
-            )
-        return results
+        return [
+            {
+                "image_id": int(row["image_id"]),
+                "post_id": int(row["post_id"]),
+                "object_key": str(row["object_key"]),
+                "created_at": row["created_at"].isoformat()
+                if isinstance(row["created_at"], datetime)
+                else str(row["created_at"]),
+                "score": float(row["score"]),
+            }
+            for row in rows
+        ]
 
     async def close(self) -> None:
-        await self.client.close()
+        """Store instances share the application-owned database pool."""
+        return None
 
     async def metadata(self) -> dict[str, Any]:
         await self.ensure_collection()
-        info = await self.client.get_collection(self.collection_name)
+        count = await self.database.fetch_one(
+            "SELECT count(*)::bigint AS count FROM ai.image_embeddings"
+        )
+        index = await self.database.fetch_one(
+            """
+            SELECT EXISTS (
+                SELECT 1 FROM pg_indexes
+                WHERE schemaname = 'ai' AND indexname = 'idx_ai_image_embeddings_post'
+            ) AS indexed
+            """
+        )
         return {
             "collection": self.collection_name,
             "dimension": VECTOR_SIZE,
-            "distance": Distance.COSINE.value,
-            "points_count": int(info.points_count or 0),
-            "post_id_indexed": "post_id" in (info.payload_schema or {}),
+            "distance": "Cosine",
+            "points_count": int((count or {}).get("count", 0)),
+            "post_id_indexed": bool((index or {}).get("indexed", False)),
         }
 
     async def inventory(self) -> list[dict[str, Any]]:
         await self.ensure_collection()
-        items: list[dict[str, Any]] = []
-        offset = None
-        while True:
-            points, offset = await self.client.scroll(
-                collection_name=self.collection_name,
-                limit=100,
-                offset=offset,
-                with_payload=True,
-                with_vectors=False,
-            )
-            for point in points:
-                payload = dict(point.payload or {})
-                items.append(
-                    {
-                        "image_id": int(point.id),
-                        "post_id": int(payload.get("post_id", 0)),
-                        "model_revision": str(payload.get("model_revision", "")),
-                    }
-                )
-            if offset is None:
-                break
-        return items
+        rows = await self.database.fetch_all(
+            "SELECT image_id, post_id, model_revision FROM ai.image_embeddings ORDER BY image_id"
+        )
+        return [
+            {
+                "image_id": int(row["image_id"]),
+                "post_id": int(row["post_id"]),
+                "model_revision": str(row["model_revision"]),
+            }
+            for row in rows
+        ]
 
 
 def image_payload(

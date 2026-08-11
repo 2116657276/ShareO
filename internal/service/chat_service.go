@@ -48,6 +48,23 @@ type ChatRepository interface {
 	SearchActiveUsers(context.Context, string, int64, int) ([]model.User, error)
 }
 
+// CitationPreviewRepository is optional so lightweight chat fakes and older
+// repository implementations can keep serving citation IDs without changing
+// the core chat contract. The production repository enriches visible posts.
+type CitationPreviewRepository interface {
+	VisiblePostPreviews(context.Context, []int64) (map[int64]model.CitationPreview, error)
+}
+
+// BotTaskOutboxRepository is implemented by the production chat repository.
+// It is optional in the service contract so small test repositories can keep
+// the legacy direct-publish behavior without weakening the production path.
+type BotTaskOutboxRepository interface {
+	CreateMessageWithBotTask(context.Context, *model.Message, bool) error
+	ListPendingBotTasks(context.Context, int) ([]model.BotTaskOutbox, error)
+	MarkBotTaskPublished(context.Context, int64) error
+	MarkBotTaskFailed(context.Context, int64, string) error
+}
+
 type BotReplyMetaRepository interface {
 	CreateBotReplyWithMeta(context.Context, int64, int64, string, []model.BotCitation, model.BotReplyMeta) (*model.Message, bool, error)
 }
@@ -121,12 +138,12 @@ func (s *ChatService) SendMessage(ctx context.Context, senderID, convID int64, c
 	if err := s.requireMember(ctx, convID, senderID); err != nil {
 		return nil, err
 	}
+	members, err := s.repo.GetMembers(ctx, convID)
+	if err != nil {
+		return nil, err
+	}
 	message := &model.Message{ConversationID: convID, SenderID: senderID, Content: content}
 	if mode == model.AIModeAgent {
-		members, err := s.repo.GetMembers(ctx, convID)
-		if err != nil {
-			return nil, err
-		}
 		if !validBotConversation(members, senderID) {
 			return nil, chatError(ErrChatInvalid, "深度分析仅支持 shareo_bot 私聊")
 		}
@@ -137,16 +154,15 @@ func (s *ChatService) SendMessage(ctx context.Context, senderID, convID int64, c
 		meta := string(metaBytes)
 		message.Meta = &meta
 	}
-	if err := s.repo.CreateMessage(ctx, message); err != nil {
-		return nil, err
+	enqueueBotTask := s.aiBridge != nil && botTaskRequired(members, senderID)
+	var createErr error
+	if outboxRepo, ok := s.repo.(BotTaskOutboxRepository); ok && s.aiBridge != nil {
+		createErr = outboxRepo.CreateMessageWithBotTask(ctx, message, enqueueBotTask)
+	} else {
+		createErr = s.repo.CreateMessage(ctx, message)
 	}
-	members, err := s.repo.GetMembers(ctx, convID)
-	if err != nil {
-		// The message is already committed. Clients recover it through after_id,
-		// so report success while retaining an operational signal.
-		slog.Warn("message committed but websocket fanout members could not be loaded",
-			"conv_id", convID, "message_id", message.ID, "err", err)
-		return message, nil
+	if createErr != nil {
+		return nil, createErr
 	}
 	memberIDs := make([]int64, 0, len(members))
 	for _, member := range members {
@@ -163,12 +179,9 @@ func (s *ChatService) SendMessage(ctx context.Context, senderID, convID int64, c
 	if senderIsBot {
 		return message, nil
 	}
-	if len(members) == 2 {
-		for _, member := range members {
-			if member.UserID != senderID && member.User != nil && member.User.IsBot != 0 && member.User.Username == model.ShareOBotUsername {
-				s.aiBridge.PublishBotTask(convID, message.ID)
-				break
-			}
+	if enqueueBotTask {
+		if _, ok := s.repo.(BotTaskOutboxRepository); !ok {
+			s.aiBridge.PublishBotTask(convID, message.ID)
 		}
 	}
 	return message, nil
@@ -535,6 +548,23 @@ func validBotConversation(members []model.ConversationMember, senderID int64) bo
 	return botFound && userFound
 }
 
+func botTaskRequired(members []model.ConversationMember, senderID int64) bool {
+	if len(members) != 2 {
+		return false
+	}
+	for _, member := range members {
+		if member.UserID == senderID && (member.User == nil || member.User.IsBot != 0) {
+			return false
+		}
+	}
+	for _, member := range members {
+		if member.UserID != senderID && member.User != nil && member.User.IsBot != 0 && member.User.Username == model.ShareOBotUsername && member.User.Status == model.UserStatusActive {
+			return true
+		}
+	}
+	return false
+}
+
 func validateBotReplyMeta(meta model.BotReplyMeta) error {
 	if meta.Mode != model.AIModeRAG && meta.Mode != model.AIModeAgent {
 		return chatError(ErrChatInvalid, "Bot AI 模式无效")
@@ -599,6 +629,7 @@ func validateBotReplyMeta(meta model.BotReplyMeta) error {
 
 func (s *ChatService) sanitizeMessageCitations(ctx context.Context, messages []model.Message) error {
 	postIDs := make([]int64, 0)
+	seenPostIDs := make(map[int64]struct{})
 	metas := make([]*model.MessageMeta, len(messages))
 	for index := range messages {
 		if messages[index].Meta == nil {
@@ -611,12 +642,28 @@ func (s *ChatService) sanitizeMessageCitations(ctx context.Context, messages []m
 		}
 		metas[index] = &meta
 		for _, citation := range meta.Citations {
-			postIDs = append(postIDs, citation.PostID)
+			if citation.PostID <= 0 {
+				continue
+			}
+			if _, seen := seenPostIDs[citation.PostID]; !seen {
+				seenPostIDs[citation.PostID] = struct{}{}
+				postIDs = append(postIDs, citation.PostID)
+			}
 		}
 	}
 	visible, err := s.repo.VisiblePostIDs(ctx, postIDs)
 	if err != nil {
 		return err
+	}
+	previews := make(map[int64]model.CitationPreview)
+	if previewRepo, ok := s.repo.(CitationPreviewRepository); ok && len(visible) > 0 {
+		previews, err = previewRepo.VisiblePostPreviews(ctx, postIDs)
+		if err != nil {
+			// A missing image or a transient preload failure must not make an
+			// otherwise valid Bot response disappear; the citation link remains.
+			slog.Warn("failed to load citation previews", "post_ids", postIDs, "err", err)
+			previews = make(map[int64]model.CitationPreview)
+		}
 	}
 	for index, meta := range metas {
 		if meta == nil {
@@ -625,6 +672,11 @@ func (s *ChatService) sanitizeMessageCitations(ctx context.Context, messages []m
 		filtered := meta.Citations[:0]
 		for _, citation := range meta.Citations {
 			if _, ok := visible[citation.PostID]; ok {
+				citation.Preview = nil
+				if preview, exists := previews[citation.PostID]; exists {
+					copy := preview
+					citation.Preview = &copy
+				}
 				filtered = append(filtered, citation)
 			}
 		}

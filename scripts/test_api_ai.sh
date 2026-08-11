@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # 本机聊天、RAG、Agent 和内部鉴权回归。
-# 只通过 Go/AI HTTP 接口操作，不直接写 MySQL、Redis、MinIO 或 Qdrant。
+# 只通过 Go/AI HTTP 接口操作，不直接写 PostgreSQL、Redis、MinIO 或 pgvector。
 set -euo pipefail
 
 env_value() {

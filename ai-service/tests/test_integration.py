@@ -4,8 +4,10 @@ import uuid
 import pytest
 from redis.asyncio import Redis
 
-from app.workers.consumer import StreamConsumer
+from app.core.pgvector import PostgresVectorDatabase
+from app.core.vectorstore import ImageVectorStore, image_payload
 from app.rag.vectorstore import TextVectorStore
+from app.workers.consumer import StreamConsumer
 
 
 @pytest.mark.integration
@@ -60,14 +62,17 @@ async def test_pending_message_is_reclaimed_then_acked_after_retry_budget():
 
 
 @pytest.mark.integration
-async def test_text_qdrant_round_trip():
-    qdrant_url = os.getenv("SHAREO_TEST_QDRANT_URL")
-    if not qdrant_url:
-        pytest.skip("set SHAREO_TEST_QDRANT_URL to run Qdrant integration tests")
-    collection = f"post-chunks-test-{uuid.uuid4().hex}"
-    store = TextVectorStore(qdrant_url, collection)
+async def test_text_pgvector_round_trip():
+    database_url = os.getenv("SHAREO_TEST_AI_DATABASE_URL")
+    if not database_url:
+        pytest.skip("set SHAREO_TEST_AI_DATABASE_URL to run PostgreSQL/pgvector integration tests")
+    database = PostgresVectorDatabase(database_url)
+    store = TextVectorStore(database)
     vector = [1.0 / (512**0.5)] * 512
+    opened = False
     try:
+        await database.open()
+        opened = True
         await store.ensure_collection()
         await store.replace_post(
             7,
@@ -90,5 +95,62 @@ async def test_text_qdrant_round_trip():
         await store.delete_post(7)
         assert await store.search(vector, 5) == []
     finally:
-        await store.client.delete_collection(collection)
-        await store.close()
+        if opened:
+            await database.execute("DELETE FROM ai.post_chunk_embeddings WHERE post_id = %s", (7,))
+        await database.close()
+
+
+@pytest.mark.integration
+async def test_image_pgvector_upsert_search_replace_and_delete():
+    database_url = os.getenv("SHAREO_TEST_AI_DATABASE_URL")
+    if not database_url:
+        pytest.skip("set SHAREO_TEST_AI_DATABASE_URL to run PostgreSQL/pgvector integration tests")
+    database = PostgresVectorDatabase(database_url)
+    store = ImageVectorStore(database)
+    vector = [1.0 / (512**0.5)] * 512
+    opened = False
+    try:
+        await database.open()
+        opened = True
+        await store.ensure_collection()
+        await store.upsert(
+            [
+                {
+                    "image_id": 7001,
+                    "vector": vector,
+                    "payload": image_payload(
+                        70,
+                        7001,
+                        "posts/original/2026/08/11/7001.jpg",
+                        "2026-01-01",
+                        "integration",
+                    ),
+                }
+            ]
+        )
+        first = await store.search(vector, 5)
+        assert first and first[0]["image_id"] == 7001
+        await store.upsert(
+            [
+                {
+                    "image_id": 7001,
+                    "vector": vector,
+                    "payload": image_payload(
+                        71,
+                        7001,
+                        "posts/original/2026/08/11/7001-replaced.jpg",
+                        "2026-01-02",
+                        "integration-v2",
+                    ),
+                }
+            ]
+        )
+        metadata = await store.metadata()
+        assert metadata["dimension"] == 512 and metadata["points_count"] == 1
+        assert (await store.inventory())[0]["post_id"] == 71
+        await store.delete_post(71)
+        assert await store.search(vector, 5) == []
+    finally:
+        if opened:
+            await database.execute("DELETE FROM ai.image_embeddings WHERE image_id = %s", (7001,))
+        await database.close()

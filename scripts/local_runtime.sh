@@ -47,13 +47,19 @@ load_allowed_env() {
         SHAREO_INTERNAL_TOKEN SHAREO_DB_PASSWORD SHAREO_JWT_SECRET \
         SHAREO_MINIO_ACCESS_KEY SHAREO_MINIO_SECRET_KEY SHAREO_REDIS_PASSWORD \
         SHAREO_TRUSTED_ORIGINS SHAREO_AI_BASE_URL SHAREO_AI_REDIS_URL \
-        SHAREO_AI_QDRANT_URL SHAREO_AI_GO_BASE_URL SHAREO_AI_INTERNAL_TOKEN \
+        SHAREO_AI_DATABASE_URL SHAREO_AI_GO_BASE_URL SHAREO_AI_INTERNAL_TOKEN \
+        SHAREO_DB_USER SHAREO_DB_PASSWORD SHAREO_DB_SSLMODE SHAREO_DB_TIMEZONE \
+        SHAREO_AI_DB_USER SHAREO_AI_DB_PASSWORD \
+        SHAREO_PG_HOST SHAREO_PG_PORT SHAREO_PG_DATABASE SHAREO_PG_ADMIN_USER SHAREO_PG_ADMIN_PASSWORD \
+        SHAREO_REDIS_PORT SHAREO_MINIO_ENDPOINT SHAREO_MINIO_BUCKET \
+        SHAREO_TEST_USERNAME SHAREO_TEST_PASSWORD \
+        SHAREO_IMAGE_SEARCH_SCORE_THRESHOLD \
         SHAREO_AI_MODEL_CACHE_DIR SHAREO_AI_TEXT_MODEL_CACHE_DIR SHAREO_AI_EMBEDDING_REVISION \
         SHAREO_AI_HF_ENDPOINT SHAREO_AI_LLM_BASE_URL SHAREO_AI_LLM_API_KEY \
         SHAREO_AI_LLM_MODEL SHAREO_AI_LLM_TIMEOUT_SECONDS SHAREO_AI_AGENT_ENABLED \
         SHAREO_AI_AGENT_MAX_ROUNDS SHAREO_AI_AGENT_MAX_TOOL_CALLS \
         SHAREO_AI_AGENT_MAX_PARALLEL_TOOLS SHAREO_AI_AGENT_MAX_OBSERVATION_CHARS \
-        SHAREO_AI_AGENT_TRACE_VERSION SHAREO_QDRANT_SOURCE_DIR SHAREO_QDRANT_BINARY \
+        SHAREO_AI_AGENT_TRACE_VERSION \
         SHAREO_MINIO_DATA_DIR SHAREO_RUNTIME HTTP_PROXY HTTPS_PROXY ALL_PROXY NO_PROXY \
         http_proxy https_proxy all_proxy no_proxy HF_ENDPOINT HF_HOME HF_HUB_OFFLINE \
         TRANSFORMERS_OFFLINE; do
@@ -124,7 +130,31 @@ port_open() {
         nc -z -w 2 "$host" "$port" >/dev/null 2>&1
         return
     fi
+    if command -v lsof >/dev/null 2>&1; then
+        lsof -nP -iTCP:"$port" -sTCP:LISTEN 2>/dev/null | grep LISTEN >/dev/null
+        return
+    fi
     curl --noproxy '*' --silent --show-error --max-time 2 "http://$host:$port" -o /dev/null >/dev/null 2>&1
+}
+
+port_owner() {
+    local port="$1" owner
+    if command -v lsof >/dev/null 2>&1; then
+        owner="$(lsof -nP -iTCP:"$port" -sTCP:LISTEN 2>/dev/null |
+            awk 'NR == 2 { printf "%s (pid=%s)", $1, $2; exit }')"
+        if [ -n "$owner" ]; then
+            printf '%s' "$owner"
+            return 0
+        fi
+    fi
+    printf 'unknown process'
+}
+
+report_unhealthy_port() {
+    local label="$1" port="$2" url="$3" owner
+    owner="$(port_owner "$port")"
+    fail "$label port $port is occupied but $url is not healthy (owner: $owner); stop the conflicting process or choose another port"
+    return 1
 }
 
 discover_proxy() {
@@ -174,34 +204,6 @@ proxy_check() {
     pass "proxy reaches Hugging Face endpoint (listener configured)"
 }
 
-qdrant_source() {
-    local source
-    source="$(value_for SHAREO_QDRANT_SOURCE_DIR)"
-    source="${source:-qdrant}"
-    resolve_path "$source"
-}
-
-qdrant_binary() {
-    local source binary
-    source="$(qdrant_source)"
-    binary="$(value_for SHAREO_QDRANT_BINARY)"
-    binary="${binary:-./target/release/qdrant}"
-    case "$binary" in
-        /*) printf '%s' "$binary" ;;
-        *) printf '%s/%s' "$source" "${binary#./}" ;;
-    esac
-}
-
-check_qdrant_files() {
-    local source binary
-    source="$(qdrant_source)"
-    binary="$(qdrant_binary)"
-    [ -d "$source/static" ] || { fail "Qdrant static directory missing: $source/static"; return 1; }
-    [ -d "$source/storage" ] || { fail "Qdrant storage directory missing: $source/storage"; return 1; }
-    [ -x "$binary" ] || { fail "Qdrant binary is not executable: $binary"; return 1; }
-    pass "Qdrant source, static, storage and release binary are available"
-}
-
 start_brew_service() {
     local service="$1"
     if ! command -v brew >/dev/null 2>&1; then
@@ -214,29 +216,6 @@ start_brew_service() {
     fi
     warn "could not request Homebrew service: $service"
     return 1
-}
-
-start_qdrant() {
-    local source binary pid_file
-    source="$(qdrant_source)"
-    binary="$(qdrant_binary)"
-    pid_file="$STATE_DIR/qdrant.pid"
-    check_qdrant_files
-    if [ "$(url_status http://127.0.0.1:6333/healthz)" = "200" ]; then
-        pass "Qdrant already healthy on 127.0.0.1:6333"
-        return 0
-    fi
-    if pid_alive "$pid_file"; then
-        wait_url "Qdrant started by ShareO" "http://127.0.0.1:6333/healthz" 30
-        return
-    fi
-    rm -f -- "$pid_file"
-    (
-        cd "$source"
-        nohup "$binary" >"$STATE_DIR/qdrant.log" 2>&1 < /dev/null &
-        printf '%s\n' "$!" > "$pid_file"
-    )
-    wait_url "Qdrant started from $source" "http://127.0.0.1:6333/healthz" 45
 }
 
 start_direct_minio() {
@@ -266,19 +245,19 @@ start_direct_minio() {
     wait_url "MinIO started with local data directory" "http://127.0.0.1:9000/minio/health/live" 30
 }
 
-check_mysql() {
+check_postgres() {
     local port
-    port="$(value_for SHAREO_MYSQL_PORT)"
-    port="${port:-3306}"
-    if command -v mysqladmin >/dev/null 2>&1 && mysqladmin --protocol=tcp -h 127.0.0.1 -P "$port" -u root ping >/dev/null 2>&1; then
-        pass "MySQL responds on 127.0.0.1:$port"
+    port="$(value_for SHAREO_PG_PORT)"
+    port="${port:-5432}"
+    if command -v pg_isready >/dev/null 2>&1 && pg_isready -h 127.0.0.1 -p "$port" >/dev/null 2>&1; then
+        pass "PostgreSQL 17 responds on 127.0.0.1:$port"
         return 0
     fi
     if port_open 127.0.0.1 "$port"; then
-        pass "MySQL port is open on 127.0.0.1:$port (credentials not printed)"
+        pass "PostgreSQL port is open on 127.0.0.1:$port (credentials not printed)"
         return 0
     fi
-    fail "MySQL is not reachable on 127.0.0.1:$port"
+    fail "PostgreSQL is not reachable on 127.0.0.1:$port"
     return 1
 }
 
@@ -299,26 +278,43 @@ check_minio() {
 }
 
 start_infra() {
+    local minio_ready=0
     load_allowed_env
-    start_brew_service mysql@8.0 || true
+    start_brew_service postgresql@17 || true
     start_brew_service redis || true
     start_brew_service minio || true
-    for _ in $(seq 1 30); do check_mysql && break || sleep 1; done
-    check_mysql
+    for _ in $(seq 1 30); do check_postgres && break || sleep 1; done
+    check_postgres
     for _ in $(seq 1 30); do check_redis && break || sleep 1; done
     check_redis
-    if ! check_minio; then
+    for _ in $(seq 1 5); do
+        if [ "$(url_status http://127.0.0.1:9000/minio/health/live)" = "200" ]; then
+            minio_ready=1
+            pass "MinIO already healthy on 127.0.0.1:9000"
+            break
+        fi
+        sleep 1
+    done
+    if [ "$minio_ready" -eq 0 ] && port_open 127.0.0.1 9000; then
+        report_unhealthy_port "MinIO" 9000 "http://127.0.0.1:9000/minio/health/live"
+        return 1
+    fi
+    if [ "$minio_ready" -eq 0 ]; then
         start_direct_minio
     fi
-    start_qdrant
+    if [ -n "$(value_for SHAREO_DB_PASSWORD)" ] && [ -n "$(value_for SHAREO_AI_DB_PASSWORD)" ]; then
+        "$PROJECT_DIR/scripts/bootstrap_postgres.sh"
+    else
+        fail "SHAREO_DB_PASSWORD and SHAREO_AI_DB_PASSWORD are required before starting ShareO"
+        return 1
+    fi
     pass "native infrastructure is ready"
 }
 
 stop_infra() {
-    stop_pid_file "$STATE_DIR/qdrant.pid" Qdrant
     stop_pid_file "$STATE_DIR/minio.pid" MinIO
     if [ "${SHAREO_STOP_BREW_SERVICES:-0}" = "1" ]; then
-        brew services stop mysql@8.0 >/dev/null 2>&1 || true
+        brew services stop postgresql@17 >/dev/null 2>&1 || true
         brew services stop redis >/dev/null 2>&1 || true
         brew services stop minio >/dev/null 2>&1 || true
         pass "Homebrew services stopped by explicit SHAREO_STOP_BREW_SERVICES=1"
@@ -329,13 +325,42 @@ stop_infra() {
 
 start_local_processes() {
     local app_pid="$STATE_DIR/app.pid" ai_pid="$STATE_DIR/ai.pid"
-    local app_port ai_port config_path model_dir proxy no_proxy cache_root image_snapshot
+    local app_port ai_port app_url ai_url app_ready ai_ready
+    local config_path model_dir proxy no_proxy cache_root image_snapshot
     load_allowed_env
     app_port="$(value_for SHAREO_APP_PORT)"; app_port="${app_port:-8080}"
     ai_port="$(value_for SHAREO_AI_PORT)"; ai_port="${ai_port:-8000}"
+    app_url="http://127.0.0.1:$app_port/healthz"
+    ai_url="http://127.0.0.1:$ai_port/healthz"
+    app_ready=0
+    ai_ready=0
     config_path="$(value_for SHAREO_CONFIG)"; config_path="${config_path:-$PROJECT_DIR/config.yaml}"
     config_path="$(resolve_path "$config_path")"
     [ -f "$config_path" ] || { fail "Go config is missing: $config_path"; return 1; }
+
+    # Keep an older ignored config.yaml from selecting the retired MySQL
+    # endpoint. These defaults are also used by bootstrap_postgres.sh and can
+    # still be overridden explicitly through SHAREO_PG_* / SHAREO_DB_USER.
+    export SHAREO_PG_HOST="${SHAREO_PG_HOST:-127.0.0.1}"
+    export SHAREO_PG_PORT="${SHAREO_PG_PORT:-5432}"
+    export SHAREO_PG_DATABASE="${SHAREO_PG_DATABASE:-shareo}"
+    export SHAREO_DB_USER="${SHAREO_DB_USER:-shareo_app}"
+
+    # A TCP listener is not enough to reuse a service: an unrelated application
+    # can leave a port open while the expected HTTP endpoint is unavailable.
+    if [ "$(url_status "$app_url")" = "200" ]; then
+        app_ready=1
+    elif port_open 127.0.0.1 "$app_port"; then
+        report_unhealthy_port "Go app" "$app_port" "$app_url"
+        return 1
+    fi
+    if [ "$(url_status "$ai_url")" = "200" ]; then
+        ai_ready=1
+    elif port_open 127.0.0.1 "$ai_port"; then
+        report_unhealthy_port "AI service" "$ai_port" "$ai_url"
+        return 1
+    fi
+
     model_dir="$(value_for SHAREO_AI_MODEL_CACHE_DIR)"
     if [ -z "$model_dir" ]; then
         if [ -d "${HOME:-}/.cache/shareo/models" ] && find -L "${HOME:-}/.cache/shareo/models" \
@@ -367,7 +392,7 @@ start_local_processes() {
     export SHAREO_APP_PORT="$app_port"
     export SHAREO_AI_BASE_URL="${SHAREO_AI_BASE_URL:-http://127.0.0.1:$ai_port}"
     export SHAREO_AI_REDIS_URL="${SHAREO_AI_REDIS_URL:-redis://127.0.0.1:6379/0}"
-    export SHAREO_AI_QDRANT_URL="${SHAREO_AI_QDRANT_URL:-http://127.0.0.1:6333}"
+    export SHAREO_AI_DATABASE_URL="${SHAREO_AI_DATABASE_URL:-postgresql://${SHAREO_AI_DB_USER:-shareo_ai}@127.0.0.1:5432/${SHAREO_PG_DATABASE:-shareo}?sslmode=disable}"
     export SHAREO_AI_GO_BASE_URL="${SHAREO_AI_GO_BASE_URL:-http://127.0.0.1:$app_port}"
     export SHAREO_AI_MODEL_CACHE_DIR="$model_dir"
     export SHAREO_AI_TEXT_MODEL_CACHE_DIR="${SHAREO_AI_TEXT_MODEL_CACHE_DIR:-$model_dir}"
@@ -385,24 +410,28 @@ start_local_processes() {
         pass "complete image model cache found; offline model loading enabled"
     fi
 
-    if ! port_open 127.0.0.1 "$app_port"; then
+    if [ "$app_ready" -eq 0 ]; then
         go build -o "$STATE_DIR/shareo-app" ./cmd/server
         nohup "$STATE_DIR/shareo-app" >"$STATE_DIR/app.log" 2>&1 < /dev/null &
         printf '%s\n' "$!" > "$app_pid"
     else
-        pass "Go app port $app_port is already occupied; not replacing existing process"
+        pass "Go app already healthy on 127.0.0.1:$app_port"
     fi
-    if ! port_open 127.0.0.1 "$ai_port"; then
+    if [ "$ai_ready" -eq 0 ]; then
         (
             cd "$PROJECT_DIR/ai-service"
             exec uv run --frozen uvicorn app.main:app --host 127.0.0.1 --port "$ai_port"
         ) >"$STATE_DIR/ai.log" 2>&1 < /dev/null &
         printf '%s\n' "$!" > "$ai_pid"
     else
-        pass "AI service port $ai_port is already occupied; not replacing existing process"
+        pass "AI service already healthy on 127.0.0.1:$ai_port"
     fi
-    wait_url "Go app health" "http://127.0.0.1:$app_port/healthz" 45
-    wait_url "AI service health" "http://127.0.0.1:$ai_port/healthz" 45
+    if [ "$app_ready" -eq 0 ]; then
+        wait_url "Go app health" "$app_url" 45
+    fi
+    if [ "$ai_ready" -eq 0 ]; then
+        wait_url "AI service health" "$ai_url" 45
+    fi
     pass "native Go and AI processes started; run make warm-ai for model readiness"
 }
 
@@ -413,7 +442,6 @@ doctor() {
     command -v go >/dev/null 2>&1 && pass "Go available" || { fail "Go unavailable"; status=1; }
     command -v uv >/dev/null 2>&1 && pass "uv available" || { fail "uv unavailable"; status=1; }
     command -v python3 >/dev/null 2>&1 && pass "Python available" || { fail "Python unavailable"; status=1; }
-    check_qdrant_files || status=1
     cache_dir="$(value_for SHAREO_AI_MODEL_CACHE_DIR)"; cache_dir="${cache_dir:-.cache/shareo/models}"
     cache_dir="$(resolve_path "$cache_dir")"
     if [ -d "$cache_dir" ] && find -L "$cache_dir" -type f -print -quit 2>/dev/null | grep -q .; then
@@ -421,14 +449,25 @@ doctor() {
     else
         warn "local model cache is empty: $cache_dir"
     fi
-    check_mysql || true
+    check_postgres || true
     check_redis || true
     check_minio || true
-    if [ "$(url_status http://127.0.0.1:6333/healthz)" = "200" ]; then pass "Qdrant readiness"; else warn "Qdrant is not running"; fi
     app_port="$(value_for SHAREO_APP_PORT)"; app_port="${app_port:-8080}"
     ai_port="$(value_for SHAREO_AI_PORT)"; ai_port="${ai_port:-8000}"
-    [ "$(url_status "http://127.0.0.1:$app_port/healthz")" = "200" ] && pass "Go app healthz" || warn "Go app is not running"
-    [ "$(url_status "http://127.0.0.1:$ai_port/healthz")" = "200" ] && pass "AI service healthz" || warn "AI service is not running"
+    if [ "$(url_status "http://127.0.0.1:$app_port/healthz")" = "200" ]; then
+        pass "Go app healthz"
+    elif port_open 127.0.0.1 "$app_port"; then
+        warn "Go app port $app_port is occupied by $(port_owner "$app_port") but healthz is unavailable"
+    else
+        warn "Go app is not running"
+    fi
+    if [ "$(url_status "http://127.0.0.1:$ai_port/healthz")" = "200" ]; then
+        pass "AI service healthz"
+    elif port_open 127.0.0.1 "$ai_port"; then
+        warn "AI service port $ai_port is occupied by $(port_owner "$ai_port") but healthz is unavailable"
+    else
+        warn "AI service is not running"
+    fi
     proxy="$(discover_proxy)"
     [ -n "$proxy" ] && pass "local proxy detected (address withheld)" || warn "no local proxy listener detected"
     proxy_check
@@ -439,7 +478,6 @@ doctor() {
 stop_local() {
     stop_pid_file "$STATE_DIR/app.pid" "Go app"
     stop_pid_file "$STATE_DIR/ai.pid" "AI service"
-    stop_pid_file "$STATE_DIR/qdrant.pid" Qdrant
     stop_pid_file "$STATE_DIR/minio.pid" MinIO
 }
 

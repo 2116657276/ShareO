@@ -1,5 +1,9 @@
 name: shareo
 
+## RETIRED: current ShareO development uses Homebrew PostgreSQL 17/pgvector,
+## Redis and MinIO on the host. This legacy file is not referenced by Make or
+## local runtime scripts and is retained only as historical rollback material.
+
 services:
   mysql:
     image: mysql:8.0

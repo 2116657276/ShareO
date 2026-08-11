@@ -56,9 +56,42 @@ type BotReply struct {
 
 func (BotReply) TableName() string { return "bot_replies" }
 
+// BotTaskOutbox stores a bot task beside the user message. Redis is only the
+// delivery mechanism; a pending row is the durable source for replay after a
+// publish failure or process restart.
+type BotTaskOutbox struct {
+	ID             int64      `gorm:"primaryKey;autoIncrement" json:"id"`
+	ConversationID int64      `gorm:"not null;index:idx_bot_outbox_pending,priority:1" json:"conversation_id"`
+	MessageID      int64      `gorm:"not null;uniqueIndex:uk_bot_outbox_message" json:"message_id"`
+	Status         string     `gorm:"type:enum('pending','published');not null;default:'pending';index:idx_bot_outbox_pending,priority:2" json:"status"`
+	Attempts       int        `gorm:"not null;default:0" json:"attempts"`
+	NextAttemptAt  time.Time  `gorm:"not null;index:idx_bot_outbox_pending,priority:3" json:"next_attempt_at"`
+	LastError      string     `gorm:"type:varchar(500);not null;default:''" json:"last_error"`
+	PublishedAt    *time.Time `json:"published_at,omitempty"`
+	CreatedAt      time.Time  `gorm:"autoCreateTime" json:"created_at"`
+}
+
+func (BotTaskOutbox) TableName() string { return "bot_task_outbox" }
+
 type BotCitation struct {
-	PostID  int64  `json:"post_id"`
-	ChunkID string `json:"chunk_id"`
+	PostID  int64            `json:"post_id"`
+	ChunkID string           `json:"chunk_id"`
+	Preview *CitationPreview `json:"preview,omitempty"`
+}
+
+// CitationPreview is attached to authenticated chat responses after the
+// citation has passed the approved/non-deleted visibility check. It is not
+// written by the AI service and is intentionally a small response DTO.
+type CitationPreview struct {
+	ImageURL string         `json:"image_url,omitempty"`
+	Content  string         `json:"content,omitempty"`
+	Author   CitationAuthor `json:"author,omitempty"`
+}
+
+type CitationAuthor struct {
+	ID        int64  `json:"id"`
+	Username  string `json:"username"`
+	AvatarURL string `json:"avatar_url,omitempty"`
 }
 
 type AIMode string

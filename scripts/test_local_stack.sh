@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Read-only smoke checks for the native Go/Python + Homebrew/Qdrant runtime.
+# Read-only smoke checks for the native Go/Python + Homebrew PostgreSQL runtime.
 set -euo pipefail
 
 PROJECT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
@@ -45,7 +45,6 @@ check_http() {
 
 check_http "Go app health" "http://127.0.0.1:$APP_PORT/healthz"
 check_http "AI service health" "$AI_URL/healthz"
-check_http "Qdrant health" "http://127.0.0.1:6333/healthz"
 check_http "MinIO health" "http://127.0.0.1:9000/minio/health/live"
 
 if command -v redis-cli >/dev/null 2>&1 && [ "$(redis-cli -h 127.0.0.1 -p 6379 ping 2>/dev/null || true)" = "PONG" ]; then

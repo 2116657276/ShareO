@@ -10,7 +10,7 @@
 - Go 模块化单体承载全部业务，包括认证、审核、社区、私聊和 WebSocket，保持 Handler → Service → Repository 分层。
 - `ai-service/` 使用 Python 3.12、FastAPI 和 uv；API、同时处理图片与正文的 `index_post` consumer、以及 `bot_tasks` consumer 在同一 FastAPI 进程内运行，Uvicorn 固定单 worker。
 - Go 与 Python 通过内部 HTTP/JSON 和 `X-Internal-Token` 通信；AI 服务不对公网暴露。
-- Go 是运行时 MySQL 业务数据的唯一写者（包括 Bot 回复），Python 通过内部接口读取载荷并只写 Qdrant。
+- Go 是运行时 PostgreSQL `public` 业务数据的唯一写者（包括 Bot 回复），Python 通过内部接口读取载荷并只写 PostgreSQL `ai` schema 的 pgvector 派生表。
 
 ## 历史取舍
 

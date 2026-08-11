@@ -9,16 +9,16 @@
 ```text
 浏览器
   → Go 公开搜贴
-      ├─ MySQL ngram FULLTEXT / LIKE 关键词候选
+      ├─ PostgreSQL LIKE 关键词候选
       └─ AI 内部正文语义检索
            → BGE query embedding
-           → Qdrant post_chunks
+           → PostgreSQL pgvector ai.post_chunk_embeddings
       → Go 按 post_id 合并
       → approved AND is_deleted=0 复核
       → 混合排序、分页和帖子补全
 ```
 
-AI/Qdrant 不可用时只使用关键词候选并返回 HTTP 200。关键词链路也失败时返回受控错误。内部语义接口必须使用 `X-Internal-Token`，不暴露为公开 API。
+AI/pgvector 不可用时只使用关键词候选并返回 HTTP 200。关键词链路也失败时返回受控错误。内部语义接口必须使用 `X-Internal-Token`，不暴露为公开 API。
 
 ## 排序
 

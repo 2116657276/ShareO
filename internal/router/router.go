@@ -1,6 +1,7 @@
 package router
 
 import (
+	"context"
 	"net/http"
 	"time"
 
@@ -40,7 +41,10 @@ func SetupRouter(trustedOrigins ...string) *gin.Engine {
 	// Chat
 	chatRepo := repository.NewChatRepo(repository.DB)
 	presence := repository.NewRedisPresenceStore()
-	aiBridge := service.NewAIBridge(queue.New(repository.RDB))
+	aiBridge := service.NewAIBridge(queue.New(repository.RDB), chatRepo)
+	if repository.DB != nil {
+		aiBridge.Start(context.Background())
+	}
 	chatSvc := service.NewChatService(chatRepo, presence, hub, aiBridge)
 	chatH := handler.NewChatHandler(chatSvc, hub, trustedOrigins)
 	internalH := handler.NewInternalHandler(postRepo, chatSvc)
@@ -113,6 +117,7 @@ func SetupRouter(trustedOrigins ...string) *gin.Engine {
 		authAPI.GET("/favorites", favoriteH.List)
 		authAPI.GET("/likes", socialH.GetLikes)
 		authAPI.POST("/posts/:id/comments", socialH.CreateComment)
+		authAPI.POST("/comments/:cid/like", socialH.ToggleCommentLike)
 		authAPI.DELETE("/comments/:cid", socialH.DeleteComment)
 		authAPI.POST("/users/:id/follow", socialH.ToggleFollow)
 		authAPI.GET("/users/search", chatH.SearchUsers)

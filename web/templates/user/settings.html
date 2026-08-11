@@ -1,52 +1,150 @@
 {{ template "header" . }}
-<div class="row"><div class="col-lg-6 mx-auto">
-    <div class="page-header">
-        <div><div class="eyebrow">ACCOUNT</div><h1>账号设置</h1><p>管理个人资料和登录安全。</p></div>
-        <div class="page-actions"><a href="/user/{{ .user_id }}" class="btn btn-outline-secondary">查看主页</a></div>
+<section class="settings-page" x-data="settingsTheme()" x-init="init()">
+    <header class="settings-header">
+        <a class="settings-back" href="/user/{{ .user_id }}" aria-label="返回个人主页"><i class="bi bi-arrow-left"></i></a>
+        <div>
+            <div class="eyebrow">PREFERENCES</div>
+            <h1>设置和动态</h1>
+        </div>
+        <span class="settings-header-spacer" aria-hidden="true"></span>
+    </header>
+
+    <label class="settings-search" for="settings-filter">
+        <i class="bi bi-search" aria-hidden="true"></i>
+        <span class="visually-hidden">搜索设置</span>
+        <input id="settings-filter" type="search" placeholder="搜索" autocomplete="off" data-settings-filter>
+    </label>
+
+    {{ if .Success }}<div class="alert alert-success settings-alert">{{ .Success }}</div>{{ end }}
+    {{ if .Error }}<div class="alert alert-danger settings-alert">{{ .Error }}</div>{{ end }}
+
+    <div class="settings-section" data-settings-group>
+        <h2>你的账户</h2>
+        <div class="settings-list">
+            <a class="settings-row" href="/user/{{ .user_id }}" data-settings-item>
+                <span class="settings-row-icon"><i class="bi bi-person-circle"></i></span>
+                <span class="settings-row-copy"><strong>账户中心</strong><small>个人资料、作品、关注和私聊</small></span>
+                <i class="bi bi-chevron-right settings-chevron" aria-hidden="true"></i>
+            </a>
+            <div class="settings-row settings-row-theme" data-settings-item>
+                <span class="settings-row-icon"><i class="bi bi-palette"></i></span>
+                <span class="settings-row-copy"><strong>主题外观</strong><small x-text="theme === 'mono' ? '经典黑白' : 'ShareO 琥珀色'"></small></span>
+                <span class="theme-switch" role="group" aria-label="选择主题">
+                    <button type="button" :class="{active: theme === 'amber'}" :aria-pressed="theme === 'amber'" @click="setTheme('amber')">琥珀</button>
+                    <button type="button" :class="{active: theme === 'mono'}" :aria-pressed="theme === 'mono'" @click="setTheme('mono')">黑白</button>
+                </span>
+            </div>
+        </div>
     </div>
-    {{ if .Success }}<div class="alert alert-success">{{ .Success }}</div>{{ end }}
-    {{ if .Error }}<div class="alert alert-danger">{{ .Error }}</div>{{ end }}
-    <div class="surface-card p-3 p-md-4 mb-3">
-        <h6 class="mb-3">个人信息</h6>
-        <form method="POST" action="/settings">
-            <div class="mb-3">
-                <label class="form-label">用户名</label>
-                <input type="text" class="form-control" value="{{ .username }}" disabled>
-                <small class="text-muted">用户名不可修改</small>
-            </div>
-            <div class="mb-3">
-                <label class="form-label">邮箱</label>
-                <input type="email" name="email" class="form-control" value="{{ .Email }}" placeholder="请输入邮箱">
-            </div>
-            <div class="mb-3">
-                <label class="form-label">个人简介</label>
-                <textarea name="bio" class="form-control" rows="3" placeholder="介绍一下自己..." maxlength="200">{{ .Bio }}</textarea>
-                <small class="text-muted">最多200字</small>
-            </div>
-            <button type="submit" class="btn btn-primary"><i class="bi bi-check2"></i> 保存设置</button>
-        </form>
+
+    <div class="settings-section" data-settings-group>
+        <h2>使用 ShareO</h2>
+        <div class="settings-list">
+            <a class="settings-row" href="/user/{{ .user_id }}#favorites" data-settings-item>
+                <span class="settings-row-icon"><i class="bi bi-bookmark"></i></span>
+                <span class="settings-row-copy"><strong>已收藏</strong><small>查看你保存的作品</small></span>
+                <i class="bi bi-chevron-right settings-chevron" aria-hidden="true"></i>
+            </a>
+            <a class="settings-row" href="/notifications" data-settings-item>
+                <span class="settings-row-icon"><i class="bi bi-bell"></i></span>
+                <span class="settings-row-copy"><strong>通知</strong><small>评论、点赞和关注动态</small></span>
+                <i class="bi bi-chevron-right settings-chevron" aria-hidden="true"></i>
+            </a>
+            <a class="settings-row" href="/chat" data-settings-item>
+                <span class="settings-row-icon"><i class="bi bi-chat-dots"></i></span>
+                <span class="settings-row-copy"><strong>私聊</strong><small>查看会话和未读消息</small></span>
+                <i class="bi bi-chevron-right settings-chevron" aria-hidden="true"></i>
+            </a>
+        </div>
     </div>
-    <div class="surface-card p-3 p-md-4 mb-3">
-        <h6 class="mb-3">安全</h6>
-        <form method="POST" action="/settings/password">
-            <div class="mb-3">
-                <label class="form-label">当前密码</label>
-                <input type="password" name="old_password" class="form-control" required minlength="6" placeholder="请输入当前密码">
-            </div>
-            <div class="mb-3">
-                <label class="form-label">新密码</label>
-                <input type="password" name="new_password" class="form-control" required minlength="6" placeholder="至少6个字符">
-            </div>
-            <button type="submit" class="btn btn-warning"><i class="bi bi-shield-lock"></i> 修改密码</button>
-            <small class="text-muted d-block mt-2">修改后需要重新登录</small>
-        </form>
+
+    <div class="settings-section" data-settings-group>
+        <h2>编辑资料</h2>
+        <div class="surface-card settings-form-card" data-settings-item>
+            <form method="POST" action="/settings">
+                <div class="settings-form-grid">
+                    <div class="mb-3">
+                        <label class="form-label" for="settings-username">用户名</label>
+                        <input id="settings-username" type="text" class="form-control" value="{{ .username }}" disabled>
+                        <small class="text-muted">用户名不可修改</small>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label" for="settings-email">邮箱</label>
+                        <input id="settings-email" type="email" name="email" class="form-control" value="{{ .Email }}" placeholder="请输入邮箱">
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label" for="settings-bio">个人简介</label>
+                    <textarea id="settings-bio" name="bio" class="form-control" rows="3" placeholder="介绍一下自己..." maxlength="200">{{ .Bio }}</textarea>
+                    <small class="text-muted">最多 200 字</small>
+                </div>
+                <button type="submit" class="btn btn-primary"><i class="bi bi-check2"></i> 保存设置</button>
+            </form>
+        </div>
     </div>
-    <div class="surface-card p-3 p-md-4">
-        <h6 class="mb-2">会话</h6>
-        <p class="text-muted small">退出后需要重新登录才能访问社区、私聊和管理页面。</p>
-        <form method="POST" action="/logout" onsubmit="return confirm('确认退出登录？')">
-            <button type="submit" class="btn btn-outline-danger"><i class="bi bi-box-arrow-right me-1"></i>退出登录</button>
-        </form>
+
+    <div class="settings-section" data-settings-group>
+        <h2>安全与登录</h2>
+        <div class="surface-card settings-form-card" data-settings-item>
+            <form method="POST" action="/settings/password">
+                <div class="settings-form-grid">
+                    <div class="mb-3">
+                        <label class="form-label" for="settings-old-password">当前密码</label>
+                        <input id="settings-old-password" type="password" name="old_password" class="form-control" required minlength="6" placeholder="请输入当前密码">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label" for="settings-new-password">新密码</label>
+                        <input id="settings-new-password" type="password" name="new_password" class="form-control" required minlength="6" placeholder="至少 6 个字符">
+                    </div>
+                </div>
+                <button type="submit" class="btn btn-outline-primary"><i class="bi bi-shield-lock"></i> 修改密码</button>
+                <small class="text-muted d-block mt-2">修改后需要重新登录</small>
+            </form>
+        </div>
     </div>
-</div></div>
+
+    <div class="settings-section settings-session" data-settings-group>
+        <h2>会话</h2>
+        <div class="settings-list">
+            <form method="POST" action="/logout" onsubmit="return confirm('确认退出登录？')">
+                <button type="submit" class="settings-row settings-danger-row" data-settings-item>
+                    <span class="settings-row-icon"><i class="bi bi-box-arrow-right"></i></span>
+                    <span class="settings-row-copy"><strong>退出登录</strong><small>退出后需要重新登录才能访问 ShareO</small></span>
+                    <i class="bi bi-chevron-right settings-chevron" aria-hidden="true"></i>
+                </button>
+            </form>
+        </div>
+    </div>
+</section>
+
+<script>
+function settingsTheme() {
+    return {
+        theme: 'amber',
+        init() {
+            try { this.theme = window.localStorage.getItem('shareo.theme') === 'mono' ? 'mono' : 'amber'; } catch (_) { this.theme = 'amber'; }
+            this.applyTheme();
+            const filter = document.querySelector('[data-settings-filter]');
+            if (filter) filter.addEventListener('input', event => this.filterItems(event.target.value));
+        },
+        applyTheme() {
+            document.documentElement.dataset.theme = this.theme === 'mono' ? 'mono' : 'amber';
+        },
+        setTheme(theme) {
+            this.theme = theme === 'mono' ? 'mono' : 'amber';
+            try { window.localStorage.setItem('shareo.theme', this.theme === 'mono' ? 'mono' : 'amber'); } catch (_) {}
+            this.applyTheme();
+        },
+        filterItems(query) {
+            const value = String(query || '').trim().toLowerCase();
+            document.querySelectorAll('[data-settings-group]').forEach(group => {
+                const items = [...group.querySelectorAll('[data-settings-item]')];
+                const visible = items.filter(item => !value || item.textContent.toLowerCase().includes(value));
+                items.forEach(item => { item.hidden = !visible.includes(item); });
+                group.hidden = Boolean(value) && visible.length === 0;
+            });
+        }
+    };
+}
+</script>
 {{ template "footer" . }}

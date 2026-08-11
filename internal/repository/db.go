@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/zhoujianlin/ShareO/internal/config"
-	"gorm.io/driver/mysql"
+	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 )
@@ -19,11 +19,11 @@ func InitDB(cfg config.DatabaseConfig, mode string) error {
 	if mode == "debug" {
 		logLevel = logger.Info
 	}
-	DB, err = gorm.Open(mysql.Open(cfg.DSN()), &gorm.Config{
+	DB, err = gorm.Open(postgres.Open(cfg.DSN()), &gorm.Config{
 		Logger: logger.Default.LogMode(logLevel),
 	})
 	if err != nil {
-		return fmt.Errorf("failed to connect mysql: %w", err)
+		return fmt.Errorf("failed to connect postgres: %w", err)
 	}
 
 	sqlDB, err := DB.DB()
@@ -34,10 +34,7 @@ func InitDB(cfg config.DatabaseConfig, mode string) error {
 	sqlDB.SetMaxOpenConns(cfg.MaxOpenConns)
 	sqlDB.SetConnMaxLifetime(time.Duration(cfg.ConnMaxLifetime) * time.Second)
 
-	slog.Info("MySQL connected successfully")
-
-	// Detect FULLTEXT index availability
-	DetectFulltext()
+	slog.Info("PostgreSQL connected successfully")
 
 	return nil
 }

@@ -1,8 +1,8 @@
 """Unified AI evaluation command for the current local corpus.
 
 Evaluates both semantic image search and RAG bot quality against
-frozen datasets, producing metrics, latency reports, and a human
-scoring template.
+frozen datasets, producing metrics, latency reports, redacted evaluation
+rows, and an optional human scoring template.
 
 Usage:
   python -m app.commands.eval_ai \\
@@ -64,6 +64,10 @@ def evaluate_rag(
     """
     metrics: dict[str, list[float]] = {
         "source_hit": [],
+        "source_coverage": [],
+        "complete_source_coverage": [],
+        "citation_precision": [],
+        "extra_citation_count": [],
         "citation_accessible": [],
         "hallucinated_count": [],
         "source_count": [],
@@ -72,6 +76,8 @@ def evaluate_rag(
     scoring_rows: list[dict] = []
     skipped = 0
     failed_queries = 0
+    timeout_queries = 0
+    failure_categories: dict[str, int] = {}
     no_answer_correct = 0
     no_answer_total = 0
 
@@ -111,8 +117,13 @@ def evaluate_rag(
             source_id = _send_message(client, token, conv_id, question)
             if not source_id:
                 failed_queries += 1
+                failure_categories["send_failed"] = failure_categories.get("send_failed", 0) + 1
                 elapsed = (time.perf_counter() - started) * 1000
                 metrics["source_hit"].append(0.0)
+                metrics["source_coverage"].append(0.0)
+                metrics["complete_source_coverage"].append(0.0)
+                metrics["citation_precision"].append(0.0)
+                metrics["extra_citation_count"].append(0.0)
                 metrics["citation_accessible"].append(0.0)
                 metrics["hallucinated_count"].append(0.0)
                 metrics["source_count"].append(0.0)
@@ -127,6 +138,7 @@ def evaluate_rag(
                         "citations": [],
                         "citation_post_ids": [],
                         "citation_details": [],
+                        "failure_category": "send_failed",
                         "relevance_score": "",
                     }
                 )
@@ -139,7 +151,13 @@ def evaluate_rag(
 
             if not bot_message:
                 failed_queries += 1
+                timeout_queries += 1
+                failure_categories["timeout"] = failure_categories.get("timeout", 0) + 1
                 metrics["source_hit"].append(0.0)
+                metrics["source_coverage"].append(0.0)
+                metrics["complete_source_coverage"].append(0.0)
+                metrics["citation_precision"].append(0.0)
+                metrics["extra_citation_count"].append(0.0)
                 metrics["citation_accessible"].append(0.0)
                 metrics["hallucinated_count"].append(0.0)
                 metrics["source_count"].append(0.0)
@@ -153,6 +171,7 @@ def evaluate_rag(
                         "citations": [],
                         "citation_post_ids": [],
                         "citation_details": [],
+                        "failure_category": "timeout",
                         "relevance_score": "",
                     }
                 )
@@ -173,12 +192,30 @@ def evaluate_rag(
                 if not citation_post_ids:
                     no_answer_correct += 1
                 hits = 1.0 if not citation_post_ids else 0.0
+                source_coverage = hits
+                complete_source_coverage = hits
+                citation_precision = hits
+                extra_citations = len(set(citation_post_ids))
             elif expected_ids:
                 hit_ids = set(citation_post_ids) & expected_ids
                 hits = 1.0 if hit_ids else 0.0
+                source_coverage = len(hit_ids) / len(expected_ids)
+                complete_source_coverage = float(source_coverage >= 1.0)
+                citation_precision = (
+                    len(hit_ids) / len(set(citation_post_ids)) if citation_post_ids else 0.0
+                )
+                extra_citations = len(set(citation_post_ids) - expected_ids)
             else:
                 hits = 0.0
+                source_coverage = 0.0
+                complete_source_coverage = 0.0
+                citation_precision = 0.0
+                extra_citations = len(set(citation_post_ids))
             metrics["source_hit"].append(hits)
+            metrics["source_coverage"].append(source_coverage)
+            metrics["complete_source_coverage"].append(complete_source_coverage)
+            metrics["citation_precision"].append(citation_precision)
+            metrics["extra_citation_count"].append(float(extra_citations))
 
             # Citation accessibility (verified via Go API)
             inaccessible = 0
@@ -208,7 +245,15 @@ def evaluate_rag(
                     "citation_post_ids": citation_post_ids,
                     "citation_details": citations,
                     "source_hit_rate": round(hits, 3),
+                    "source_coverage": round(source_coverage, 3),
+                    "complete_source_coverage": bool(complete_source_coverage),
+                    "citation_precision": round(citation_precision, 3),
+                    "extra_citations": extra_citations,
                     "accessible": accessible_ratio >= 1.0,
+                    "citation_accessible": accessible_ratio >= 1.0,
+                    "hallucinated_citations": hallucinated,
+                    "expect_no_answer": bool(expect_no_answer),
+                    "failure_category": "",
                     "relevance_score": "",
                 }
             )
@@ -222,9 +267,24 @@ def evaluate_rag(
         "total_queries": total,
         "skipped": skipped,
         "failed_queries": failed_queries,
+        "timeout_queries": timeout_queries,
+        "timeout_rate": round(timeout_queries / total, 4) if total else 0,
+        "failure_categories": failure_categories,
         "source_hit_rate": round(statistics.fmean(metrics["source_hit"]), 4)
         if metrics["source_hit"]
         else 0,
+        "source_coverage_rate": round(statistics.fmean(metrics["source_coverage"]), 4)
+        if metrics["source_coverage"]
+        else 0,
+        "complete_source_coverage_rate": round(
+            statistics.fmean(metrics["complete_source_coverage"]), 4
+        )
+        if metrics["complete_source_coverage"]
+        else 0,
+        "citation_precision_rate": round(statistics.fmean(metrics["citation_precision"]), 4)
+        if metrics["citation_precision"]
+        else 0,
+        "extra_citations": int(sum(metrics["extra_citation_count"])),
         "citation_accessible_rate": round(statistics.fmean(metrics["citation_accessible"]), 4)
         if metrics["citation_accessible"]
         else 0,
@@ -409,6 +469,7 @@ def _export_image_metrics(report: dict) -> dict:
         "recall_5": semantic.get("recall_5", 0),
         "recall_10": semantic.get("recall_10", 0),
         "mrr": semantic.get("mrr", 0),
+        "no_match_accuracy": semantic.get("no_match_accuracy", 0),
         "duplicate_queries": report.get("semantic_duplicate_queries", 0),
         "latency_p50_ms": semantic.get("latency_p50_ms", 0),
         "latency_p95_ms": semantic.get("latency_p95_ms", 0),
@@ -422,6 +483,10 @@ def _export_rag_metrics(rag_result: dict) -> dict:
     report = rag_result.get("report", {})
     return {
         "source_hit_rate": report.get("source_hit_rate", 0),
+        "source_coverage_rate": report.get("source_coverage_rate", 0),
+        "complete_source_coverage_rate": report.get("complete_source_coverage_rate", 0),
+        "citation_precision_rate": report.get("citation_precision_rate", 0),
+        "extra_citations": report.get("extra_citations", 0),
         "citation_accessible_rate": report.get("citation_accessible_rate", 0),
         "total_hallucinated": report.get("total_hallucinated", 0),
         "avg_sources_per_answer": report.get("avg_sources_per_answer", 0),
@@ -430,6 +495,9 @@ def _export_rag_metrics(rag_result: dict) -> dict:
         "total_queries": report.get("total_queries", 0),
         "skipped": report.get("skipped", 0),
         "failed_queries": report.get("failed_queries", 0),
+        "timeout_queries": report.get("timeout_queries", 0),
+        "timeout_rate": report.get("timeout_rate", 0),
+        "failure_categories": report.get("failure_categories", {}),
         "no_answer_accuracy": report.get("no_answer_accuracy"),
     }
 
@@ -450,6 +518,9 @@ def check_quality_gates(
     # Image search gates
     gates["recall_5 >= 0.70"] = image_available and sem.get("recall_5", 0) >= 0.70
     gates["mrr >= 0.55"] = image_available and sem.get("mrr", 0) >= 0.55
+    gates["no-match accuracy >= 0.80"] = (
+        image_available and sem.get("no_match_accuracy", 1.0) >= 0.80
+    )
     gates["no duplicate posts"] = (
         image_available and image_report.get("semantic_duplicate_queries", 0) == 0
     )
@@ -463,6 +534,16 @@ def check_quality_gates(
     gates["source_hit_rate >= 0.80"] = (
         rag_available and rag_metrics.get("source_hit_rate", 0) >= 0.80
     )
+    gates["complete source coverage >= 0.80"] = (
+        rag_available
+        and rag_metrics.get("complete_source_coverage_rate", rag_metrics.get("source_hit_rate", 0))
+        >= 0.80
+    )
+    gates["citation precision >= 0.80"] = (
+        rag_available
+        and rag_metrics.get("citation_precision_rate", rag_metrics.get("source_hit_rate", 0))
+        >= 0.80
+    )
     gates["citation_accessible 100%"] = (
         rag_available and rag_metrics.get("citation_accessible_rate", 0) >= 1.0
     )
@@ -470,7 +551,8 @@ def check_quality_gates(
         rag_available and rag_metrics.get("total_hallucinated", 0) == 0
     )
 
-    # Human scoring
+    # Human scoring remains a separate optional path. The final evidence
+    # command uses app.commands.ai_judge for the configured AI-judge policy.
     gates["human_relevance_avg >= 4.0"] = (
         human_avg_score >= 4.0 if human_avg_score is not None else "PENDING"
     )
@@ -607,6 +689,7 @@ def _write_report(path: Path, results: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     output_data = {key: value for key, value in results.items()}
     if "rag" in output_data and "scoring_template" in output_data["rag"]:
+        output_data["rag"]["evaluation_rows"] = output_data["rag"]["scoring_template"]
         del output_data["rag"]["scoring_template"]
     path.write_text(json.dumps(output_data, ensure_ascii=False, indent=2), encoding="utf-8")
 
@@ -699,7 +782,7 @@ def _apply_human_scoring(
     results["machine_quality_gate_passed"] = machine_passed
     human_avg_score: float | None = None
     if machine_only:
-        results["human_scoring"] = {"status": "SKIPPED"}
+        results["human_scoring"] = {"status": "not_run"}
     elif not machine_passed:
         results["human_scoring"] = {"status": "BLOCKED_MACHINE_GATES"}
     elif scoring_input is None:
@@ -760,7 +843,7 @@ def main() -> int:
                 / ".local"
                 / "shareo"
                 / "eval"
-                / "rag_qa_current_v1.jsonl"
+                / "rag_qa_current_v2.jsonl"
             ),
         ),
         type=Path,
@@ -892,6 +975,7 @@ def main() -> int:
                 "report": rag_result.get("report", {}),
                 "metrics": rag_metrics,
                 "scoring_template": rag_result.get("scoring_template", []),
+                "evaluation_rows": rag_result.get("scoring_template", []),
             }
             print(
                 f"  Source Hit Rate:    {rag_metrics.get('source_hit_rate', 0):.4f}  (target ≥ 0.80)"

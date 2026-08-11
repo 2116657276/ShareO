@@ -2,7 +2,8 @@
 
 import asyncio
 import json
-from dataclasses import dataclass
+import time
+from dataclasses import dataclass, field
 from typing import Any
 
 import httpx
@@ -27,7 +28,7 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
         "type": "function",
         "function": {
             "name": "semantic_search_posts",
-            "description": "Search approved community post chunks by meaning.",
+            "description": "Search approved community post chunks by meaning when the user gives a paraphrase or conceptual description.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -43,7 +44,7 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
         "type": "function",
         "function": {
             "name": "keyword_search_posts",
-            "description": "Search approved community posts by exact keywords.",
+            "description": "Search approved community posts by exact words or named topics; use this first for comparison questions that need separate sources.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -59,7 +60,7 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
         "type": "function",
         "function": {
             "name": "read_posts",
-            "description": "Read approved community posts by their IDs.",
+            "description": "Read approved community posts by IDs returned by a search; use it to verify details before citing a source.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -79,7 +80,7 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
         "type": "function",
         "function": {
             "name": "search_images",
-            "description": "Search approved community images by a Chinese description.",
+            "description": "Search approved community images by a Chinese visual description; only use when the user explicitly asks to find a photo, image, or visual match.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -105,6 +106,7 @@ class ToolExecution:
     output: dict[str, Any]
     citations: list[dict[str, Any]]
     result_count: int
+    timings: dict[str, float] = field(default_factory=dict)
 
 
 class AgentToolRuntime:
@@ -194,7 +196,10 @@ class AgentToolRuntime:
 
     async def _semantic_search(self, args: dict[str, Any]) -> ToolExecution:
         query, limit = self._query(args)
+        embedding_started = time.perf_counter()
         vector = await asyncio.to_thread(self.text_embedder.embed_query, query)
+        embedding_ms = (time.perf_counter() - embedding_started) * 1000
+        retrieval_started = time.perf_counter()
         candidates = await self.text_vector_store.search(
             vector,
             min(
@@ -202,14 +207,17 @@ class AgentToolRuntime:
                 settings.agent_search_max_candidates,
             ),
         )
+        retrieval_ms = (time.perf_counter() - retrieval_started) * 1000
         post_ids: list[int] = []
         for candidate in candidates:
             post_id = int(candidate["post_id"])
             if post_id not in post_ids:
                 post_ids.append(post_id)
+        visibility_started = time.perf_counter()
         visible = await self._go(
             "POST", "/internal/posts/agent/read", json={"post_ids": post_ids[:10]}
         )
+        visibility_ms = (time.perf_counter() - visibility_started) * 1000
         content_by_post = {int(item["post_id"]): str(item.get("content") or "") for item in visible}
         items: list[dict[str, Any]] = []
         citations: list[dict[str, Any]] = []
@@ -233,13 +241,20 @@ class AgentToolRuntime:
             {"items": items},
             citations,
             len(items),
+            {
+                "embedding_ms": round(embedding_ms, 1),
+                "retrieval_ms": round(retrieval_ms, 1),
+                "visibility_ms": round(visibility_ms, 1),
+            },
         )
 
     async def _keyword_search(self, args: dict[str, Any]) -> ToolExecution:
         query, limit = self._query(args)
+        keyword_started = time.perf_counter()
         payloads = await self._go(
             "GET", "/internal/posts/agent/search", params={"q": query, "limit": limit}
         )
+        keyword_ms = (time.perf_counter() - keyword_started) * 1000
         items = [
             {
                 "post_id": int(item["post_id"]),
@@ -255,11 +270,14 @@ class AgentToolRuntime:
             {"items": items},
             citations,
             len(items),
+            {"keyword_ms": round(keyword_ms, 1)},
         )
 
     async def _read_posts(self, args: dict[str, Any]) -> ToolExecution:
         post_ids = self._post_ids(args)
+        visibility_started = time.perf_counter()
         payloads = await self._go("POST", "/internal/posts/agent/read", json={"post_ids": post_ids})
+        visibility_ms = (time.perf_counter() - visibility_started) * 1000
         items = [
             {
                 "post_id": int(item["post_id"]),
@@ -276,12 +294,16 @@ class AgentToolRuntime:
             {"items": items},
             citations,
             len(items),
+            {"visibility_ms": round(visibility_ms, 1)},
         )
 
     async def _search_images(self, args: dict[str, Any]) -> ToolExecution:
         query, limit = self._query(args)
         limit = min(limit, 8)
+        embedding_started = time.perf_counter()
         vector = await asyncio.to_thread(self.image_embedder.encode_text, query)
+        embedding_ms = (time.perf_counter() - embedding_started) * 1000
+        retrieval_started = time.perf_counter()
         candidates = await self.image_vector_store.search(
             vector,
             min(
@@ -289,14 +311,17 @@ class AgentToolRuntime:
                 settings.agent_image_search_max_candidates,
             ),
         )
+        retrieval_ms = (time.perf_counter() - retrieval_started) * 1000
         post_ids: list[int] = []
         for candidate in candidates:
             post_id = int(candidate["post_id"])
             if post_id not in post_ids:
                 post_ids.append(post_id)
+        visibility_started = time.perf_counter()
         visible = await self._go(
             "POST", "/internal/posts/agent/read", json={"post_ids": post_ids[:10]}
         )
+        visibility_ms = (time.perf_counter() - visibility_started) * 1000
         content_by_post = {int(item["post_id"]): str(item.get("content") or "") for item in visible}
         items: list[dict[str, Any]] = []
         seen_posts: set[int] = set()
@@ -321,6 +346,11 @@ class AgentToolRuntime:
             {"items": items},
             citations,
             len(items),
+            {
+                "embedding_ms": round(embedding_ms, 1),
+                "retrieval_ms": round(retrieval_ms, 1),
+                "visibility_ms": round(visibility_ms, 1),
+            },
         )
 
     async def execute(self, name: str, arguments: str | dict[str, Any]) -> ToolExecution:

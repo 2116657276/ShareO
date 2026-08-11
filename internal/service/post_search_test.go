@@ -107,7 +107,7 @@ func TestHybridPostSearchFallsBackToKeyword(t *testing.T) {
 	}
 	search := &hybridPostSearch{
 		repo: repo, semanticThreshold: 0,
-		semantic: &fakeSemanticPostSearch{err: errors.New("qdrant unavailable")},
+		semantic: &fakeSemanticPostSearch{err: errors.New("pgvector unavailable")},
 	}
 	posts, total, err := search.Search(context.Background(), "桃花", 1, 10)
 	if err != nil {
@@ -120,7 +120,7 @@ func TestHybridPostSearchFallsBackToKeyword(t *testing.T) {
 
 func TestHybridPostSearchUsesSemanticWhenKeywordFails(t *testing.T) {
 	repo := &fakePostSearchRepo{
-		keywordErr: errors.New("mysql unavailable"),
+		keywordErr: errors.New("postgres unavailable"),
 		posts:      []model.Post{{ID: 5, Content: "安静的校园角落"}},
 	}
 	search := &hybridPostSearch{
@@ -135,8 +135,8 @@ func TestHybridPostSearchUsesSemanticWhenKeywordFails(t *testing.T) {
 
 func TestHybridPostSearchFailsWhenBothChannelsFail(t *testing.T) {
 	search := &hybridPostSearch{
-		repo:     &fakePostSearchRepo{keywordErr: errors.New("mysql unavailable")},
-		semantic: &fakeSemanticPostSearch{err: errors.New("qdrant unavailable")},
+		repo:     &fakePostSearchRepo{keywordErr: errors.New("postgres unavailable")},
+		semantic: &fakeSemanticPostSearch{err: errors.New("pgvector unavailable")},
 	}
 	if _, _, err := search.Search(context.Background(), "测试", 1, 10); err == nil {
 		t.Fatal("expected all-channel failure")

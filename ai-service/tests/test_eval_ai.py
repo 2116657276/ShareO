@@ -146,4 +146,7 @@ def test_evaluate_rag_counts_failed_and_no_answer_queries(monkeypatch):
     assert report["failed_queries"] == 1
     assert report["no_answer_accuracy"] == 1.0
     assert report["source_hit_rate"] == 0.6667
+    assert report["source_coverage_rate"] == 0.6667
+    assert report["complete_source_coverage_rate"] == 0.6667
+    assert report["citation_precision_rate"] == 0.6667
     assert report["citation_accessible_rate"] == 0.6667

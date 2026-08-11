@@ -1,31 +1,30 @@
-# ADR-003: 向量数据库 —— Qdrant
+# ADR-003：PostgreSQL pgvector 向量存储
 
-- 日期: 2026-07-19
-- 状态: 已接受
+- 日期：2026-08-11
+- 状态：已接受
 
 ## 背景
 
-图片向量与文本块向量需要专门的近邻检索存储，规模预估 1 万~10 万向量级（毕设规模），需支持按 payload 过滤（post_id、时间等）与删除。主库是 MySQL，无 pgvector 选项。
+图片向量与文本块向量需要 512 维余弦近邻检索、按帖子删除和幂等替换。当前本机运行目标是 Homebrew PostgreSQL 17，业务数据已经以 PostgreSQL 为唯一真相；继续维护独立向量服务会增加本机网络、模型下载和数据清理的故障面。
 
 ## 候选方案
 
-1. Qdrant —— Rust 编写，单容器部署
-2. Milvus —— 国产明星项目（Zilliz），standalone 需多个依赖容器
-3. Redis 向量检索 —— 复用现有 Redis
-4. Elasticsearch/OpenSearch kNN —— 重型搜索引擎
+1. PostgreSQL pgvector：复用同一实例，以独立 `ai` schema 和 AI 账号隔离派生数据。
+2. 独立向量服务：需要额外进程、端口和存储生命周期。
+3. Redis 向量检索：复用缓存服务，但不适合本项目的持久化与索引管理。
 
 ## 决定
 
-选 Qdrant，单 Docker 容器部署。两个 collection：`images`（Chinese-CLIP 图片向量，512 维）、`post_chunks`（BGE 文本向量）。只由 ai-service 访问。
+采用 PostgreSQL 17 的 pgvector 扩展。建立 `ai.image_embeddings` 与 `ai.post_chunk_embeddings` 两张派生表，向量列固定为 `vector(512)`，建立 `vector_cosine_ops` HNSW 索引。Go 使用 `shareo_app` 读写 `public` 业务 schema；Python 使用 `shareo_ai` 只读写 `ai` schema。Python 通过 Psycopg 3 异步连接池访问数据库，保留现有 `ImageVectorStore`、`TextVectorStore` 方法语义。
 
 ## 理由
 
-- 单容器即起、API 干净、文档好，笔记本上运维负担最小——独立开发者的时间是最稀缺资源。
-- Payload 过滤、按条件删除等本项目刚需功能完备。
-- Milvus 认知度高但 standalone 部署重（etcd + MinIO + 本体），对本规模是纯负担；本 ADR 即为答辩时"为何不用 Milvus"的书面回答。
-- Redis 向量能力可用但生态与论文素材薄；ES 体量完全不匹配。
+- 本机只需维护 PostgreSQL、Redis 和 MinIO，避免 Qdrant/Compose/Colima/OrbStack 的网络与生命周期问题。
+- 业务和派生数据共享事务数据库的连接与备份边界，但通过 schema、账号和权限实现写入隔离。
+- `<=>` 余弦距离、HNSW 和唯一约束覆盖当前图片搜图、RAG、upsert、删除和替换需求；派生表可由 approved 帖子回填重建。
 
-## 后果与代价
+## 后果与边界
 
-- 比 Milvus 少一个"大厂名字" → 用选型论证的严谨性弥补，答辩讲清楚工程权衡反而更加分。
-- 新增一个基础组件 → 已纳入 docker-compose 统一管理。
+- 向量检索与业务数据库共享资源，规模扩大时需要单独评估连接池、索引和磁盘容量。
+- AI 账号不持有 `public` 表或 MinIO 凭证；公开结果仍由 Go 按 `approved AND is_deleted=0` 做最终校验。
+- 旧 Qdrant 存储可以作为人工回滚材料保留，但新运行时、启动脚本和 readiness 完全不访问它。

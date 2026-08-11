@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"os"
 	"reflect"
 	"sort"
@@ -14,26 +15,26 @@ import (
 	"testing"
 	"time"
 
-	mysqlDriver "github.com/go-sql-driver/mysql"
 	"github.com/zhoujianlin/ShareO/internal/model"
-	"gorm.io/driver/mysql"
+	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )
 
 func openChatIntegrationDB(t *testing.T) *gorm.DB {
 	t.Helper()
-	dsn := os.Getenv("SHAREO_TEST_MYSQL_DSN")
+	dsn := os.Getenv("SHAREO_TEST_POSTGRES_DSN")
 	if dsn == "" {
-		t.Skip("set SHAREO_TEST_MYSQL_DSN to a migrated disposable *_test database")
+		t.Skip("set SHAREO_TEST_POSTGRES_DSN to a migrated disposable *_test database")
 	}
-	parsed, err := mysqlDriver.ParseDSN(dsn)
+	parsed, err := url.Parse(dsn)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.HasSuffix(parsed.DBName, "_test") {
-		t.Fatalf("refusing integration test database %q: name must end in _test", parsed.DBName)
+	databaseName := strings.TrimPrefix(parsed.Path, "/")
+	if !strings.HasSuffix(databaseName, "_test") {
+		t.Fatalf("refusing integration test database %q: name must end in _test", databaseName)
 	}
-	db, err := gorm.Open(mysql.Open(dsn), &gorm.Config{})
+	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -43,13 +44,13 @@ func openChatIntegrationDB(t *testing.T) *gorm.DB {
 func TestLightweightBaselineSchema(t *testing.T) {
 	db := openChatIntegrationDB(t)
 	expected := []string{
-		"bot_replies", "comments", "conversation_members", "conversations",
-		"favorites", "follows", "likes", "messages", "notifications", "post_images",
+		"bot_replies", "bot_task_outbox", "comment_likes", "comments", "conversation_members",
+		"conversations", "favorites", "follows", "likes", "messages", "notifications", "post_images",
 		"posts", "system_logs", "users",
 	}
 	var tables []string
-	if err := db.Raw(`SELECT TABLE_NAME FROM information_schema.TABLES
-		WHERE TABLE_SCHEMA = DATABASE() AND TABLE_TYPE = 'BASE TABLE'`).Scan(&tables).Error; err != nil {
+	if err := db.Raw(`SELECT table_name FROM information_schema.tables
+		WHERE table_schema = 'public' AND table_type = 'BASE TABLE'`).Scan(&tables).Error; err != nil {
 		t.Fatal(err)
 	}
 	sort.Strings(tables)
@@ -63,8 +64,8 @@ func TestLightweightBaselineSchema(t *testing.T) {
 	}
 	for table, columns := range removedColumns {
 		var count int64
-		if err := db.Raw(`SELECT COUNT(*) FROM information_schema.COLUMNS
-			WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME IN ?`, table, columns).
+		if err := db.Raw(`SELECT COUNT(*) FROM information_schema.columns
+			WHERE table_schema = 'public' AND table_name = ? AND column_name IN ?`, table, columns).
 			Scan(&count).Error; err != nil {
 			t.Fatal(err)
 		}
@@ -199,6 +200,58 @@ func TestBotReplyIsAtomicIdempotentAndFiltersCitations(t *testing.T) {
 	}
 }
 
+func TestBotTaskOutboxIsWrittenWithMessageAndCanBeReplayed(t *testing.T) {
+	db := openChatIntegrationDB(t)
+	ctx := context.Background()
+	repo := NewChatRepo(db)
+	stamp := time.Now().UnixNano()
+	user := model.User{
+		Username: fmt.Sprintf("outbox_it_%d", stamp), PasswordHash: "test", Status: model.UserStatusActive,
+	}
+	if err := db.Create(&user).Error; err != nil {
+		t.Fatal(err)
+	}
+	var bot model.User
+	if err := db.Where("username = ? AND is_bot = 1", "shareo_bot").First(&bot).Error; err != nil {
+		t.Fatal(err)
+	}
+	conversation, err := repo.EnsureDM(ctx, user.ID, bot.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	message := &model.Message{ConversationID: conversation.ID, SenderID: user.ID, Content: "outbox"}
+	if err := repo.CreateMessageWithBotTask(ctx, message, true); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		db.Where("message_id = ?", message.ID).Delete(&model.BotTaskOutbox{})
+		db.Where("conversation_id = ?", conversation.ID).Delete(&model.Message{})
+		db.Where("conversation_id = ?", conversation.ID).Delete(&model.ConversationMember{})
+		db.Delete(&model.Conversation{}, conversation.ID)
+		db.Delete(&user)
+	})
+
+	var task model.BotTaskOutbox
+	if err := db.Where("message_id = ?", message.ID).First(&task).Error; err != nil {
+		t.Fatal(err)
+	}
+	if task.Status != "pending" || task.ConversationID != conversation.ID {
+		t.Fatalf("outbox task=%+v", task)
+	}
+	if err := repo.MarkBotTaskFailed(ctx, task.ID, "redis down"); err != nil {
+		t.Fatal(err)
+	}
+	if err := repo.MarkBotTaskPublished(ctx, task.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.First(&task, task.ID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if task.Status != "published" || task.Attempts != 1 {
+		t.Fatalf("replayed task=%+v", task)
+	}
+}
+
 func TestChatRepositoryIntegration(t *testing.T) {
 	db := openChatIntegrationDB(t)
 	ctx := context.Background()
@@ -302,9 +355,9 @@ func TestChatRepositoryIntegration(t *testing.T) {
 	}
 
 	var fkCount int64
-	if err := db.Raw(`SELECT COUNT(*) FROM information_schema.TABLE_CONSTRAINTS
-		WHERE CONSTRAINT_SCHEMA = DATABASE() AND CONSTRAINT_NAME IN
-		('fk_conversation_members_conversation','fk_conversation_members_user','fk_messages_conversation','fk_messages_sender')`).
+	if err := db.Raw(`SELECT COUNT(*) FROM information_schema.table_constraints
+		WHERE constraint_schema = current_schema() AND constraint_type = 'FOREIGN KEY'
+		AND table_name IN ('conversation_members', 'messages')`).
 		Scan(&fkCount).Error; err != nil || fkCount != 4 {
 		t.Fatalf("baseline chat constraints=%d err=%v", fkCount, err)
 	}

@@ -2,6 +2,7 @@ package handler
 
 import (
 	"errors"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -48,7 +49,8 @@ func (h *FeedHandler) GetFeed(c *gin.Context) {
 	currentUserID := c.GetInt64("user_id")
 	posts, total, err := h.svc.GetFeed(req, currentUserID)
 	if err != nil {
-		response.InternalError(c, err.Error())
+		slog.Warn("feed lookup failed", "user_id", currentUserID, "err", err)
+		response.InternalError(c, "动态暂时无法加载，请稍后重试")
 		return
 	}
 	pageSize := req.PageSize
@@ -104,9 +106,10 @@ func (h *FeedHandler) HomePage(c *gin.Context) {
 
 	posts, total, err := h.svc.GetFeed(req, currentUserID)
 	if err != nil {
+		slog.Warn("home feed lookup failed", "user_id", currentUserID, "err", err)
 		c.HTML(http.StatusOK, "feed.html", userData(c, gin.H{
 			"title": "ShareO - 发现美好",
-			"Error": err.Error(),
+			"Error": "动态暂时无法加载，请稍后重试",
 		}))
 		return
 	}

@@ -1,8 +1,8 @@
 {
-  "authoritative_run_id": "20260730T143316Z",
+  "authoritative_run_id": "20260808T091649Z",
   "dataset_scope": {
     "posts": 47,
-    "image_search": 34,
+    "image_search": 38,
     "post_search": 32,
     "rag": 30,
     "agent": 36
@@ -94,6 +94,112 @@
         "not_run": 0
       },
       "raw_bundle": ".local/shareo/final-freeze/20260730T143316Z"
+    },
+    {
+      "run_id": "20260808T083820Z",
+      "record_status": "full_bundle_retained",
+      "started_at": "2026-08-08T08:38:20.298Z",
+      "finished_at": "2026-08-08T08:45:19.671Z",
+      "duration_ms": 419373.2,
+      "git": {
+        "sha": "833b58a4ffab7e5906d786b41ad5b5ee835b89ac",
+        "branch": "main",
+        "dirty": true
+      },
+      "provider": "deepseek-v4-flash",
+      "dataset_sha256": {
+        "image_search_current": "df31bacf91885e2f0034241424f01fd453f4bf248200d67844176812432350f8",
+        "rag_current": "039a7f4e0f50624e4705f41fc7d0672055c6e787e00d28fa4578a009de50c4",
+        "agent_current": "b8c14fac188eb4d0c48c6c3ab6f404328a3704f7a672561111e979b504ab1e39",
+        "post_search_current": "45b8bc56dc493c692e55e04d82dff1ffbaf4f3907917db5d5cb5e2fe941d7e9d"
+      },
+      "quality": {
+        "image_recall_at_5": 0.9222222222,
+        "image_no_match_accuracy": 1.0,
+        "image_mrr": 0.975,
+        "rag_source_hit_rate": 0.9333,
+        "rag_complete_source_coverage_rate": 0.9333,
+        "rag_citation_precision_rate": 0.9167,
+        "rag_citation_accessible_rate": 1.0,
+        "rag_extra_citations": 6,
+        "agent_source_hit_rate": 1.0,
+        "agent_complete_source_coverage_rate": 0.9722,
+        "agent_citation_precision_rate": 0.9722,
+        "agent_required_tool_selection_rate": 1.0,
+        "agent_unexpected_tool_calls": 0,
+        "agent_citation_accessible_rate": 1.0,
+        "agent_failed_queries": 0,
+        "agent_timeout_queries": 0,
+        "agent_injection_failures": 0
+      },
+      "latency_ms": {
+        "image_p50": 67.8,
+        "image_p95": 75.3,
+        "rag_p50": 4075.8,
+        "rag_p95": 6097.4,
+        "agent_p50": 5137.0,
+        "agent_p95": 7183.1
+      },
+      "command_status": {
+        "pass": 13,
+        "fail": 0,
+        "blocked": 0,
+        "not_run": 0
+      },
+      "raw_bundle": ".local/shareo/final-freeze/20260808T083820Z"
+    },
+    {
+      "run_id": "20260808T091649Z",
+      "record_status": "full_bundle_retained",
+      "started_at": "2026-08-08T09:16:49.023Z",
+      "finished_at": "2026-08-08T09:24:34.478Z",
+      "duration_ms": 465455.7,
+      "git": {
+        "sha": "833b58a4ffab7e5906d786b41ad5b5ee835b89ac",
+        "branch": "main",
+        "dirty": true
+      },
+      "provider": "deepseek-v4-flash",
+      "dataset_sha256": {
+        "image_search_current": "df31bacf91885e2f0034241424f01fd453f4bf248200d67844176812432350f8",
+        "rag_current": "039a7f4e0f50624e4705f41fc7d0672055c6e787e00d28fa4578a009de50c4",
+        "agent_current": "b8c14fac188eb4d0c48c6c3ab6f404328a3704f7a672561111e979b504ab1e39",
+        "post_search_current": "45b8bc56dc493c692e55e04d82dff1ffbaf4f3907917db5d5cb5e2fe941d7e9d"
+      },
+      "quality": {
+        "image_recall_at_5": 0.9222222222,
+        "image_no_match_accuracy": 1.0,
+        "image_mrr": 0.975,
+        "rag_source_hit_rate": 0.9667,
+        "rag_complete_source_coverage_rate": 0.9667,
+        "rag_citation_precision_rate": 0.9333,
+        "rag_citation_accessible_rate": 1.0,
+        "rag_extra_citations": 6,
+        "agent_source_hit_rate": 0.9722,
+        "agent_complete_source_coverage_rate": 0.9444,
+        "agent_citation_precision_rate": 0.9352,
+        "agent_required_tool_selection_rate": 1.0,
+        "agent_unexpected_tool_calls": 0,
+        "agent_citation_accessible_rate": 1.0,
+        "agent_failed_queries": 0,
+        "agent_timeout_queries": 0,
+        "agent_injection_failures": 0
+      },
+      "latency_ms": {
+        "image_p50": 52.5,
+        "image_p95": 82.7,
+        "rag_p50": 4081.7,
+        "rag_p95": 8124.4,
+        "agent_p50": 7211.0,
+        "agent_p95": 9309.6
+      },
+      "command_status": {
+        "pass": 13,
+        "fail": 0,
+        "blocked": 0,
+        "not_run": 0
+      },
+      "raw_bundle": ".local/shareo/final-freeze/20260808T091649Z"
     }
   ]
 }

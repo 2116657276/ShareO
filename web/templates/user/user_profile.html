@@ -12,13 +12,13 @@
                     </div>
                     <div class="page-actions">
                         {{ if .IsOwnProfile }}
-                        <a class="btn btn-outline-secondary position-relative" href="/notifications"><i class="bi bi-bell me-1"></i>通知</a>
-                        <a class="btn btn-outline-secondary" href="/settings"><i class="bi bi-gear me-1"></i>编辑资料</a>
-                        {{ if eq .role "admin" }}<a class="btn btn-outline-secondary" href="/admin"><i class="bi bi-shield-check me-1"></i>管理</a>{{ end }}
-                        <form action="/logout" method="post" class="d-inline" onsubmit="return confirm('确认退出登录？')"><button type="submit" class="btn btn-outline-secondary"><i class="bi bi-box-arrow-right me-1"></i>退出</button></form>
+                        <a class="btn btn-outline-secondary position-relative" href="/notifications" aria-label="通知" title="通知"><i class="bi bi-bell me-1"></i><span class="label-full">通知</span><span class="label-compact" aria-hidden="true">通知</span></a>
+                        <a class="btn btn-outline-secondary" href="/settings" aria-label="编辑资料" title="编辑资料"><i class="bi bi-gear me-1"></i><span class="label-full">编辑资料</span><span class="label-compact" aria-hidden="true">编辑</span></a>
+                        {{ if eq .role "admin" }}<a class="btn btn-outline-secondary" href="/admin" aria-label="管理" title="管理"><i class="bi bi-shield-check me-1"></i><span class="label-full">管理</span><span class="label-compact" aria-hidden="true">管理</span></a>{{ end }}
+                        <form action="/logout" method="post" class="d-inline" onsubmit="return confirm('确认退出登录？')"><button type="submit" class="btn btn-outline-secondary" aria-label="退出" title="退出"><i class="bi bi-box-arrow-right me-1"></i><span class="label-full">退出</span><span class="label-compact" aria-hidden="true">退出</span></button></form>
                         {{ else }}
-                        <button type="button" class="btn btn-outline-primary" @click="toggleFollow" x-text="following ? '已关注' : '关注'"></button>
-                        <button type="button" class="btn btn-primary" @click="startDM"><i class="bi bi-chat-dots me-1"></i>私聊</button>
+                        <button type="button" class="btn btn-outline-primary" @click="toggleFollow" :aria-label="following ? '已关注' : '关注'" :title="following ? '已关注' : '关注'" x-text="following ? '已关注' : '关注'"></button>
+                        <button type="button" class="btn btn-primary" @click="startDM" aria-label="私聊" title="私聊"><i class="bi bi-chat-dots me-1"></i><span class="label-full">私聊</span><span class="label-compact" aria-hidden="true">聊天</span></button>
                         {{ end }}
                     </div>
                 </div>

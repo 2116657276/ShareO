@@ -2,9 +2,9 @@
 
 ## 边界
 
-系统只支持两个不同用户之间的文本私聊。发送走 REST并以 MySQL为真相，WebSocket只负责下行；不支持群聊、邀请、成员管理、撤回、编辑、图片消息、音视频或端到端加密。
+系统只支持两个不同用户之间的文本私聊。发送走 REST 并以 PostgreSQL 为真相，WebSocket 只负责下行；不支持群聊、邀请、成员管理、撤回、编辑、图片消息、音视频或端到端加密。
 
-固定 `shareo_bot` 复用同一会话、消息、未读和 WebSocket管线，但Bot账号禁止登录。普通用户之间的DM不触发AI。
+固定 `shareo_bot` 复用同一会话、消息、未读和 WebSocket 管线，但 Bot 账号禁止登录。普通用户之间的 DM 不触发 AI。
 
 ## 会话与事务
 
@@ -16,6 +16,7 @@
 2. 插入 `messages`。
 3. 更新 `conversations.updated_at`。
 4. 以最大值推进发送者的 `last_read_message_id`。
+5. 若目标是固定 Bot，同时写入 `bot_task_outbox` pending 记录。
 
 任何一步失败整笔回滚。准确未读是读游标之后且发送者不是自己的消息数。
 
@@ -23,10 +24,10 @@
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
-| GET | `/api/v1/conversations` | 最近更新优先，返回对端、最后消息和准确未读 |
+| GET | `/api/v1/conversations` | 最近更新优先，返回对端、最后消息和准确未读；已建立但暂无消息的普通DM也可展示 |
 | POST | `/api/v1/conversations` | `{"user_id":2}`，幂等获取或创建DM |
 | GET | `/api/v1/conversations/:id/messages` | `before_id` 历史或 `after_id` 恢复，不能并用 |
-| POST | `/api/v1/conversations/:id/messages` | `{"content":"..."}`，trim后1–2000字符 |
+| POST | `/api/v1/conversations/:id/messages` | `{"content":"..."}`，trim 后为 1–2000 字符 |
 | PUT | `/api/v1/conversations/:id/read` | 只接受本会话真实消息，读标记不能倒退 |
 | GET | `/api/v1/conversations/unread-count` | 全部DM准确未读总数 |
 | GET | `/api/v1/users/search` | 搜索正常用户并排除调用者；固定 `shareo_bot` 也可被搜索 |
@@ -42,9 +43,9 @@
 
 ## Bot 扩展
 
-Go只在发送者为普通用户、目标为固定 `shareo_bot` 的有效DM中发布 `bot_tasks`。用户消息先完成事务和WebSocket下发，AI任务异步执行，因此Redis或AI故障不阻塞普通消息。
+Go只在发送者为普通用户、目标为固定 `shareo_bot` 的有效DM中写入 outbox。消息事务提交后由单进程 publisher 按退避重试发布 `bot_tasks`；因此 Redis 或 AI 故障不阻塞普通消息，Go 重启后也能补发未完成任务。
 
-Bot回复协议和引用安全见 [RAG设计](rag.md)。
+Bot 回复协议和引用安全见 [RAG 设计](rag.md)。
 
 ## 安全与错误
 

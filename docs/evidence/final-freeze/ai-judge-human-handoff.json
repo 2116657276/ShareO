@@ -1,0 +1,313 @@
+{
+  "run_id": "20260808T151704Z",
+  "status": "required",
+  "method": "llm_judge_with_human_fallback",
+  "instructions": "人工只需复核下列题目；不得把 AI 分数改写为人工分数，也不得为通过门禁修改题目、答案或阈值。",
+  "count": 10,
+  "items": [
+    {
+      "kind": "rag",
+      "id": "rag-011",
+      "category": "advice",
+      "question": "如果要拍摄体育赛事现场的加油氛围这类场景，有什么构图或用光建议？",
+      "reference_answer": "可围绕今天也要为主队加油突出主体、控制构图并利用现场光线。",
+      "answer": "不确定，未找到足够的相关内容。",
+      "expected_source_post_ids": [
+        "42"
+      ],
+      "citation_post_ids": [],
+      "score": 1,
+      "reasons": [
+        "score_below_3"
+      ],
+      "deterministic_audit": {
+        "expected_source_count": 1,
+        "citation_count": 0,
+        "flags": [
+          "missing_expected_sources"
+        ],
+        "hard_failures": []
+      },
+      "judge_reasons": [
+        "没有回答实质内容，未引用任何来源，完全缺失所要求的建议。",
+        "答案直接表示未找到相关内容，但期望来源42应存在，机器审计标记缺失来源。回答没有提供任何有用信息且无引用，虽未编造，但未完成用户请求，属于明显缺漏。"
+      ],
+      "recommended_action": "确认答案是否真正完成用户请求；若拒答是有意的安全边界，记录理由，否则提出最小修复。"
+    },
+    {
+      "kind": "rag",
+      "id": "rag-012",
+      "category": "advice",
+      "question": "如果要拍摄蓝天与钟楼同框的抬头视角这类场景，有什么构图或用光建议？",
+      "reference_answer": "可围绕抬头就是蓝天和钟楼突出主体、控制构图并利用现场光线。",
+      "answer": "根据现有资料，只提到“抬头就是蓝天和钟楼”这一场景，但没有提供具体的构图或用光建议，因此无法给出详细建议。",
+      "expected_source_post_ids": [
+        "43"
+      ],
+      "citation_post_ids": [
+        "43"
+      ],
+      "score": 2,
+      "reasons": [
+        "score_below_3"
+      ],
+      "deterministic_audit": {
+        "expected_source_count": 1,
+        "citation_count": 1,
+        "flags": [],
+        "hard_failures": []
+      },
+      "judge_reasons": [
+        "正确引用了来源并说明了内容局限，但未能按要求提供构图或用光建议，存在明显缺漏。",
+        "答案引用了帖子43，但只转述了场景描述，未按reference_answer给出构图或用光建议，回答明显不完整，属于部分正确但存在明显缺漏。"
+      ],
+      "recommended_action": "确认答案是否真正完成用户请求；若拒答是有意的安全边界，记录理由，否则提出最小修复。"
+    },
+    {
+      "kind": "rag",
+      "id": "rag-013",
+      "category": "advice",
+      "question": "如果要拍摄湖面被荷叶覆盖的清凉夏景这类场景，有什么构图或用光建议？",
+      "reference_answer": "可围绕荷叶铺满湖面太清凉突出主体、控制构图并利用现场光线。",
+      "answer": "不确定。参考资料中仅提到“荷叶铺满湖面太清凉”和“夏天的荷塘自带滤镜”等场景描述，未提供具体的构图或用光建议。",
+      "expected_source_post_ids": [
+        "44"
+      ],
+      "citation_post_ids": [
+        "44",
+        "46"
+      ],
+      "score": 2,
+      "reasons": [
+        "score_below_3"
+      ],
+      "deterministic_audit": {
+        "expected_source_count": 1,
+        "citation_count": 2,
+        "flags": [],
+        "hard_failures": []
+      },
+      "judge_reasons": [
+        "实际答案准确描述了引用中的场景描述，但未按参考要求给出构图或用光建议，严重缺漏；引用含期望来源但未用于回答。",
+        "准确指出资料中只有场景描述、没有具体构图或用光建议，也引用了预期帖子44；但完全未给出任何实际建议，明显缺漏。"
+      ],
+      "recommended_action": "确认答案是否真正完成用户请求；若拒答是有意的安全边界，记录理由，否则提出最小修复。"
+    },
+    {
+      "kind": "rag",
+      "id": "rag-014",
+      "category": "advice",
+      "question": "如果要拍摄湖边鸭子缓慢游动的生活感这类场景，有什么构图或用光建议？",
+      "reference_answer": "可围绕湖边看鸭子慢慢游过突出主体、控制构图并利用现场光线。",
+      "answer": "不确定。参考资料中仅提到“湖边看鸭子慢慢游过”这一场景描述，未提供具体的构图或用光建议。",
+      "expected_source_post_ids": [
+        "45"
+      ],
+      "citation_post_ids": [
+        "45"
+      ],
+      "score": 2,
+      "reasons": [
+        "score_below_3"
+      ],
+      "deterministic_audit": {
+        "expected_source_count": 1,
+        "citation_count": 1,
+        "flags": [],
+        "hard_failures": []
+      },
+      "judge_reasons": [
+        "实际答案准确描述了引用中的场景描述，但未给出任何构图或用光建议，严重缺漏；引用正确但未用于回答。",
+        "正确说明帖子45仅含场景描述，引用到位；但未提供任何构图或用光建议，回答不完整。"
+      ],
+      "recommended_action": "确认答案是否真正完成用户请求；若拒答是有意的安全边界，记录理由，否则提出最小修复。"
+    },
+    {
+      "kind": "rag",
+      "id": "rag-015",
+      "category": "advice",
+      "question": "如果要拍摄夏日荷塘的柔和色彩这类场景，有什么构图或用光建议？",
+      "reference_answer": "可围绕夏天的荷塘自带滤镜突出主体、控制构图并利用现场光线。",
+      "answer": "不确定。参考资料中仅提到“夏天的荷塘自带滤镜”和“荷叶铺满湖面太清凉”等场景描述，未提供具体的构图或用光建议。",
+      "expected_source_post_ids": [
+        "46"
+      ],
+      "citation_post_ids": [
+        "44",
+        "46"
+      ],
+      "score": 2,
+      "reasons": [
+        "score_below_3"
+      ],
+      "deterministic_audit": {
+        "expected_source_count": 1,
+        "citation_count": 2,
+        "flags": [],
+        "hard_failures": []
+      },
+      "judge_reasons": [
+        "实际答案准确描述了引用中的场景描述，但未给出构图或用光建议，严重缺漏；引用包含期望来源但多引了44且未用于回答。",
+        "准确说明资料中只有场景描述，引用包含预期帖子46；但未基于‘夏天的荷塘自带滤镜’等给出实际建议。"
+      ],
+      "recommended_action": "确认答案是否真正完成用户请求；若拒答是有意的安全边界，记录理由，否则提出最小修复。"
+    },
+    {
+      "kind": "rag",
+      "id": "rag-016",
+      "category": "advice",
+      "question": "如果要拍摄湖面晚霞和安静倒影这类场景，有什么构图或用光建议？",
+      "reference_answer": "可围绕湖上日落温柔得刚刚好突出主体、控制构图并利用现场光线。",
+      "answer": "不确定。参考资料中仅提到“傍晚坐船看湖光”、“晚霞前的云也很漂亮”、“晚风把湖面吹成金色”、“海面被晚霞染成了粉色”、“今天的晚霞像打翻了颜料”等场景描述，未提供具体的构图或用光建议。",
+      "expected_source_post_ids": [
+        "47"
+      ],
+      "citation_post_ids": [
+        "48",
+        "51",
+        "64",
+        "66",
+        "67"
+      ],
+      "score": 2,
+      "reasons": [
+        "score_below_3"
+      ],
+      "deterministic_audit": {
+        "expected_source_count": 1,
+        "citation_count": 5,
+        "flags": [
+          "missing_expected_sources"
+        ],
+        "hard_failures": []
+      },
+      "judge_reasons": [
+        "实际答案未引用期望来源47，遗漏了相关场景描述，且未给出任何建议；引用多个其他来源但均不支持答案，存在严重缺漏和引用不支持。",
+        "遗漏预期来源帖子47，引用的多为泛化场景描述，且仍未给出任何构图或用光建议，引用支持严重不足。"
+      ],
+      "recommended_action": "确认答案是否真正完成用户请求；若拒答是有意的安全边界，记录理由，否则提出最小修复。"
+    },
+    {
+      "kind": "rag",
+      "id": "rag-017",
+      "category": "advice",
+      "question": "如果要拍摄晚风吹过湖面形成的金色光泽这类场景，有什么构图或用光建议？",
+      "reference_answer": "可围绕晚风把湖面吹成金色突出主体、控制构图并利用现场光线。",
+      "answer": "不确定。参考资料中仅提到“晚风把湖面吹成金色”这一场景描述，未提供具体的构图或用光建议。",
+      "expected_source_post_ids": [
+        "48"
+      ],
+      "citation_post_ids": [
+        "48"
+      ],
+      "score": 2,
+      "reasons": [
+        "score_below_3"
+      ],
+      "deterministic_audit": {
+        "expected_source_count": 1,
+        "citation_count": 1,
+        "flags": [],
+        "hard_failures": []
+      },
+      "judge_reasons": [
+        "实际答案准确描述了引用中的场景描述，但未给出构图或用光建议，严重缺漏；引用正确但未用于回答。",
+        "正确引用帖子48并说明只有场景描述；但没有提供任何构图或用光建议，明显缺漏。"
+      ],
+      "recommended_action": "确认答案是否真正完成用户请求；若拒答是有意的安全边界，记录理由，否则提出最小修复。"
+    },
+    {
+      "kind": "rag",
+      "id": "rag-018",
+      "category": "advice",
+      "question": "如果要拍摄开阔水面与天空相接的下午这类场景，有什么构图或用光建议？",
+      "reference_answer": "可围绕水天一色的下午突出主体、控制构图并利用现场光线。",
+      "answer": "不确定。参考资料中仅提到“水天一色的下午”这一场景描述（帖子49:0），未提供具体的构图或用光建议。",
+      "expected_source_post_ids": [
+        "49"
+      ],
+      "citation_post_ids": [
+        "49"
+      ],
+      "score": 2,
+      "reasons": [
+        "score_below_3"
+      ],
+      "deterministic_audit": {
+        "expected_source_count": 1,
+        "citation_count": 1,
+        "flags": [],
+        "hard_failures": []
+      },
+      "judge_reasons": [
+        "实际答案准确描述了引用中的场景描述，但未给出构图或用光建议，严重缺漏；引用正确但未用于回答。",
+        "准确引用帖子49并说明只有场景描述；但未回答用户要求的构图或用光建议，不完整。"
+      ],
+      "recommended_action": "确认答案是否真正完成用户请求；若拒答是有意的安全边界，记录理由，否则提出最小修复。"
+    },
+    {
+      "kind": "agent",
+      "id": "current-keyword-06",
+      "category": "keyword",
+      "question": "找一条以湖面晚霞和安静倒影为主题的社区帖子，并给出来源。",
+      "reference_answer": "",
+      "answer": "在已检索到的社区资料中，未找到同时以「湖面晚霞」和「安静倒影」为主题的明确帖子。最接近的记录是「湖上日落温柔得刚刚好」，内容为湖上日落时分的柔和景象，但未明确描述湖面倒影；另一条「晚风把湖面吹成金色」也只涉及晚风和湖面色彩。因此，目前无法定位完全符合您描述的主题帖子。",
+      "expected_source_post_ids": [
+        "47"
+      ],
+      "citation_post_ids": [
+        "47",
+        "48"
+      ],
+      "score": 1,
+      "reasons": [
+        "score_below_3"
+      ],
+      "deterministic_audit": {
+        "expected_source_count": 1,
+        "citation_count": 2,
+        "flags": [],
+        "hard_failures": []
+      },
+      "judge_reasons": [
+        "期望来源为47，但答案声称未找到符合帖子，事实错误且未正确回答问题",
+        "问题明确要求找以湖面晚霞和安静倒影为主题的帖子，期望来源为47。答案却声称未找到完全匹配的帖子，并引用47和48作为近似，但未将47判定为目标来源，导致回答错误且不完整。引用虽然存在但未用于支持正确结论。"
+      ],
+      "recommended_action": "确认答案是否真正完成用户请求；若拒答是有意的安全边界，记录理由，否则提出最小修复。"
+    },
+    {
+      "kind": "agent",
+      "id": "current-multi-01",
+      "category": "multi-source",
+      "question": "比较社区中天空中成群飞鸟的自由姿态和海边成群海鸥被风吹起的动态两条帖子，并分别引用来源。",
+      "reference_answer": "",
+      "answer": "根据现有社区资料，能对应“飞鸟自由姿态”的帖子是《海面上的飞鸟好自由》（73:0），内容描述海面上的飞鸟自由；另一条《海风把海鸥都吹来了》（57:0）则对应海边海鸥被风吹来的动态。两者都表现鸟类在自然环境中的动态，但前者侧重飞鸟的自由感，后者侧重海风吹动下海鸥的动态；需注意前者未明确提到“成群”或“天空”。",
+      "expected_source_post_ids": [
+        "56",
+        "57"
+      ],
+      "citation_post_ids": [
+        "57",
+        "73"
+      ],
+      "score": 2,
+      "reasons": [
+        "low_confidence",
+        "score_below_3"
+      ],
+      "deterministic_audit": {
+        "expected_source_count": 2,
+        "citation_count": 2,
+        "flags": [
+          "missing_expected_sources"
+        ],
+        "hard_failures": []
+      },
+      "judge_reasons": [
+        "答案引用了错误来源：期望为56和57，实际用73代替56；73的内容“海面上的飞鸟好自由”与问题中“天空中成群飞鸟”不完全一致，答案也承认未明确提到成群或天空，导致比较对象错误且缺少期望来源。",
+        "回答未引用期望来源56，将73（海面上的飞鸟）与“天空中成群飞鸟”对应，与问题不符，存在明显误导；仅57一条符合要求，完整性和引用支持不足。安全方面无内部信息泄露。"
+      ],
+      "recommended_action": "确认答案是否真正完成用户请求；若拒答是有意的安全边界，记录理由，否则提出最小修复。"
+    }
+  ]
+}

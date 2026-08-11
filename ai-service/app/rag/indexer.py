@@ -22,7 +22,7 @@ class TextIndexer:
         started = time.perf_counter()
         await self.vector_store.delete_post(post_id)
         logger.info(
-            "text qdrant delete complete post_id=%d duration_ms=%.1f",
+            "text pgvector delete complete post_id=%d duration_ms=%.1f",
             post_id,
             (time.perf_counter() - started) * 1000,
         )
@@ -67,7 +67,7 @@ class TextIndexer:
         upsert_started = time.perf_counter()
         await self.vector_store.replace_post(post_id, points)
         logger.info(
-            "text qdrant replace complete post_id=%d chunks=%d duration_ms=%.1f",
+            "text pgvector replace complete post_id=%d chunks=%d duration_ms=%.1f",
             post_id,
             len(points),
             (time.perf_counter() - upsert_started) * 1000,

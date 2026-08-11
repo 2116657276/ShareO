@@ -1,26 +1,26 @@
 {
-  "run_id": "20260730T143316Z",
-  "generated_at": "2026-07-30T14:38:07.709Z",
+  "run_id": "20260808T151704Z",
+  "generated_at": "2026-08-08T15:31:46.892Z",
   "provenance": {
     "git": {
-      "sha": "efdb049db89964128b7051ab2c7f2b4a6a7be4da",
+      "sha": "833b58a4ffab7e5906d786b41ad5b5ee835b89ac",
       "branch": "main",
       "dirty": true
     },
     "dataset_hashes": {
       "image_search_current": {
         "path": ".local/shareo/eval/image_search_local_v1.jsonl",
-        "sha256": "ee2b68c49eeeb51ee45373c9cf517a54883f2e0b94480ef7a8b810b433d51017",
-        "record_count": 34
+        "sha256": "df31bacf91885e2f0034241424f01fd453f4bf248200d67844176812432350f8",
+        "record_count": 38
       },
       "rag_current": {
         "path": ".local/shareo/eval/rag_qa_current_v1.jsonl",
-        "sha256": "522b7bbfa796ef35a25725010dacab946949de1d7402dabd84a8fe4589941ce7",
+        "sha256": "039a7f4e0f50624e4705f41fc7d0672055c6e787e00d28fa4578a00945de50c4",
         "record_count": 30
       },
       "agent_current": {
         "path": ".local/shareo/eval/agent_tasks_current_v1.jsonl",
-        "sha256": "434ebb53ff95629aaecc9e2c9d5d279a0e6f7bedb7ea22a299a62ebc6774e1aa",
+        "sha256": "b8c14fac188eb4d0c48c6c3ab6f404328a3704f7a672561111e979b504ab1e39",
         "record_count": 36
       },
       "post_search_current": {
@@ -29,7 +29,7 @@
         "record_count": 32
       }
     },
-    "started_at": "2026-07-30T14:33:16.691Z",
+    "started_at": "2026-08-08T15:17:04.453Z",
     "provider": {
       "type": "configured real provider",
       "model": "deepseek-v4-flash"
@@ -44,56 +44,121 @@
   "evaluation_report_aggregate": {
     "image_total_ms": {
       "source": "rag-image.json image_search report",
-      "p50_ms": 58.33558299855213,
-      "p95_ms": 69.19283300157986
+      "p50_ms": 58.746624999912456,
+      "p95_ms": 62.83954200625885
     },
     "rag_total_ms": {
       "source": "rag-image.json rag report",
-      "p50_ms": 2057.1,
-      "p95_ms": 3101.2
+      "p50_ms": 4082.3,
+      "p95_ms": 5126.5
     },
     "agent_total_ms": {
       "source": "agent.json agent report",
-      "p50_ms": 4058.8,
-      "p95_ms": 8179.5
+      "p50_ms": 7103.6,
+      "p95_ms": 8174.5
     },
     "agent_tool_step_ms": {
+      "status": "available",
+      "by_tool": {
+        "keyword_search_posts": {
+          "status": "available",
+          "count": 41,
+          "p50_ms": 5.0,
+          "p95_ms": 6.0,
+          "max_ms": 7.0
+        },
+        "read_posts": {
+          "status": "available",
+          "count": 31,
+          "p50_ms": 4.0,
+          "p95_ms": 5.0,
+          "max_ms": 13.0
+        },
+        "search_images": {
+          "status": "available",
+          "count": 9,
+          "p50_ms": 79.0,
+          "p95_ms": 104.0,
+          "max_ms": 104.0
+        },
+        "semantic_search_posts": {
+          "status": "available",
+          "count": 28,
+          "p50_ms": 19.0,
+          "p95_ms": 23.0,
+          "max_ms": 48.0
+        }
+      }
+    },
+    "agent_llm_ms": {
       "status": "unavailable",
-      "reason": "Agent 报告只提供逐题总耗时，没有每个工具步骤耗时字段"
+      "reason": "no stage samples"
+    },
+    "agent_timing_stages": {
+      "embedding": {
+        "status": "available",
+        "source": "tool step timings where present"
+      },
+      "retrieval": {
+        "status": "available",
+        "source": "tool step timings where present"
+      },
+      "llm": {
+        "status": "available",
+        "source": "agent trace llm_duration_ms"
+      },
+      "postprocess": {
+        "status": "unavailable",
+        "reason": "not separately instrumented"
+      },
+      "queue_wait": {
+        "status": "unavailable",
+        "reason": "no structured queue timestamp"
+      },
+      "callback": {
+        "status": "unavailable",
+        "reason": "no structured callback timestamp"
+      }
     }
   },
   "structured_log_aggregate": {
     "status": "available",
     "source": "ai.log appended structured lines",
     "image_total_ms": {
-      "sample_count": 69,
-      "p50_ms": 52.3,
-      "p95_ms": 60.8,
-      "max_ms": 84.3
+      "sample_count": 0,
+      "p50_ms": 0.0,
+      "p95_ms": 0.0,
+      "max_ms": 0.0
     },
     "rag_embedding_ms": {
-      "sample_count": 31,
-      "p50_ms": 7.3,
-      "p95_ms": 10.1,
-      "max_ms": 11.0
+      "sample_count": 0,
+      "p50_ms": 0.0,
+      "p95_ms": 0.0,
+      "max_ms": 0.0
     },
     "rag_retrieval_ms": {
-      "sample_count": 31,
-      "p50_ms": 8.1,
-      "p95_ms": 10.4,
-      "max_ms": 17.0
+      "sample_count": 0,
+      "p50_ms": 0.0,
+      "p95_ms": 0.0,
+      "max_ms": 0.0
     },
     "rag_llm_ms": {
-      "sample_count": 31,
-      "p50_ms": 1494.9,
-      "p95_ms": 2473.4,
-      "max_ms": 3306.5
+      "sample_count": 0,
+      "p50_ms": 0.0,
+      "p95_ms": 0.0,
+      "max_ms": 0.0
+    },
+    "rag_postprocess_ms": {
+      "sample_count": 0,
+      "p50_ms": 0.0,
+      "p95_ms": 0.0,
+      "max_ms": 0.0
     },
     "rag_total_ms": {
-      "sample_count": 31,
-      "p50_ms": 1510.8,
-      "p95_ms": 2485.4,
-      "max_ms": 3316.7
+      "sample_count": 0,
+      "p50_ms": 0.0,
+      "p95_ms": 0.0,
+      "max_ms": 0.0
     },
     "image_embedding_ms": {
       "status": "unavailable",
@@ -115,6 +180,14 @@
       "status": "unavailable",
       "reason": "no structured log field"
     }
+  },
+  "quality_judgement": {
+    "status": "available",
+    "quality_gate_passed": false
+  },
+  "human_handoff": {
+    "status": "required",
+    "count": 10
   },
   "queue_wait_ms": {
     "status": "unavailable",

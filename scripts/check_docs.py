@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import sys
 from pathlib import Path
@@ -71,6 +72,8 @@ def validate_retired_references(files: list[Path], failures: list[str]) -> None:
 
 
 def validate_current_evidence(failures: list[str]) -> None:
+    if os.environ.get("SHAREO_SKIP_CURRENT_EVIDENCE") == "1":
+        return
     evidence_dir = ROOT / "docs" / "evidence" / "final-freeze"
     summary_path = evidence_dir / "quality-summary.json"
     manifest_path = evidence_dir / "run-manifest.json"
@@ -82,7 +85,7 @@ def validate_current_evidence(failures: list[str]) -> None:
         return
 
     expected_counts = {
-        "image_search_current": 34,
+        "image_search_current": 38,
         "post_search_current": 32,
         "rag_current": 30,
         "agent_current": 36,
@@ -94,6 +97,26 @@ def validate_current_evidence(failures: list[str]) -> None:
         )
     if summary.get("run_id") != manifest.get("run_id"):
         failures.append("current final-freeze quality summary and manifest run_id differ")
+    retained_path = evidence_dir / "retained-runs.json"
+    try:
+        retained = json.loads(retained_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        failures.append(f"retained-runs.json is unavailable or invalid: {exc}")
+        retained = {}
+    authoritative_run_id = retained.get("authoritative_run_id")
+    if authoritative_run_id != manifest.get("run_id"):
+        failures.append(
+            "retained-runs authoritative_run_id does not point to current run-manifest"
+        )
+    if authoritative_run_id and not any(
+        item.get("run_id") == authoritative_run_id for item in retained.get("runs", [])
+    ):
+        failures.append("retained-runs authoritative_run_id has no retained run entry")
+    repeated = summary.get("ai_repetitions", {})
+    if repeated.get("requested_rounds", 0) < 3:
+        failures.append("current final-freeze must record at least three AI evaluation rounds")
+    if summary.get("source_fingerprint", {}).get("stable") is not True:
+        failures.append("current final-freeze source fingerprint is not stable")
     for report_name in ("post_search_local", "image_search_local", "rag_image", "agent"):
         report = summary.get("reports", {}).get(report_name, {})
         if report.get("status") != "available":
@@ -111,7 +134,16 @@ def main() -> int:
         for failure in failures:
             print(f"  {failure}", file=sys.stderr)
         return 1
-    print(f"Documentation validation OK ({len(files)} Markdown files); current evidence is authoritative.")
+    if os.environ.get("SHAREO_SKIP_CURRENT_EVIDENCE") == "1":
+        print(
+            f"Documentation validation OK ({len(files)} Markdown files); "
+            "current evidence check skipped by caller."
+        )
+    else:
+        print(
+            f"Documentation validation OK ({len(files)} Markdown files); "
+            "current evidence is authoritative."
+        )
     return 0
 
 

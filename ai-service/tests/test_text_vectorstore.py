@@ -1,8 +1,6 @@
-from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
-from qdrant_client.models import Distance, VectorParams
 
 from app.rag.vectorstore import TextVectorStore, point_id
 
@@ -13,29 +11,20 @@ def test_chunk_point_id_is_deterministic_uuid():
 
 
 @pytest.mark.asyncio
-async def test_text_collection_uses_512_cosine_and_two_indexes():
-    store = TextVectorStore("http://qdrant")
-    store.client = AsyncMock()
-    store.client.get_collections.return_value = SimpleNamespace(collections=[])
-    store.client.get_collection.return_value = SimpleNamespace(
-        config=SimpleNamespace(
-            params=SimpleNamespace(vectors=VectorParams(size=512, distance=Distance.COSINE))
-        ),
-        payload_schema={},
-    )
+async def test_text_store_validates_pgvector_dimension():
+    database = AsyncMock()
+    database.fetch_one.return_value = {"type_name": "vector(512)"}
+    store = TextVectorStore(database)
+
     await store.ensure_collection()
-    assert store.client.create_payload_index.await_count == 2
+    database.fetch_one.assert_awaited()
 
 
 @pytest.mark.asyncio
-async def test_incompatible_text_collection_is_rejected():
-    store = TextVectorStore("http://qdrant")
-    store.client = AsyncMock()
-    store.client.get_collection.return_value = SimpleNamespace(
-        config=SimpleNamespace(
-            params=SimpleNamespace(vectors=VectorParams(size=384, distance=Distance.COSINE))
-        ),
-        payload_schema={},
-    )
-    with pytest.raises(RuntimeError, match="incompatible post_chunks collection"):
+async def test_incompatible_text_vector_dimension_is_rejected():
+    database = AsyncMock()
+    database.fetch_one.return_value = {"type_name": "vector(384)"}
+    store = TextVectorStore(database)
+
+    with pytest.raises(RuntimeError, match="incompatible post_chunks vector column"):
         await store.validate_schema()

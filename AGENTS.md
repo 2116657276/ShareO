@@ -14,8 +14,8 @@
 
 ## 架构与设计边界
 
-- Go 是业务运行时和 MySQL 的唯一写者，负责认证、权限、审核、社区、聊天和 Bot 回复。
-- Python AI 服务是 Qdrant 的唯一写者，负责模型、向量检索、RAG 管线和两个 Redis Streams consumer；保持单 FastAPI 进程、单 Uvicorn worker 的设计。
+- Go 是业务运行时和 PostgreSQL 的唯一写者，负责认证、权限、审核、社区、聊天和 Bot 回复。
+- Python AI 服务通过同一 PostgreSQL 实例的 `ai` schema 写入 pgvector 派生数据，负责模型、向量检索、RAG 管线和两个 Redis Streams consumer；保持单 FastAPI 进程、单 Uvicorn worker 的设计。
 - MinIO 凭证只由 Go 持有。Python 通过 Go 的图片代理读取图片，不直接获取对象存储凭证。
 - 所有公开帖子和 Bot 引用都必须经过 Go 的可见性校验：`approved AND is_deleted=0`。
 - Redis Streams 按 at-least-once 语义处理；保持现有重试、重领、最终记录并 ACK 的策略，不擅自引入死信队列。
@@ -58,7 +58,7 @@
 
 - 修改后先运行与改动直接相关的测试；核心逻辑需要覆盖正常路径、边界条件和失败路径。
 - 在成本合理时运行 `make check`；并按影响范围补充 `make test-integration`、`go test -race ./...`、`make test-api` 或 `make eval-ai`。
-- AI 效果通过 `docs/eval/` 中的冻结数据集和指标验证，不用普通单测替代质量评测；并发、队列和幂等逻辑必须有工程测试。
+- AI 效果通过 `docs/eval/` 中的版本化评测数据集和指标验证，不用普通单测替代质量评测；并发、队列和幂等逻辑必须有工程测试。
 - 无法执行某项检查时，明确记录未运行的命令、原因和替代验证方式；不得声称运行过未实际运行的命令。
 - 只有在需求实现、相关验证完成或明确说明限制、无明显临时文件和敏感信息、必要文档同步后，才可报告任务完成。
-- 当前状态只更新 `TASK.md`，完工证据和边界写入 `docs/REVIEW.md` 与 `docs/evidence/final-freeze/`；技术选型写入 ADR，功能变更同步 `docs/features.md`。
+- 当前状态只更新 `TASK.md`，当前证据和边界写入 `docs/REVIEW.md` 与 `docs/evidence/final-freeze/`；技术选型写入 ADR，功能变更同步 `docs/features.md`。

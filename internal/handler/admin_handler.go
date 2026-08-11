@@ -29,7 +29,8 @@ func NewAdminHandler(disconnector ...interface{ DisconnectUser(int64) }) *AdminH
 func (h *AdminHandler) Dashboard(c *gin.Context) {
 	stats, err := h.svc.GetDashboardStats()
 	if err != nil {
-		c.HTML(http.StatusOK, "admin_dashboard.html", userData(c, gin.H{"Error": err.Error()}))
+		slog.Warn("admin dashboard lookup failed", "err", err)
+		c.HTML(http.StatusOK, "admin_dashboard.html", userData(c, gin.H{"Error": "后台数据暂时无法加载，请稍后重试"}))
 		return
 	}
 	c.HTML(http.StatusOK, "admin_dashboard.html", userData(c, gin.H{
@@ -41,7 +42,8 @@ func (h *AdminHandler) Dashboard(c *gin.Context) {
 func (h *AdminHandler) GetStats(c *gin.Context) {
 	stats, err := h.svc.GetDashboardStats()
 	if err != nil {
-		response.InternalError(c, err.Error())
+		slog.Warn("admin stats lookup failed", "err", err)
+		response.InternalError(c, "后台数据暂时无法加载，请稍后重试")
 		return
 	}
 	response.Success(c, stats)
@@ -53,7 +55,8 @@ func (h *AdminHandler) Review(c *gin.Context) {
 	page := getPage(c)
 	posts, total, err := h.svc.GetPendingPosts(page, 20)
 	if err != nil {
-		c.HTML(http.StatusOK, "admin_review.html", userData(c, gin.H{"Error": err.Error()}))
+		slog.Warn("admin review lookup failed", "err", err)
+		c.HTML(http.StatusOK, "admin_review.html", userData(c, gin.H{"Error": "审核列表暂时无法加载，请稍后重试"}))
 		return
 	}
 	c.HTML(http.StatusOK, "admin_review.html", userData(c, gin.H{
@@ -79,7 +82,8 @@ func (h *AdminHandler) GetPendingPosts(c *gin.Context) {
 	page, pageSize := getPageSizePair(c, 50)
 	posts, total, err := h.svc.GetPendingPosts(page, pageSize)
 	if err != nil {
-		response.InternalError(c, err.Error())
+		slog.Warn("admin pending posts lookup failed", "err", err)
+		response.InternalError(c, "审核列表暂时无法加载，请稍后重试")
 		return
 	}
 	respondPage(c, page, pageSize, posts, total)
@@ -90,7 +94,8 @@ func (h *AdminHandler) GetUsers(c *gin.Context) {
 	role := c.DefaultQuery("role", "")
 	users, total, err := h.svc.ListUsers(page, pageSize, role, nil)
 	if err != nil {
-		response.InternalError(c, err.Error())
+		slog.Warn("admin users lookup failed", "err", err)
+		response.InternalError(c, "用户列表暂时无法加载，请稍后重试")
 		return
 	}
 	respondPage(c, page, pageSize, users, total)
@@ -101,7 +106,8 @@ func (h *AdminHandler) GetLogs(c *gin.Context) {
 	action := c.DefaultQuery("action", "")
 	logs, total, err := h.svc.GetLogs(page, pageSize, nil, action)
 	if err != nil {
-		response.InternalError(c, err.Error())
+		slog.Warn("admin logs lookup failed", "err", err)
+		response.InternalError(c, "系统日志暂时无法加载，请稍后重试")
 		return
 	}
 	respondPage(c, page, pageSize, logs, total)
@@ -142,7 +148,8 @@ func (h *AdminHandler) UsersPage(c *gin.Context) {
 	role := c.DefaultQuery("role", "")
 	users, total, err := h.svc.ListUsers(page, 20, role, nil)
 	if err != nil {
-		c.HTML(http.StatusOK, "admin_users.html", userData(c, gin.H{"Error": err.Error()}))
+		slog.Warn("admin users page lookup failed", "err", err)
+		c.HTML(http.StatusOK, "admin_users.html", userData(c, gin.H{"Error": "用户列表暂时无法加载，请稍后重试"}))
 		return
 	}
 	c.HTML(http.StatusOK, "admin_users.html", userData(c, gin.H{
@@ -184,7 +191,8 @@ func (h *AdminHandler) LogsPage(c *gin.Context) {
 	action := c.DefaultQuery("action", "")
 	logs, total, err := h.svc.GetLogs(page, 20, nil, action)
 	if err != nil {
-		c.HTML(http.StatusOK, "admin_logs.html", userData(c, gin.H{"Error": err.Error()}))
+		slog.Warn("admin logs page lookup failed", "err", err)
+		c.HTML(http.StatusOK, "admin_logs.html", userData(c, gin.H{"Error": "系统日志暂时无法加载，请稍后重试"}))
 		return
 	}
 	c.HTML(http.StatusOK, "admin_logs.html", userData(c, gin.H{

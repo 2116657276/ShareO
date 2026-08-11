@@ -107,7 +107,7 @@ async def test_failed_image_module_does_not_starve_text_module():
             return response(200, json=payload, url=url)
 
     image_store = AsyncMock()
-    image_store.delete_post.side_effect = RuntimeError("qdrant image failure")
+    image_store.delete_post.side_effect = RuntimeError("pgvector image failure")
     text_indexer = AsyncMock()
     with pytest.raises(RuntimeError, match="post index operation"):
         await ImageIndexer(

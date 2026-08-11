@@ -9,13 +9,13 @@ import httpx
 from fastapi import FastAPI, Header, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, field_validator
-from qdrant_client import AsyncQdrantClient
 from redis.asyncio import Redis
 
 from app.config import settings
 from app.agent.graph import AgentRunner
 from app.agent.tools import AgentToolRuntime
 from app.core.embedding import ImageEmbedder
+from app.core.pgvector import PostgresVectorDatabase
 from app.core.source_fingerprint import PROCESS_SOURCE_FINGERPRINT, PROCESS_STARTED_AT
 from app.core.vectorstore import ImageVectorStore
 from app.rag.embedding import TextEmbedder
@@ -26,9 +26,10 @@ from app.workers.runtime import STREAM_INDEX_POST, WorkerRuntime
 
 logger = logging.getLogger(__name__)
 embedder = ImageEmbedder()
-vector_store = ImageVectorStore(settings.qdrant_url, settings.image_collection)
+vector_database = PostgresVectorDatabase(settings.database_url)
+vector_store = ImageVectorStore(vector_database, settings.image_collection)
 text_embedder = TextEmbedder()
-text_vector_store = TextVectorStore(settings.qdrant_url, settings.text_collection)
+text_vector_store = TextVectorStore(vector_database, settings.text_collection)
 llm_provider = OpenAICompatibleProvider(
     settings.llm_base_url,
     settings.llm_api_key,
@@ -103,6 +104,10 @@ async def lifespan(app: FastAPI):
     logger.info("ai-service starting (log_level=%s)", settings.log_level)
     app.state.embedding_semaphore = asyncio.Semaphore(max(1, settings.embedding_concurrency))
     try:
+        await vector_database.open()
+    except Exception as exc:
+        logger.warning("PostgreSQL vector pool startup failed: %s", exc)
+    try:
         await vector_store.ensure_collection()
     except Exception as exc:
         logger.warning("image collection startup check failed: %s", exc)
@@ -147,6 +152,7 @@ async def lifespan(app: FastAPI):
     await llm_provider.close()
     await agent_tool_runtime.http.aclose()
     await runtime.stop()
+    await vector_database.close()
     logger.info("ai-service shutting down")
 
 
@@ -171,19 +177,16 @@ async def check_redis() -> None:
         await client.aclose()
 
 
-async def check_qdrant() -> None:
-    client = AsyncQdrantClient(url=settings.qdrant_url, check_compatibility=False)
-    try:
-        await client.get_collections()
-    finally:
-        await client.close()
+async def check_postgres_vector() -> None:
+    await vector_database.open()
+    await vector_database.ping()
 
 
 @app.get("/readyz")
 async def readyz():
     """Readiness probe: both backing services must be reachable."""
     dependencies: dict[str, str] = {}
-    for name, check in (("redis", check_redis), ("qdrant", check_qdrant)):
+    for name, check in (("redis", check_redis), ("postgres_vector", check_postgres_vector)):
         try:
             await check()
             dependencies[name] = "connected"

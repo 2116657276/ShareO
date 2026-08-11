@@ -75,3 +75,5 @@ resources/
 # Misc
 *.docx
 .playwright-mcp/
+.playwright-cli/
+output/playwright/

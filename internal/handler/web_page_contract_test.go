@@ -120,10 +120,12 @@ func TestPageStateContracts(t *testing.T) {
 	}
 }
 
-func TestRemovedPageControlsStayRemoved(t *testing.T) {
+func TestCurrentPageControlsStayWithinScope(t *testing.T) {
 	following := readWebTemplate(t, "user/following.html")
-	if strings.Contains(following, "全部关注") || strings.Contains(following, "/api/v1/conversations") {
-		t.Fatal("following page must not expose the removed expanded list or direct-message action")
+	for _, marker := range []string{"following-list", "following-card", "/api/v1/conversations"} {
+		if !strings.Contains(following, marker) {
+			t.Fatalf("following page missing current control %q", marker)
+		}
 	}
 
 	chat := readWebTemplate(t, "chat/chat.html")
@@ -138,6 +140,9 @@ func TestFooterAndMyPageContracts(t *testing.T) {
 	footer := readWebTemplate(t, "layout/footer.html")
 	if !strings.Contains(footer, "site-footer") || !strings.Contains(footer, "public-footer") {
 		t.Fatal("footer variants are missing")
+	}
+	if !strings.Contains(footer, "conversations.total") || strings.Contains(footer, "conversations.count") {
+		t.Fatal("private-message unread badge must consume the API total field")
 	}
 	for _, marker := range []string{"data-chat-unread", "data-comment-unread", "/api/v1/conversations/unread-count", "/api/v1/notifications/unread-count"} {
 		if !strings.Contains(footer, marker) && !strings.Contains(readWebTemplate(t, "layout/header.html"), marker) {
@@ -154,8 +159,9 @@ func TestFooterAndMyPageContracts(t *testing.T) {
 
 func TestThirdRoundUIContracts(t *testing.T) {
 	chat := readWebTemplate(t, "chat/chat.html")
-	if !strings.Contains(chat, "c.last_message && !this.isBotConversationData(c)") {
-		t.Fatal("normal conversation list must hide shareo_bot")
+	if strings.Contains(chat, "c.last_message && !this.isBotConversationData(c)") ||
+		!strings.Contains(chat, "!this.isBotConversationData(c)") {
+		t.Fatal("normal conversation list must include empty conversations while hiding shareo_bot")
 	}
 	if strings.Contains(chat, `class="chat-detail-avatar" :src="conversationAvatar(activeConversation)"`) &&
 		!strings.Contains(chat, `x-show="!isBotConversation()"`) {
@@ -171,6 +177,8 @@ func TestThirdRoundUIContracts(t *testing.T) {
 		"transform: scale(1.09)",
 		".profile-content-toolbar",
 		".chat-bot-heading",
+		".citation-card-thumb",
+		"--ink: #38332e",
 	} {
 		if !strings.Contains(stylesheet, marker) {
 			t.Fatalf("stylesheet missing third-round UI marker %q", marker)

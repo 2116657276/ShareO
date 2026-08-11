@@ -1,26 +1,20 @@
 #!/usr/bin/env bash
-# Run real integration tests against a disposable database in the current Demo MySQL.
+# Run integration tests against a disposable native PostgreSQL database.
+# The database is intentionally left in place for inspection; no container
+# runtime or legacy database/vector service is consulted.
 set -euo pipefail
 
 PROJECT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$PROJECT_DIR"
 
-local_mode=0
-if command -v mysql >/dev/null 2>&1 && curl --noproxy '*' --silent --fail \
-    http://127.0.0.1:8080/healthz >/dev/null 2>&1; then
-    local_mode=1
-elif docker compose version >/dev/null 2>&1; then
-    compose=(docker compose)
-elif docker-compose version >/dev/null 2>&1; then
-    compose=(docker-compose)
-else
-    echo "[FAIL] neither the native stack nor Docker Compose is available" >&2
-    exit 2
-fi
-
 env_value() {
     local key="$1" line value
-    while IFS= read -r line; do
+    if [ -n "${!key-}" ]; then
+        printf '%s' "${!key}"
+        return 0
+    fi
+    [ -f .env ] || return 0
+    while IFS= read -r line || [ -n "$line" ]; do
         case "$line" in
             "$key="*)
                 value="${line#*=}"
@@ -32,76 +26,78 @@ env_value() {
                 return 0
                 ;;
         esac
-    done < .env 2>/dev/null || true
+    done < .env
+    return 0
 }
 
-config_database_password() {
-    [ -f config.yaml ] || return 0
-    awk '
-        /^database:[[:space:]]*$/ { inside=1; next }
-        /^[^[:space:]]/ { inside=0 }
-        inside && /^[[:space:]]+password:/ {
-            value=$0
-            sub(/^[[:space:]]+password:[[:space:]]*/, "", value)
-            gsub(/^\"|\"$/, "", value)
-            gsub(/^\x27|\x27$/, "", value)
-            print value
-            exit
-        }
-    ' config.yaml
-}
-
-db_password="$(env_value SHAREO_DB_PASSWORD)"
-if [ -z "$db_password" ] && [ "$local_mode" -eq 1 ]; then
-    db_password="$(config_database_password)"
+if [ "$(env_value SHAREO_RUNTIME)" = "compose" ]; then
+    echo "[FAIL] SHAREO_RUNTIME=compose is retired; integration tests use native PostgreSQL/Redis" >&2
+    exit 2
 fi
-db_password="${db_password:-shareo_pass}"
-mysql_port="$(env_value SHAREO_MYSQL_PORT)"
-mysql_port="${mysql_port:-3306}"
+
+pg_host="$(env_value SHAREO_PG_HOST)"
+pg_host="${pg_host:-127.0.0.1}"
+pg_port="$(env_value SHAREO_PG_PORT)"
+pg_port="${pg_port:-5432}"
+admin_user="$(env_value SHAREO_PG_ADMIN_USER)"
+admin_user="${admin_user:-$(id -un)}"
+admin_password="$(env_value SHAREO_PG_ADMIN_PASSWORD)"
 redis_port="$(env_value SHAREO_REDIS_PORT)"
 redis_port="${redis_port:-6379}"
-qdrant_port="$(env_value SHAREO_QDRANT_HTTP_PORT)"
-qdrant_port="${qdrant_port:-6333}"
-test_db="shareo_test"
 
 export GOCACHE="${GOCACHE:-$PROJECT_DIR/.cache/shareo/go-build}"
 export GOMODCACHE="${GOMODCACHE:-$PROJECT_DIR/.cache/shareo/go-mod}"
 export UV_CACHE_DIR="${UV_CACHE_DIR:-$PROJECT_DIR/.cache/shareo/uv}"
-
-mysql_exec() {
-    if [ "$local_mode" -eq 1 ]; then
-        MYSQL_PWD="$db_password" mysql --protocol=tcp -h 127.0.0.1 -P "$mysql_port" -u root "$@"
-    else
-        "${compose[@]}" exec -T mysql mysql "-p$db_password" "$@"
-    fi
-}
-
-cleanup() {
-    mysql_exec -e \
-        "DROP DATABASE IF EXISTS $test_db" >/dev/null 2>&1 || true
-}
-trap cleanup EXIT INT TERM
-
-mysql_exec -e \
-    "CREATE DATABASE IF NOT EXISTS $test_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci" >/dev/null
-for migration in migrations/*.sql; do
-    mysql_exec "$test_db" < "$migration"
-done
-
-export SHAREO_TEST_MYSQL_DSN="root:${db_password}@tcp(127.0.0.1:${mysql_port})/${test_db}?charset=utf8mb4&parseTime=True&loc=Local"
-export SHAREO_TEST_REDIS_URL="redis://127.0.0.1:${redis_port}/0"
-export SHAREO_TEST_QDRANT_URL="http://127.0.0.1:${qdrant_port}"
 local_no_proxy="127.0.0.1,localhost,::1"
 export NO_PROXY="${NO_PROXY:+$NO_PROXY,}$local_no_proxy"
 export no_proxy="${no_proxy:+$no_proxy,}$local_no_proxy"
 
-go test -count=1 -tags=integration ./...
+for command in psql createdb pg_isready redis-cli; do
+    command -v "$command" >/dev/null 2>&1 || {
+        echo "[FAIL] required native command is missing: $command" >&2
+        exit 2
+    }
+done
+
+if ! pg_isready --host "$pg_host" --port "$pg_port" >/dev/null 2>&1; then
+    echo "[FAIL] PostgreSQL is not accepting connections at $pg_host:$pg_port" >&2
+    echo "[INFO] start the local stack with: SHAREO_OPEN_BROWSER=0 make up" >&2
+    exit 2
+fi
+if [ "$(redis-cli -h 127.0.0.1 -p "$redis_port" PING 2>/dev/null || true)" != "PONG" ]; then
+    echo "[FAIL] Redis is not responding on 127.0.0.1:$redis_port" >&2
+    exit 2
+fi
+
+if [ -n "$admin_password" ]; then
+    export PGPASSWORD="$admin_password"
+fi
+
+stamp="$(date +%Y%m%d%H%M%S)"
+test_db="shareo_it_${stamp}_test"
+createdb --host "$pg_host" --port "$pg_port" --username "$admin_user" "$test_db"
+for migration in migrations/postgres/*.sql; do
+    psql --no-psqlrc --set ON_ERROR_STOP=1 \
+        --host "$pg_host" --port "$pg_port" --username "$admin_user" --dbname "$test_db" \
+        < "$migration" >/dev/null
+done
+
+admin_user_escaped="$(python3 -c 'import urllib.parse,sys; print(urllib.parse.quote(sys.argv[1], safe=""))' "$admin_user")"
+admin_password_escaped=""
+if [ -n "$admin_password" ]; then
+    admin_password_escaped=":$(python3 -c 'import urllib.parse,sys; print(urllib.parse.quote(sys.argv[1], safe=""))' "$admin_password")"
+fi
+admin_dsn="postgresql://${admin_user_escaped}${admin_password_escaped}@${pg_host}:${pg_port}/${test_db}?sslmode=disable"
+export SHAREO_TEST_POSTGRES_DSN="${SHAREO_TEST_POSTGRES_DSN:-$admin_dsn}"
+export SHAREO_TEST_AI_DATABASE_URL="${SHAREO_TEST_AI_DATABASE_URL:-$admin_dsn}"
+export SHAREO_TEST_REDIS_URL="${SHAREO_TEST_REDIS_URL:-redis://127.0.0.1:${redis_port}/0}"
+
+echo "[INFO] integration database: $test_db (left in place for inspection)"
+echo "[INFO] running Go PostgreSQL integration tests"
+env GOCACHE="$GOCACHE" GOMODCACHE="$GOMODCACHE" go test -count=1 -tags=integration ./...
+echo "[INFO] running Python Redis/pgvector integration tests"
 (
     cd ai-service
     uv run --frozen pytest -m integration
 )
-if [ "$local_mode" -eq 1 ]; then
-    echo "[PASS] native MySQL/Redis/Qdrant integration tests"
-else
-    echo "[PASS] current Demo MySQL/Redis/Qdrant integration tests"
-fi
+echo "[PASS] native PostgreSQL 17/pgvector and Redis integration tests"

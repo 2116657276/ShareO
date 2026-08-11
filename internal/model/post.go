@@ -18,11 +18,12 @@ type Post struct {
 	CreatedAt     time.Time  `gorm:"autoCreateTime;index:idx_posts_created,priority:1,sort:desc" json:"created_at"`
 	UpdatedAt     time.Time  `gorm:"autoUpdateTime" json:"updated_at"`
 
-	User        *User       `gorm:"foreignKey:UserID" json:"user,omitempty"`
-	Images      []PostImage `gorm:"foreignKey:PostID" json:"images,omitempty"`
-	Reviewer    *User       `gorm:"foreignKey:ReviewedBy" json:"reviewer,omitempty"`
-	IsLiked     bool        `gorm:"-" json:"is_liked"`
-	IsFavorited bool        `gorm:"-" json:"is_favorited"`
+	User            *User       `gorm:"foreignKey:UserID" json:"user,omitempty"`
+	Images          []PostImage `gorm:"foreignKey:PostID" json:"images,omitempty"`
+	Reviewer        *User       `gorm:"foreignKey:ReviewedBy" json:"reviewer,omitempty"`
+	FeaturedComment *Comment    `gorm:"-" json:"featured_comment,omitempty"`
+	IsLiked         bool        `gorm:"-" json:"is_liked"`
+	IsFavorited     bool        `gorm:"-" json:"is_favorited"`
 }
 
 func (Post) TableName() string { return "posts" }

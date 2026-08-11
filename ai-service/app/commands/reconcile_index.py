@@ -1,4 +1,4 @@
-"""Audit and optionally repair the Qdrant image index."""
+"""Audit and optionally repair the PostgreSQL/pgvector indexes."""
 
 import argparse
 import asyncio
@@ -9,6 +9,7 @@ import httpx
 from redis.asyncio import Redis
 
 from app.config import settings
+from app.core.pgvector import PostgresVectorDatabase
 from app.core.vectorstore import ImageVectorStore
 from app.rag.chunking import chunk_text
 from app.rag.vectorstore import TextVectorStore
@@ -90,11 +91,13 @@ async def fetch_desired(
 
 
 async def reconcile(apply: bool) -> dict:
-    vector_store = ImageVectorStore(settings.qdrant_url, settings.image_collection)
-    text_vector_store = TextVectorStore(settings.qdrant_url, settings.text_collection)
+    database = PostgresVectorDatabase(settings.database_url)
+    vector_store = ImageVectorStore(database, settings.image_collection)
+    text_vector_store = TextVectorStore(database, settings.text_collection)
     redis = Redis.from_url(settings.redis_url, decode_responses=True)
     async with httpx.AsyncClient(timeout=10.0) as client:
         try:
+            await database.open()
             desired_images, desired_chunks = await fetch_desired(client)
             image_inventory = await vector_store.inventory()
             text_inventory = await text_vector_store.inventory()
@@ -134,8 +137,7 @@ async def reconcile(apply: bool) -> dict:
             return result
         finally:
             await redis.aclose()
-            await vector_store.close()
-            await text_vector_store.close()
+            await database.close()
 
 
 def main() -> None:

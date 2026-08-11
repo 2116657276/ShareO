@@ -3,7 +3,7 @@
     <div class="chat-panel">
         <div class="chat-conversation-index" x-show="view === 'list'" x-cloak>
             <header class="chat-index-header">
-                <div><div class="eyebrow">MESSAGES</div><h1>私聊</h1><p>选择一位聊过的用户继续对话。</p></div>
+                <div><div class="eyebrow">MESSAGES</div><h1>私聊</h1><p>查看联系人、未读消息和历史对话。</p></div>
             </header>
             <div class="state-panel is-error m-3" x-show="errorMessage" x-cloak role="alert">
                 <i class="bi bi-cloud-slash" aria-hidden="true"></i><h2 class="h5">消息服务暂时不可用</h2>
@@ -19,13 +19,13 @@
                     <button type="button" class="conversation-row" @click="openConv(c)">
                         <span class="conversation-identity">
                             <img class="conversation-preview-avatar" :src="conversationAvatar(c)" alt="" onerror="this.src='/static/img/default-avatar.svg'">
-                            <span class="conversation-name"><strong x-text="c.title || '私聊用户'"></strong><small><span class="online-dot" :class="{online:c.online}"></span><span x-text="c.online ? '在线' : '离线'"></span></small></span>
+                            <span class="conversation-name"><strong x-text="c.title || '私聊用户'"></strong><small><span class="online-dot" :class="{online:c.online}"></span><span x-text="c.online ? '在线' : '离线'"></span></small><em class="conversation-peer-bio" x-text="conversationBio(c)"></em></span>
                         </span>
                         <span class="conversation-summary">
                             <span class="conversation-time" x-text="conversationTime(c)"></span>
                             <span class="conversation-preview" x-text="messagePreview(c.last_message)"></span>
                         </span>
-                        <span x-show="c.unread_count > 0" class="conversation-unread" x-text="c.unread_count > 99 ? '99+' : c.unread_count"></span>
+                        <span x-show="c.unread_count > 0" class="conversation-unread" x-text="c.unread_count > 99 ? '99+' : c.unread_count" :aria-label="`${c.unread_count} 条未读私聊`" :title="`${c.unread_count} 条未读私聊`" role="status"></span>
                     </button>
                 </template>
             </div>
@@ -36,7 +36,7 @@
                 <button type="button" class="chat-back-button" @click="backToList()" aria-label="返回私聊列表"><i class="bi bi-arrow-left"></i></button>
                 <div class="chat-peer-summary" x-show="!isBotConversation()" x-cloak>
                     <img class="chat-detail-avatar" :src="conversationAvatar(activeConversation)" alt="" onerror="this.src='/static/img/default-avatar.svg'">
-                    <span><strong x-text="activeConvTitle || '私聊'"></strong><small x-text="activeConversation?.online ? '在线' : '私聊会话'"></small></span>
+                    <span class="chat-peer-copy"><strong x-text="activeConvTitle || '私聊'"></strong><small x-text="peerStatus(activeConversation)"></small><em class="chat-peer-bio" x-text="conversationBio(activeConversation)"></em></span>
                 </div>
                 <strong class="chat-bot-heading" x-show="isBotConversation()" x-cloak>问问小O</strong>
                 <span class="agent-mode-label ms-auto" x-show="isBotConversation() && agentMode"><i class="bi bi-stars"></i> 深度分析</span>
@@ -46,16 +46,21 @@
             </div>
             <div class="msg-area" x-ref="msgArea">
                 <button x-show="hasMore" class="btn btn-sm btn-link w-100" @click="loadMore">加载更多</button>
+                <div class="empty-block chat-empty-messages" x-show="!loadingMessages && !errorMessage && messages.length === 0" x-cloak>
+                    <i class="bi bi-chat-square-text" aria-hidden="true"></i><h2 class="h6">还没有消息</h2><p class="mb-0">发送第一条消息，开始这段对话吧。</p>
+                </div>
                 <template x-for="m in messages" :key="m.id">
                     <div class="message-row" :class="m.sender_id === userId ? 'is-mine' : 'is-other'">
                         <div class="msg-bubble" :class="m.sender_id === userId ? 'mine' : 'other'">
                             <div class="message-content" x-text="m.content"></div>
+                            <time class="message-time" x-text="messageTime(m.created_at)"></time>
                             <div x-show="citationList(m).length" class="citation-group">
                                 <small class="citation-heading">来源帖子</small>
                                 <template x-for="citation in citationList(m)" :key="citation.chunk_id">
                                     <a class="citation-card" :href="'/post/' + citation.post_id">
-                                        <i class="bi bi-file-earmark-image" aria-hidden="true"></i>
-                                        <span><strong x-text="'帖子 #' + citation.post_id"></strong><small>查看已审核来源</small></span>
+                                        <img class="citation-card-thumb" x-show="citation.preview?.image_url" :src="citation.preview?.image_url || ''" alt="" loading="lazy" onerror="this.hidden=true">
+                                        <i class="bi bi-file-earmark-image citation-card-icon" x-show="!citation.preview?.image_url" aria-hidden="true"></i>
+                                        <span class="citation-card-copy"><strong x-text="citation.preview?.author?.username || ('帖子 #' + citation.post_id)"></strong><small x-text="citation.preview?.content || '查看已审核来源'"></small></span>
                                         <i class="bi bi-chevron-right ms-auto" aria-hidden="true"></i>
                                     </a>
                                 </template>
@@ -93,11 +98,11 @@ function chatApp() {
     return {
         userId: {{ .user_id }}, convs: [], activeConv: null, activeConversation: null, activeConvTitle: '',
         view: 'list', messages: [], newMsg: '', agentMode: false, sending: false, hasMore: false,
-        loadingConvs: false, ws: null, reconnectDelay: 1000, errorMessage: '',
+        loadingConvs: false, loadingMessages: false, ws: null, reconnectDelay: 1000, errorMessage: '',
         requestedConv: Number(new URLSearchParams(location.search).get('conv')) || 0,
         requestedBotAgent: new URLSearchParams(location.search).get('bot') === 'agent',
 
-        get visibleConvs() { return this.convs.filter(c => c.last_message && !this.isBotConversationData(c)); },
+        get visibleConvs() { return this.convs.filter(c => !this.isBotConversationData(c)); },
         async init() {
             await this.loadConvs();
             if (this.requestedBotAgent) await this.openBotAgent();
@@ -181,10 +186,29 @@ function chatApp() {
                 ? date.toLocaleTimeString('zh-CN', {hour:'2-digit', minute:'2-digit'})
                 : date.toLocaleDateString('zh-CN', {month:'numeric', day:'numeric'});
         },
-        messagePreview(message) { return String(message?.content || '').replace(/\s+/g, ' ').slice(0, 56) || '还没有消息'; },
+        messagePreview(message) { return String(message?.content || '').replace(/\s+/g, ' ').slice(0, 56) || '还没有消息，发送第一条消息吧'; },
+        peerMember(c) { return (c?.members || []).find(member => Number(member.user_id) !== Number(this.userId)); },
         conversationAvatar(c) {
-            const peer = (c?.members || []).find(member => Number(member.user_id) !== Number(this.userId));
+            const peer = this.peerMember(c);
             return peer?.user?.avatar_url || '/static/img/default-avatar.svg';
+        },
+        conversationBio(c) {
+            const bio = String(this.peerMember(c)?.user?.bio || '').trim();
+            return bio || '暂无简介';
+        },
+        peerStatus(c) {
+            if (!c) return '私聊会话';
+            return c.online ? '在线' : (c.followed_at ? `关注于 ${this.formatDate(c.followed_at)}` : '离线');
+        },
+        formatDate(value) {
+            const date = new Date(value);
+            if (Number.isNaN(date.getTime())) return '最近';
+            return date.toLocaleDateString('zh-CN', {year: 'numeric', month: 'numeric', day: 'numeric'});
+        },
+        messageTime(value) {
+            const date = new Date(value);
+            if (Number.isNaN(date.getTime())) return '';
+            return date.toLocaleString('zh-CN', {month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit'});
         },
         isBotConversationData(conversation) {
             if (conversation?.title === 'shareo_bot') return true;
@@ -192,6 +216,7 @@ function chatApp() {
         },
         async loadMsgs(before = 0) {
             if (!this.activeConv) return;
+            this.loadingMessages = true;
             let url = `/api/v1/conversations/${this.activeConv}/messages?limit=30`;
             if (before) url += `&before_id=${before}`;
             try {
@@ -207,6 +232,8 @@ function chatApp() {
                 if (this.messages.length) await this.markRead(this.messages[this.messages.length - 1].id);
             } catch (error) {
                 this.errorMessage = error.message || '消息服务暂时不可用';
+            } finally {
+                this.loadingMessages = false;
             }
         },
         loadMore() { if (this.messages.length) this.loadMsgs(this.messages[0].id); },

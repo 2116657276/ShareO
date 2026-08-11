@@ -61,7 +61,7 @@ class ImageIndexer:
             delete_started = time.perf_counter()
             await self.vector_store.delete_post(post_id)
             logger.info(
-                "image qdrant delete complete post_id=%d reason=no_images duration_ms=%.1f",
+                "image pgvector delete complete post_id=%d reason=no_images duration_ms=%.1f",
                 post_id,
                 (time.perf_counter() - delete_started) * 1000,
             )
@@ -122,14 +122,14 @@ class ImageIndexer:
         delete_started = time.perf_counter()
         await self.vector_store.delete_post(post_id)
         logger.info(
-            "image qdrant delete complete post_id=%d reason=replace duration_ms=%.1f",
+            "image pgvector delete complete post_id=%d reason=replace duration_ms=%.1f",
             post_id,
             (time.perf_counter() - delete_started) * 1000,
         )
         upsert_started = time.perf_counter()
         await self.vector_store.upsert(points)
         logger.info(
-            "image qdrant upsert complete post_id=%d images=%d duration_ms=%.1f total_ms=%.1f",
+            "image pgvector upsert complete post_id=%d images=%d duration_ms=%.1f total_ms=%.1f",
             post_id,
             len(points),
             (time.perf_counter() - upsert_started) * 1000,
@@ -144,7 +144,7 @@ class ImageIndexer:
             delete_started = time.perf_counter()
             await self._delete_post(post_id)
             logger.info(
-                "image qdrant delete complete post_id=%d duration_ms=%.1f total_ms=%.1f",
+                "image pgvector delete complete post_id=%d duration_ms=%.1f total_ms=%.1f",
                 post_id,
                 (time.perf_counter() - delete_started) * 1000,
                 (time.perf_counter() - started) * 1000,
@@ -171,7 +171,7 @@ class ImageIndexer:
             delete_started = time.perf_counter()
             await self._delete_post(post_id)
             logger.info(
-                "image qdrant delete complete post_id=%d reason=payload_not_visible duration_ms=%.1f",
+                "image pgvector delete complete post_id=%d reason=payload_not_visible duration_ms=%.1f",
                 post_id,
                 (time.perf_counter() - delete_started) * 1000,
             )

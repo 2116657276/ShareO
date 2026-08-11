@@ -33,11 +33,14 @@ type imageSearchPostReader interface {
 }
 
 type ImageSearchHandler struct {
-	postRepo  imageSearchPostReader
-	client    *http.Client
-	aiBaseURL string
-	token     string
+	postRepo       imageSearchPostReader
+	client         *http.Client
+	aiBaseURL      string
+	token          string
+	scoreThreshold float64
 }
+
+const defaultImageSearchScoreThreshold = 0.39
 
 // ImageSearchPage renders the authenticated shell for semantic image search.
 // The browser calls the existing public API; no AI credentials cross this boundary.
@@ -56,11 +59,25 @@ func NewImageSearchHandler(postRepo imageSearchPostReader) *ImageSearchHandler {
 		baseURL = "http://127.0.0.1:8000"
 	}
 	return &ImageSearchHandler{
-		postRepo:  postRepo,
-		client:    &http.Client{Timeout: 8 * time.Second},
-		aiBaseURL: baseURL,
-		token:     os.Getenv("SHAREO_INTERNAL_TOKEN"),
+		postRepo:       postRepo,
+		client:         &http.Client{Timeout: 8 * time.Second},
+		aiBaseURL:      baseURL,
+		token:          os.Getenv("SHAREO_INTERNAL_TOKEN"),
+		scoreThreshold: imageSearchScoreThreshold(),
 	}
+}
+
+func imageSearchScoreThreshold() float64 {
+	value := strings.TrimSpace(os.Getenv("SHAREO_IMAGE_SEARCH_SCORE_THRESHOLD"))
+	if value == "" {
+		return defaultImageSearchScoreThreshold
+	}
+	parsed, err := strconv.ParseFloat(value, 64)
+	if err != nil || parsed < 0 || parsed > 1 {
+		slog.Warn("invalid image search score threshold; using default", "value", value, "default", defaultImageSearchScoreThreshold)
+		return defaultImageSearchScoreThreshold
+	}
+	return parsed
 }
 
 func (h *ImageSearchHandler) Search(c *gin.Context) {
@@ -111,6 +128,9 @@ func (h *ImageSearchHandler) Search(c *gin.Context) {
 	ids := make([]int64, 0, len(ai.Results))
 	seen := make(map[int64]struct{}, len(ai.Results))
 	for _, item := range ai.Results {
+		if item.Score < h.scoreThreshold {
+			continue
+		}
 		if item.PostID > 0 {
 			if _, ok := seen[item.PostID]; !ok {
 				seen[item.PostID] = struct{}{}
@@ -132,6 +152,9 @@ func (h *ImageSearchHandler) Search(c *gin.Context) {
 	for _, item := range ai.Results {
 		if len(results) >= limit {
 			break
+		}
+		if item.Score < h.scoreThreshold {
+			continue
 		}
 		if _, duplicate := returnedPosts[item.PostID]; duplicate {
 			continue

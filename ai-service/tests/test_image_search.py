@@ -16,7 +16,7 @@ async def test_image_search_requires_internal_token(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_image_search_returns_qdrant_results(monkeypatch):
+async def test_image_search_returns_pgvector_results(monkeypatch):
     monkeypatch.setattr(main.settings, "internal_token", "secret")
     monkeypatch.setattr(main.embedder, "encode_text", lambda query: [1.0] * 512)
     store = AsyncMock()

@@ -12,17 +12,19 @@ import (
 )
 
 type FeedService struct {
-	postRepo *repository.PostRepo
-	likeRepo *repository.LikeRepo
-	search   *hybridPostSearch
+	postRepo    *repository.PostRepo
+	likeRepo    *repository.LikeRepo
+	commentRepo *repository.CommentRepo
+	search      *hybridPostSearch
 }
 
 func NewFeedService() *FeedService {
 	postRepo := repository.NewPostRepo()
 	return &FeedService{
-		postRepo: postRepo,
-		likeRepo: repository.NewLikeRepo(),
-		search:   newHybridPostSearch(postRepo),
+		postRepo:    postRepo,
+		likeRepo:    repository.NewLikeRepo(),
+		commentRepo: repository.NewCommentRepo(),
+		search:      newHybridPostSearch(postRepo),
 	}
 }
 
@@ -54,6 +56,7 @@ func (s *FeedService) GetFeed(req FeedReq, currentUserID int64) ([]model.Post, i
 				result = result[:req.PageSize]
 			}
 			s.fillUserInteraction(result, currentUserID)
+			s.fillFeaturedComments(result, currentUserID)
 			return result, cachedTotal, nil
 		}
 	}
@@ -71,6 +74,7 @@ func (s *FeedService) GetFeed(req FeedReq, currentUserID int64) ([]model.Post, i
 	}
 
 	s.fillUserInteraction(posts, currentUserID)
+	s.fillFeaturedComments(posts, currentUserID)
 
 	// Cache first page of latest feed (store page_size=20 worth + total)
 	if req.Page == 1 && req.Sort == model.SortLatest && req.UserID == nil {
@@ -95,6 +99,7 @@ func (s *FeedService) GetFollowingFeed(req FeedReq, currentUserID int64) ([]mode
 		return nil, 0, err
 	}
 	s.fillUserInteraction(posts, currentUserID)
+	s.fillFeaturedComments(posts, currentUserID)
 	return posts, total, nil
 }
 
@@ -104,6 +109,7 @@ func (s *FeedService) Search(ctx context.Context, q string, page, pageSize int, 
 		return nil, 0, err
 	}
 	s.fillUserInteraction(posts, currentUserID)
+	s.fillFeaturedComments(posts, currentUserID)
 	return posts, total, nil
 }
 
@@ -118,6 +124,26 @@ func (s *FeedService) fillUserInteraction(posts []model.Post, userID int64) {
 	likedMap := s.likeRepo.GetUserLikedPostIDs(userID, postIDs)
 	for i := range posts {
 		posts[i].IsLiked = likedMap[posts[i].ID]
+	}
+}
+
+func (s *FeedService) fillFeaturedComments(posts []model.Post, userID int64) {
+	if len(posts) == 0 || s.commentRepo == nil {
+		return
+	}
+	postIDs := make([]int64, len(posts))
+	for i := range posts {
+		postIDs[i] = posts[i].ID
+	}
+	featured, err := s.commentRepo.FindFeaturedByPostIDs(postIDs, userID)
+	if err != nil {
+		// The post feed remains usable if an older database has not received
+		// the additive comment-like migration yet; the preview is optional.
+		slog.Warn("failed to load featured comments", "err", err)
+		return
+	}
+	for i := range posts {
+		posts[i].FeaturedComment = featured[posts[i].ID]
 	}
 }
 

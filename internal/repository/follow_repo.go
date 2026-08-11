@@ -120,18 +120,18 @@ func (r *FollowRepo) GetFollowers(userID int64, page, pageSize int) ([]model.Use
 	}
 
 	var users []model.User
-	DB.Where("id IN ?", followerIDs).Order(orderByField("id", followerIDs)).Find(&users)
+	DB.Where("id IN ?", followerIDs).Order(orderByIDList("id", followerIDs)).Find(&users)
 	return users, total, nil
 }
 
-// orderByField builds an ORDER BY FIELD clause to preserve the order of IDs.
-func orderByField(column string, ids []int64) string {
+// orderByIDList builds a portable CASE expression to preserve the order of IDs.
+func orderByIDList(column string, ids []int64) string {
 	if len(ids) == 0 {
 		return ""
 	}
 	parts := make([]string, len(ids))
 	for i, id := range ids {
-		parts[i] = fmt.Sprintf("%d", id)
+		parts[i] = fmt.Sprintf("WHEN %d THEN %d", id, i)
 	}
-	return fmt.Sprintf("FIELD(%s, %s)", column, strings.Join(parts, ","))
+	return fmt.Sprintf("CASE %s %s ELSE %d END", column, strings.Join(parts, " "), len(ids))
 }

@@ -1,16 +1,16 @@
 {
-  "captured_at": "2026-07-30T14:33:38.565Z",
+  "captured_at": "2026-08-08T15:17:15.586Z",
   "git": {
-    "sha": "efdb049db89964128b7051ab2c7f2b4a6a7be4da",
+    "sha": "833b58a4ffab7e5906d786b41ad5b5ee835b89ac",
     "branch": "main",
     "dirty": true
   },
   "python": "3.14.6",
   "python_eval_runtime": "Python 3.12.13",
   "go": "go version go1.26.5 darwin/arm64",
-  "uv": "uv 0.11.28 (Homebrew 2026-07-07 aarch64-apple-darwin)",
+  "uv": "uv 0.12.0 (Homebrew 2026-07-28 aarch64-apple-darwin)",
   "platform": "macOS-15.7.7-arm64-arm-64bit-Mach-O",
-  "network_environment": "local-native",
+  "network_environment": "unspecified",
   "configured_keys": {
     "SHAREO_AI_LLM_BASE_URL": true,
     "SHAREO_AI_LLM_API_KEY": true,
@@ -111,8 +111,8 @@
           "rag_consumer": "running",
           "prompt_version": "agent-v1",
           "trace_version": "agent-trace-v1",
-          "source_fingerprint": "9d11fd416d26dc45a74dca971a68e38225a3e9489878587e8926e544d2c56620",
-          "process_started_at": "2026-07-30T14:33:31.304131+00:00",
+          "source_fingerprint": "d5b1113d2fe6c29e94c2691eb5b91c35899ac6512a6cdb57c10e060faa1070da",
+          "process_started_at": "2026-08-08T15:16:23.485991+00:00",
           "vector_store": {
             "collection": "post_chunks",
             "dimension": 512,
@@ -130,17 +130,17 @@
   "dataset_hashes": {
     "image_search_current": {
       "path": ".local/shareo/eval/image_search_local_v1.jsonl",
-      "sha256": "ee2b68c49eeeb51ee45373c9cf517a54883f2e0b94480ef7a8b810b433d51017",
-      "record_count": 34
+      "sha256": "df31bacf91885e2f0034241424f01fd453f4bf248200d67844176812432350f8",
+      "record_count": 38
     },
     "rag_current": {
       "path": ".local/shareo/eval/rag_qa_current_v1.jsonl",
-      "sha256": "522b7bbfa796ef35a25725010dacab946949de1d7402dabd84a8fe4589941ce7",
+      "sha256": "039a7f4e0f50624e4705f41fc7d0672055c6e787e00d28fa4578a00945de50c4",
       "record_count": 30
     },
     "agent_current": {
       "path": ".local/shareo/eval/agent_tasks_current_v1.jsonl",
-      "sha256": "434ebb53ff95629aaecc9e2c9d5d279a0e6f7bedb7ea22a299a62ebc6774e1aa",
+      "sha256": "b8c14fac188eb4d0c48c6c3ab6f404328a3704f7a672561111e979b504ab1e39",
       "record_count": 36
     },
     "post_search_current": {
@@ -259,8 +259,8 @@
           "rag_consumer": "running",
           "prompt_version": "agent-v1",
           "trace_version": "agent-trace-v1",
-          "source_fingerprint": "9d11fd416d26dc45a74dca971a68e38225a3e9489878587e8926e544d2c56620",
-          "process_started_at": "2026-07-30T14:33:31.304131+00:00",
+          "source_fingerprint": "d5b1113d2fe6c29e94c2691eb5b91c35899ac6512a6cdb57c10e060faa1070da",
+          "process_started_at": "2026-08-08T15:16:23.485991+00:00",
           "vector_store": {
             "collection": "post_chunks",
             "dimension": 512,
@@ -275,5 +275,5 @@
       }
     }
   },
-  "captured_at_end": "2026-07-30T14:38:07.704Z"
+  "captured_at_end": "2026-08-08T15:31:46.886Z"
 }

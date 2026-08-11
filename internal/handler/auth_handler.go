@@ -66,6 +66,9 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		response.BadRequest(c, err.Error())
 		return
 	}
+	// Replacing the Redis session must also revoke old live sockets; otherwise
+	// an old browser tab can continue receiving private messages.
+	h.disconnectUser(resp.User.ID)
 	http.SetCookie(c.Writer, &http.Cookie{
 		Name:     "token",
 		Value:    resp.Token,
@@ -103,7 +106,8 @@ func (h *AuthHandler) Me(c *gin.Context) {
 	userID := c.GetInt64("user_id")
 	user, err := h.svc.GetProfile(userID)
 	if err != nil {
-		response.InternalError(c, err.Error())
+		slog.Warn("profile lookup failed", "user_id", userID, "err", err)
+		response.InternalError(c, "个人资料暂时无法加载，请稍后重试")
 		return
 	}
 	response.Success(c, user)
@@ -121,7 +125,8 @@ func (h *AuthHandler) UpdateProfile(c *gin.Context) {
 		return
 	}
 	if err := h.svc.UpdateProfile(userID, req.AvatarURL, req.Bio, req.Email); err != nil {
-		response.InternalError(c, err.Error())
+		slog.Warn("profile update failed", "user_id", userID, "err", err)
+		response.InternalError(c, "个人资料暂时无法保存，请稍后重试")
 		return
 	}
 	response.Success(c, nil)
@@ -146,6 +151,7 @@ func (h *AuthHandler) WebLogin(c *gin.Context) {
 		c.HTML(http.StatusOK, "login.html", userData(c, gin.H{"title": "登录 - ShareO", "Error": err.Error()}))
 		return
 	}
+	h.disconnectUser(resp.User.ID)
 	http.SetCookie(c.Writer, &http.Cookie{
 		Name:     "token",
 		Value:    resp.Token,

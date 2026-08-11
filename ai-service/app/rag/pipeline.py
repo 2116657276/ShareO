@@ -132,6 +132,7 @@ class RAGPipeline:
             return RAGAnswer(NO_ANSWER, [])
 
         result = await self.provider.complete(build_messages(question, sources, history))
+        postprocess_started = time.perf_counter()
         source_by_id = {str(item["chunk_id"]): item for item in sources}
         answer, source_ids = parse_model_output(result.content, set(source_by_id))
         if not answer or not source_ids:
@@ -146,13 +147,15 @@ class RAGPipeline:
             )
             for chunk_id in source_ids
         ]
+        postprocess_ms = (time.perf_counter() - postprocess_started) * 1000
         logger.info(
             "rag answer complete citations=%d embedding_ms=%.1f retrieval_ms=%.1f "
-            "llm_ms=%.1f total_ms=%.1f model=%s prompt_tokens=%d completion_tokens=%d",
+            "llm_ms=%.1f postprocess_ms=%.1f total_ms=%.1f model=%s prompt_tokens=%d completion_tokens=%d",
             len(citations),
             embedding_ms,
             retrieval_ms,
             result.duration_ms,
+            postprocess_ms,
             (time.perf_counter() - total_started) * 1000,
             result.model,
             result.prompt_tokens,
