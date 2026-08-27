@@ -1,12 +1,12 @@
 # ShareO 功能矩阵
 
-> 更新时间：2026-08-11 | 本文只维护稳定能力；当前状态和证据边界以 [REVIEW.md](REVIEW.md) 为准
+> 更新时间：2026-08-28 | 本文只维护稳定能力；当前状态和证据边界以 [REVIEW.md](REVIEW.md) 为准
 
 ## 功能能力
 
 | 能力 | 用户入口 | 核心依赖 | 当前状态 | 主要证据 |
 |---|---|---|---|---|
-| 注册、登录、资料、改密、退出 | `/login`、`/register`、`/settings` | Go、PostgreSQL、Redis JWT缓存 | 已实现 | 认证单测与接口回归 |
+| 注册、登录、资料、改密、退出 | `/login`、`/register`、`/settings` | Go、PostgreSQL、Redis 当前令牌校验 | 已实现；Redis 不可用时受保护请求 fail-closed | 认证单测与接口回归 |
 | 响应式界面与主题 | 全部页面、“设置和动态” | 共享模板、CSS、浏览器本地偏好 | 已实现手机/桌面响应式布局；默认 ShareO 琥珀色，可切换经典黑白主题；两套主题保持低对比度 | 浏览器 smoke、模板契约与静态检查 |
 | 图文发布与编辑 | `/post/create`、`/post/:id/edit` | PostgreSQL、MinIO | 已实现 | 上传/帖子测试 |
 | Feed与帖子详情 | `/home`、`/post/:id` | PostgreSQL、Redis缓存 | 单/双列均使用 1200px 高清中图，新上传采用 JPEG 90% 质量；人工 smoke 已覆盖 Feed，完整移动端/实时 WebSocket仍未形成浏览器自动化证据 | 社区回归 |

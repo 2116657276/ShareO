@@ -1,12 +1,12 @@
 # ShareO 简历项目审查
 
-> 审查日期：2026-08-08 | 本文不固定分支或提交数量；具体代码基线以提交时的 `git status`、提交 SHA 和评测报告为准。
+> 审查日期：2026-08-08（历史摘要） | 本文不固定分支或提交数量；具体代码基线以提交时的 `git status`、提交 SHA 和评测报告为准。当前状态、评分和下一轮计划以 [`TASK.md`](../TASK.md) 与 [`docs/REVIEW.md`](REVIEW.md) 为准。
 
 ## 推荐定位
 
-ShareO 适合表述为“Go + Python 的可评测引用式 RAG 应用工程项目”，并可补充“同一私聊入口中的受限只读知识 Agent”。当前仍不是通用 Agent：没有写入工具、外部工具、长期记忆、多 Agent 或独立 Agent 页面。默认 `shareo_bot` 消息仍是固定 RAG；只有用户显式打开深度分析后，才进入 LangGraph 状态图并在四个只读工具之间进行受限多步调用。
+ShareO 适合表述为“AI 原生社区后端与多模态 RAG 工程项目”，主线是 Go 业务控制面、PostgreSQL 事务/outbox、Redis Streams、pgvector 图文检索、引用与评测；LangGraph 只读 Agent 是同一私聊入口中的显式深度分析能力，不作为项目第一标签。当前仍不是通用 Agent：没有写入工具、外部工具、长期记忆、多 Agent 或独立 Agent 页面。默认 `shareo_bot` 消息走固定 RAG，只有用户主动打开深度分析后，才进入四个只读工具之间的受限多步调用。
 
-简历、项目介绍和面试讲解可以强调 RAG、受限 Agent 工具调用、LangGraph 状态图、可见性与引用安全、异步幂等、质量评测和故障降级；不得把项目描述成“自主 Agent 平台”“多 Agent 系统”或“生产级通用智能体”。当前证据目录的最新报告运行 `20260808T151704Z` 使用本机 47 条语料和真实 Provider，工作区为 dirty；该报告的机器质量门禁通过，AI judge 仍有 10 条答案需要人工复核，不能替代干净提交复评或人工评分。当前结果和证据边界见 [`docs/evidence/final-freeze/README.md`](evidence/final-freeze/README.md)。
+简历、项目介绍和面试讲解应优先强调事务 outbox、Redis Streams 的恢复语义、图文向量索引、Go 最终可见性复核、引用安全、质量评测和故障降级；受限 Agent 工具调用与 LangGraph 状态图放在增强能力中说明。不得把项目描述成“自主 Agent 平台”“多 Agent 系统”或“生产级通用智能体”。当前证据目录的最新报告运行 `20260808T151704Z` 使用本机 47 条语料和真实 Provider，工作区为 dirty；该报告的机器质量门禁通过，AI judge 仍有 10 条答案需要人工复核，不能替代干净提交复评或人工评分。当前结果和证据边界见 [`docs/evidence/final-freeze/README.md`](evidence/final-freeze/README.md)。
 
 ## 已由代码和测试支持的能力
 
@@ -15,7 +15,7 @@ ShareO 适合表述为“Go + Python 的可评测引用式 RAG 应用工程项�
 | 设计 Go 业务服务与 Python AI 服务的数据所有权边界 | PostgreSQL `public` 运行时只由 Go 写，`ai`/pgvector 只由 Python 写，MinIO 凭证只在 Go 侧 |
 | 实现帖子正文 RAG 与可访问引用 | 400/80 字符分块、BGE 512 维向量、pgvector `ai.post_chunk_embeddings`、结构化回答和两级引用白名单 |
 | 实现中文语义搜图 | Chinese-CLIP、pgvector `ai.image_embeddings`、候选过取、按帖去重和 Go 可见性复核 |
-| 实现受限只读社区知识 Agent | LangGraph `StateGraph`、原生 tool calling、语义/关键词/帖子读取/图片四个只读工具、步骤轨迹和最终引用过滤；工程测试、真实集成和当前机器门禁均有证据 |
+| 增加显式只读深度分析能力 | LangGraph `StateGraph`、原生 tool calling、语义/关键词/帖子读取/图片四个只读工具、步骤轨迹和最终引用过滤；它不替代默认固定 RAG |
 | 实现异步且幂等的 Bot 工作流 | Redis Streams at-least-once、重试、`XAUTOCLAIM`、`NOGROUP` 恢复、`source_message_id` 唯一约束 |
 | 建立 AI 质量评测 | 当前报告使用 38 条搜图（含 8 条 no-match）、32 条搜贴、30 条 v1 RAG 和 36 条 v1 Agent 机器评测；搜图 Recall@5 0.9222 且 no-match accuracy 1.0，RAG 完整来源覆盖率 0.9333、引用精度 0.9000，Agent 完整来源覆盖率 0.9722、额外工具调用 0；另有双轮 AI judge 和 10 条人工复核交接包中的待复核题 |
 | 验证依赖故障降级 | 代码和本机 readiness 定义了 AI、PostgreSQL/pgvector、MinIO、Redis 和 LLM Provider 的降级边界；旧 Compose 路径已退役 |
@@ -44,7 +44,7 @@ ShareO 适合表述为“Go + Python 的可评测引用式 RAG 应用工程项�
 
 推荐使用如下口径：
 
-> 独立设计并实现 Go + Python 的社区 RAG 系统：通过 Redis Streams 异步构建 Chinese-CLIP 图片索引与 BGE 正文索引，使用 PostgreSQL pgvector 完成向量检索；为私聊 RAG Bot 增加任务幂等、失败重试、引用白名单和 Go 侧可见性复核，并在同一入口实现显式开启的 LangGraph 只读知识 Agent，以四个受限工具完成多步检索和脱敏轨迹记录；用版本化评测数据集、机器门禁和独立故障矩阵验证质量与降级行为。
+> 独立设计并实现 AI 原生社区后端与多模态 RAG：使用 PostgreSQL 事务 outbox 与 Redis Streams 构建可重试、可重领、幂等的异步索引和 Bot 链路，通过 Chinese-CLIP、BGE 与 pgvector 实现图文检索；在 Go 侧对 Python 返回的候选引用执行可见性复核，并用版本化数据集、机器门禁和故障矩阵验证检索质量与降级行为；同一私聊入口支持显式开启的 LangGraph 只读深度分析。
 
 不要使用“打造自主 Agent 平台”“支持多工具协作”“生产级高并发”“一键完整复现”或“第三方评测达到 5.0”等无法由当前仓库证明的描述。
 

@@ -1,12 +1,14 @@
 # 数据模型参考
 
-> 结构事实源：`migrations/postgres/001_schema.sql` 与 `migrations/postgres/002_vector.sql`
+> 结构事实源：`migrations/postgres/001_schema.sql`、`migrations/postgres/002_vector.sql`、`migrations/postgres/003_session_version.sql` 与 `migrations/postgres/004_upload_artifacts.sql`
+
+这些脚本是按文件名顺序执行的 PostgreSQL 初始化/增量脚本；当前仓库尚未提供带版本表、校验和和回滚记录的迁移执行器。升级、重复执行和生产变更不能仅凭本页表结构说明判断，相关缺口由 `TASK.md` 的 `DATA-01` 跟踪。
 
 ## PostgreSQL 17 业务表
 
 | 表 | 用途 | 关键约束 |
 |---|---|---|
-| `users` | 用户、管理员和固定Bot | username唯一；`is_bot`；Bot密码不可登录 |
+| `users` | 用户、管理员和固定Bot | username唯一；`is_bot`；Bot密码不可登录；`session_version` 持久化会话撤销版本 |
 | `posts` | 帖子与审核状态 | 作者级联；审核人删除置空；正文使用安全 `LIKE` 回退搜索 |
 | `post_images` | 帖子图片顺序和尺寸 | 帖子删除级联 |
 | `comments` | 评论与回复及热度计数 | 帖子、作者、父评论级联；回复用户删除置空；`like_count` 为评论点赞明细的同步计数 |
@@ -21,6 +23,7 @@
 | `messages` | 文本消息和引用meta | 会话/发送者删除级联；按会话和ID索引 |
 | `bot_replies` | Bot任务幂等映射 | source和reply消息ID分别唯一 |
 | `bot_task_outbox` | Bot任务事务外发箱 | message唯一；pending/published 状态与退避时间；会话/消息删除级联 |
+| `upload_artifacts` | 已上传但尚未绑定帖子的对象登记 | owner、批次和对象键唯一；过期未绑定记录由本机清理；帖子删除后释放绑定 |
 
 ## 核心关系
 
@@ -35,6 +38,7 @@ users ──< posts ──< post_images
   └────< conversation_members >──── conversations ──< messages
                                                      └─ bot_replies
                                                      └─ bot_task_outbox
+  └────< upload_artifacts >──── posts (可选绑定)
 ```
 
 `conversations.dm_key` 由两名用户ID排序组成。业务层必须保证一个会话恰有两个不同成员，schema唯一约束负责并发收敛。
@@ -49,6 +53,7 @@ users ──< posts ──< post_images
 - `messages` 与 `bot_task_outbox` 在同一事务中写入；发布成功后 outbox 才标记 `published`。
 - `bot_replies.source_message_id` 保证一条用户来源消息最多产生一条 Bot 回复。
 - 用户编辑 approved帖子后状态回到 pending，并发布图文向量删除事件。
+- `upload_artifacts` 只接受上传用户本人提交的对象键；发帖与对象绑定在同一 PostgreSQL 事务中完成，未绑定记录按 TTL 有界清理。
 
 ## pgvector 派生数据
 
@@ -72,4 +77,4 @@ AI 账号只访问 `ai` schema。两张派生表都使用 `vector(512)`，并建
 
 - `shareo:stream:index_post`：`action=upsert|delete`、`post_id`。
 - `shareo:stream:bot_tasks`：来源消息任务。
-- 登录、Feed缓存和在线状态使用TTL，不能替代 PostgreSQL 真相。
+- 登录令牌缓存、Feed缓存和在线状态使用 TTL，不能替代 PostgreSQL 真相；受保护请求当前必须命中登录令牌缓存，Redis 不可用会 fail-closed；会话撤销以 `users.session_version` 为持久化判断。

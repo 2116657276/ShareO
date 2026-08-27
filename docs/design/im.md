@@ -37,13 +37,13 @@
 
 ## WebSocket 与在线状态
 
-握手复用JWT和Redis登录缓存，不接受已退出、改密或被封禁用户的旧Token。Hub允许一个用户多个连接，最后一个连接关闭后才删除在线状态；慢连接写缓冲满时主动断开。
+握手复用 JWT 和 Redis 当前令牌校验，并用 PostgreSQL `session_version` 拒绝已退出、改密或被封禁用户的旧 Token。Redis 不可用时握手 fail-closed；Hub 允许一个用户多个连接，最后一个连接关闭后才删除在线状态；慢连接写缓冲满时主动断开。
 
-连接断开后按指数退避重连，成功后立即使用最后渲染的 message ID调用 `after_id`。Redis在线状态不是消息真相，丢失时只影响在线展示。
+连接断开后按指数退避重连，成功后立即使用最后渲染的 message ID 调用 `after_id`。Redis 在线状态不是消息真相；仅在线状态键丢失时只影响在线展示，但 Redis 基础设施整体不可用还会使受保护请求 fail-closed，并延迟 Streams 发布与消费。
 
 ## Bot 扩展
 
-Go只在发送者为普通用户、目标为固定 `shareo_bot` 的有效DM中写入 outbox。消息事务提交后由单进程 publisher 按退避重试发布 `bot_tasks`；因此 Redis 或 AI 故障不阻塞普通消息，Go 重启后也能补发未完成任务。
+Go只在发送者为普通用户、目标为固定 `shareo_bot` 的有效DM中写入 outbox。消息事务提交后由单进程 publisher 按退避重试发布 `bot_tasks`；AI 或 LLM 故障不阻塞已经通过认证的普通消息，但 Redis 故障会使新的受保护 REST/WS 请求因会话校验 fail-closed。Go 重启后仍能补发已落库的未完成任务。
 
 Bot 回复协议和引用安全见 [RAG 设计](rag.md)。
 

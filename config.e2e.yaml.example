@@ -1,4 +1,8 @@
-# Disposable Phase 2 E2E configuration. Do not point this file at shared data.
+# RETIRED: historical Phase 2 E2E configuration. It targets the removed MySQL
+# runtime and is not compatible with the current PostgreSQL/pgvector path.
+# Do not use it for local startup or integration tests; use config.yaml.example
+# plus the SHAREO_* test environment variables instead. It is retained only to
+# explain the old test boundary.
 server:
   port: 18080
   mode: test

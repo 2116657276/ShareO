@@ -14,7 +14,9 @@ Go JSON API 成功响应为：
 
 业务错误码：`1001` 参数错误、`1002` 未登录、`1003` 禁止、`1004` 不存在、`1005` 内部错误、`1006` 限流、`1007` 冲突。HTTP状态仍分别使用 400、401、403、404、500、429、409。
 
-浏览器登录态使用 JWT Cookie 和 Redis 登录缓存；API 也可使用 Bearer。浏览器写操作受同源保护。Go ↔ AI 内部接口要求 `X-Internal-Token`，不得暴露给浏览器。
+浏览器登录态使用 JWT Cookie 和 Redis 当前令牌缓存；受保护请求当前必须先通过 Redis 会话校验，再用 JWT 中的版本与 PostgreSQL `users.session_version` 比对。Redis 不是撤销事实源，但 Redis 基础设施不可用时受保护 REST 和 WebSocket 握手都会 fail-closed；REST 返回 503，WebSocket 握手当前统一按 401 处理。注销、改密和封禁通过持久化版本撤销旧令牌。API 也可使用 Bearer。浏览器写操作受同源保护。Go ↔ AI 内部接口要求 `X-Internal-Token`，不得暴露给浏览器。
+
+除业务错误码外，依赖不可用使用 HTTP 503，并沿用内部错误码 `1005`；客户端不能把 503 当作“未登录”或空列表处理。
 
 ## 稳定网页入口
 
@@ -42,7 +44,7 @@ Go JSON API 成功响应为：
 | GET | `/api/v1/posts/:id` | 可见帖子详情 |
 | POST | `/api/v1/posts/:id/view` | 显式记录浏览 |
 | GET | `/api/v1/posts/:id/comments` | 可见评论 |
-| GET | `/api/v1/users/:id/following` | 关注列表；列表项在保留原用户字段基础上增加 `followed_at` |
+| GET | `/api/v1/users/:id/following` | 关注列表；列表项使用公共用户字段并增加 `followed_at` |
 | GET | `/api/v1/users/:id/followers` | 粉丝列表 |
 | GET | `/api/v1/users/:id/likes` | 用户点赞帖子 |
 | GET | `/api/v1/favorites?page=&page_size=` | 当前登录用户的私人收藏；只返回 approved、未删除帖子，不提供他人收藏查询 |
@@ -55,7 +57,7 @@ Go JSON API 成功响应为：
 | 账号 | `GET /auth/me`、`POST /auth/logout`、`PUT /auth/profile`、`PUT /auth/password` |
 | 帖子 | `POST /posts`、`PUT /posts/:id`、`DELETE /posts/:id` |
 | 互动 | `POST /posts/:id/like`、`GET /likes`、`PUT/DELETE /posts/:id/favorite`、`GET /favorites`、`POST /posts/:id/comments`、`POST /comments/:cid/like`、`DELETE /comments/:cid`、`POST /users/:id/follow` |
-| 上传 | `POST /upload` |
+| 上传 | `POST /upload`；响应中的 `urls.upload_id` 用于追踪本次对象批次，发帖时只能提交当前用户上传且尚未过期的内部图片 URL |
 | 用户搜索 | `GET /users/search?q=&limit=`，返回正常用户并排除调用者；固定Bot可被搜索 |
 | 通知 | `GET /notifications`、`PUT /notifications/:id/read`、`PUT /notifications/read-all`、`GET /notifications/unread-count`；列表只含关注、点赞、评论，未读响应含兼容字段 `count` 与评论专用 `comment_count` |
 | 私聊 | `GET/POST /conversations`、`GET/POST /conversations/:id/messages`、`PUT /conversations/:id/read`、`GET /conversations/unread-count` |
@@ -65,6 +67,10 @@ Go JSON API 成功响应为：
 收藏 PUT/DELETE 均为幂等操作。收藏不产生通知，不公开数量，也不参与热门排序；不可见帖子可以保留收藏关系，但不会出现在收藏列表或公开帖子详情中。
 
 WebSocket 使用 `GET /ws`。握手复用登录校验，下行新消息包含稳定 message ID，客户端必须用该 ID去重。Bot 消息的 `meta.citations[]` 在 Go 对外返回时可附带 `preview`，其中只包含已审核、未删除帖子的首张图片、作者和正文摘要；该字段不写回 AI 的原始引用元数据。
+
+社区公开读接口的用户对象统一只包含 `id`、`username`、`avatar_url`、`bio`、可选 `is_bot` 和关系场景下的 `followed_at`；不会包含邮箱、角色、封禁状态、密码哈希或 ORM 关联。`/auth/me`、登录/注册响应使用独立的认证资料对象，不能把认证对象当作公共用户对象复用。
+
+私聊列表、消息 REST 接口和 WebSocket `new_message` 事件也使用安全读模型：会话保留标题、成员、未读数、在线状态和最后消息，消息保留内容、时间、`meta`、发送者 ID 与公共用户字段；不会返回 `dm_key`、邮箱、角色、账号状态或密码相关字段。
 
 `GET /api/v1/conversations/unread-count` 的稳定响应为 `data.total`，例如 `{"code":0,"data":{"total":1}}`；页面导航徽标直接使用该字段。Bot outbox 是 Go/PostgreSQL 内部结构，不暴露给前端或公开 API。
 
@@ -101,15 +107,15 @@ WebSocket 使用 `GET /ws`。握手复用登录校验，下行新消息包含稳
 |---|---|---|
 | GET | `/healthz` | 进程存活 |
 | GET | `/readyz` | Redis/PostgreSQL pgvector 基础就绪 |
-| GET | `/readyz/image-search` | 图片模型、pgvector 表和 consumer 就绪 |
-| GET | `/readyz/rag` | 文本模型、pgvector 表、consumer 和 LLM 配置就绪 |
-| GET | `/readyz/agent` | Agent 工具、状态图和 LLM 配置就绪 |
+| GET | `/readyz/image-search` | 图片模型、pgvector 表和 `index_post` consumer 就绪 |
+| GET | `/readyz/rag` | 文本模型、pgvector 表、`index_post` consumer 和 LLM 配置就绪；当前不检查 `bot_tasks` consumer |
+| GET | `/readyz/agent` | Agent 开关、LLM 配置和向量存储元数据可用；当前不检查两个 Streams consumer 或模型加载状态 |
 | GET | `/v1/meta/image-search` | 模型、revision、device和collection信息 |
 | POST | `/v1/search/images` | 文本编码与图片KNN |
 | POST | `/v1/search/posts` | BGE 查询编码与 `post_chunks` KNN；仅供 Go 混合搜贴调用 |
 | POST | `/v1/rag/answer` | 受限RAG回答 |
 
-除 `/healthz` 和基础 `/readyz` 外，能力接口要求内部 token。RAG问题为1–500字符，历史最多20条，`top_k` 为1–20。AI 接口不直接对浏览器公开；Go 负责公开 API、权限和引用最终校验。
+除 `/healthz` 和基础 `/readyz` 外，能力接口要求内部 token。RAG问题为1–500字符，历史最多20条，`top_k` 为1–20。AI 接口不直接对浏览器公开；Go 负责公开 API、权限和引用最终校验。`/readyz/*` 的 200 只表示该 endpoint 当前检查到的条件满足，不能替代 Bot consumer 运行状态审计。
 
 ## API 契约审计与测试边界
 

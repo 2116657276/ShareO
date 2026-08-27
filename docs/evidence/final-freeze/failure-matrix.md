@@ -1,6 +1,6 @@
 # Final Freeze 自动化结果
 
-> 本文件只记录本轮本机运行状态；原始命令输出位于 `.local/shareo/final-freeze/<run_id>/`，不进入仓库证据目录。
+> 归档属性：历史运行快照（对应旧的本机采集批次），不是当前运行结果。表中的 `check=pass` 仅表示采集当时的命令状态；当前文档门禁仍以 `python3 scripts/check_docs.py` 的实时输出为准。原始命令输出位于 `.local/shareo/final-freeze/<run_id>/`，不进入仓库证据目录。
 
 | 场景 | 状态 | 退出码 | 说明 |
 |---|---|---:|---|

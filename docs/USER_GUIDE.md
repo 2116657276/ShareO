@@ -1,6 +1,6 @@
 # ShareO 用户使用指南
 
-这是一份面向日常使用者的本机运行说明。项目默认使用 macOS 宿主机服务，不会由 `make up` 自动启动 Docker 或 Colima。
+这是一份面向日常使用者的本机运行说明。项目默认使用 macOS 宿主机服务，不会由 `make up` 自动启动 Docker 或 Colima。默认 Go/AI 端口为 `8080`/`8000`。
 
 ## 第一次运行
 
@@ -18,10 +18,13 @@ make bootstrap-postgres
 至少检查以下配置：
 
 - `config.yaml` 中的 PostgreSQL、MinIO 和 JWT 配置是否适合当前本机环境；
-- `.env` 中的 `SHAREO_INTERNAL_TOKEN` 是否为 Go 和 Python 共用的随机值；
+- 如果修改端口，`.env` 中的 `SHAREO_APP_PORT`、`SHAREO_AI_PORT` 必须分别与 `config.yaml` 的 `server.port` 以及 `SHAREO_AI_BASE_URL`、`SHAREO_AI_GO_BASE_URL` 保持一致；当前 Go 直接启动仍以 YAML 端口为准；
+- `.env` 中的 `SHAREO_INTERNAL_TOKEN` 如果已填写，必须是 Go 和 Python 共用的随机值；留空或保留示例占位符时，本机启动脚本会生成随机令牌并以 `0600` 权限保存到 `${SHAREO_LOCAL_STATE_DIR:-/tmp/shareo-local}/internal-token`。Go/Python 内部接口也会拒绝已知占位符，即使绕过启动脚本直接运行服务也不会把占位符当作有效凭证；
 - 需要使用 RAG、Agent 或真实模型评测时，再填写 `SHAREO_AI_LLM_API_KEY` 等 Provider 配置。
 
 不要把 `.env`、API Key、Token、个人图片或模型权重提交到 Git。
+
+当前支持路径不包含 Compose；内部令牌必须由环境变量显式提供，或由本机启动脚本生成并保存到状态目录。旧 Compose 文件仅作退役历史资料，不要作为日常启动入口。
 
 ## 日常启动与关闭
 
@@ -36,7 +39,7 @@ make up
 1. 检查并按需启动本机 PostgreSQL 17、Redis 和 MinIO；
 2. 编译并启动 Go 服务和 Python AI 服务；
 3. 预热图片模型、文本模型，并检查图片搜索、RAG、Agent readiness；
-4. 通过后使用系统默认浏览器打开 `http://127.0.0.1:8080/home`。
+4. 通过后使用系统默认浏览器打开默认地址 `http://127.0.0.1:8080/home`；若使用非默认端口，请访问 `.env` 中 `SHAREO_APP_PORT` 对应的地址。
 
 不希望自动打开浏览器时使用：
 
@@ -44,7 +47,7 @@ make up
 SHAREO_OPEN_BROWSER=0 make up
 ```
 
-启动成功后也可以手动访问：<http://127.0.0.1:8080>。
+启动成功后也可以手动访问默认地址：<http://127.0.0.1:8080>。非默认端口以 `.env` 的 `SHAREO_APP_PORT` 为准，但必须先同步 `config.yaml` 的 `server.port`。
 
 ### 一键关闭
 
@@ -81,10 +84,12 @@ SHAREO_STOP_BREW_SERVICES=1 make down
 日常使用只需要 `make up` 和 `make down`；修改代码或准备答辩演示时，再按需执行：
 
 ```bash
-make check
+SHAREO_SKIP_CURRENT_EVIDENCE=1 make check
 make test-api
 make test-integration-auto
 ```
+
+`make check` 会额外执行 Final Freeze 证据门禁；只有完成新的权威运行号、三轮 AI 复评和稳定源码指纹后才应要求它全量通过。日常代码回归使用上面的跳过当前证据选项，不要删改历史证据来绕过门禁。
 
 需要生成当前本机图片语料时：
 
@@ -106,11 +111,11 @@ MySQL、Qdrant、Colima、OrbStack 和 Docker Compose 已退役，不再由当�
 
 ### `make up` 在 AI readiness 处失败
 
-先执行 `make logs`，确认模型缓存、PostgreSQL/pgvector 和 LLM Provider 配置。没有可用 Provider 时，社区页面和普通私聊代码仍可运行，但完整 `make up` 的 RAG/Agent readiness 检查不会通过。
+先执行 `make logs`，确认模型缓存、PostgreSQL/pgvector 和 LLM Provider 配置。没有可用 Provider 时，在 PostgreSQL、Redis 和 Go 会话校验正常的前提下，社区页面、普通私聊和非 LLM 搜索仍可运行，但完整 `make up` 的 RAG/Agent readiness 检查不会通过。
 
 ### 页面打不开
 
-执行 `make doctor`，再确认 `127.0.0.1:8080` 没有被其他程序占用。也可以使用 `curl http://127.0.0.1:8080/healthz` 检查 Go 服务。
+执行 `make doctor`，再确认 `.env` 中 `SHAREO_APP_PORT`（默认 `8080`）没有被其他程序占用。也可以使用 `curl http://127.0.0.1:${SHAREO_APP_PORT:-8080}/healthz` 检查 Go 服务；如果是直接启动 Go，请先确认 `config.yaml` 的 `server.port` 与该端口一致。
 
 ### Bot 没有回复
 

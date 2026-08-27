@@ -1,6 +1,8 @@
 # Final Freeze 证据归档
 
-本目录保存 ShareO 本轮本机自动化测试的脱敏汇总。统一入口为：
+> 归档属性：只读历史证据快照，不是当前运行状态或发布通过证明。最新状态和待执行计划见 [`TASK.md`](../../../TASK.md)；稳定设计和当前边界见 [`docs/REVIEW.md`](../../REVIEW.md)。除非重新运行并更新权威指针，否则本目录数字只用于追溯。
+
+本目录保存 ShareO 历史本机自动化测试的脱敏汇总。统一入口为：
 
 ```bash
 make final-evidence
@@ -10,7 +12,7 @@ make final-evidence
 
 本目录中的 AI 质量报告是在 2026-08-11 PostgreSQL/pgvector 迁移前采集的历史证据，运行时为 Homebrew MySQL/Redis/MinIO 与本地 Qdrant；这些报告用于保留模型和评测边界，不代表当前运行时仍访问旧服务。历史报告使用当前 47 条本机帖子语料：38 条搜图开发集（含 8 条 no-match）、32 条搜贴开发集、30 条 v1 RAG 题和 36 条 v1 Agent 题。迁移后的 PostgreSQL/pgvector、API 和 seed 重验结果见 [`docs/REVIEW.md`](../../REVIEW.md) 与 [`TASK.md`](../../../TASK.md)。Compose E2E 与故障注入不属于本轮范围，并在失败矩阵中标记为 `not_run`。
 
-当前证据目录的最新报告运行是 `20260808T151704Z`，使用当前代码树、v1 的 38/32/30/36 四组数据集和真实 Provider；14 个自动化步骤通过，AI judge 步骤完成但状态为 `needs_human_review`。其中采集前的工程检查为避免复用旧证据，跳过了当前 Final Freeze 证据门禁；这不等同于完整 `make check` 已通过。运行结果绑定 Git SHA、dirty 状态、数据集 SHA256、模型和运行时版本。`retained-runs.json` 当前仍指向较早的 `20260808T091649Z`，因此最新报告尚未成为一致的权威归档；该归档也尚未完成计划中的三轮 AI 复评和稳定源码指纹收口，不能表述为干净提交上的最终复现结果。此前运行已作为历史对照保留，运行记录见 [`retained-runs.json`](retained-runs.json)。
+证据目录中记录的最新报告运行是 `20260808T151704Z`，使用采集时的代码树、v1 的 38/32/30/36 四组数据集和真实 Provider；14 个自动化步骤通过，AI judge 步骤完成但状态为 `needs_human_review`。其中采集前的工程检查为避免复用旧证据，跳过了当时的 Final Freeze 证据门禁；这不等同于当前完整 `make check` 已通过。运行结果绑定采集时的 Git SHA、dirty 状态、数据集 SHA256、模型和运行时版本。`retained-runs.json` 当前仍指向较早的 `20260808T091649Z`，因此该报告不是一致的权威归档；也尚未完成计划中的三轮 AI 复评和稳定源码指纹收口，不能表述为干净提交上的最终复现结果。此前运行已作为历史对照保留，运行记录见 [`retained-runs.json`](retained-runs.json)。
 
 本次机器结果为：搜图 Recall@5 `0.9222`、no-match accuracy `1.0`；混合搜贴 Recall@5 `0.8906`；RAG 完整来源覆盖率 `0.9333`、引用精度 `0.9000`、引用可访问率 `100%`、额外引用 `7`、虚假引用 `0`、P95 `5.13s`；Agent 完整来源覆盖率 `0.9722`、引用精度 `0.9583`、额外工具调用 `0`、注入拒答失败 `0`、P95 `8.17s`。两轮 AI judge 的 RAG 平均 `4.1667`、最低 `1`，Agent 平均 `4.8056`、最低 `1`；10 条答案进入 [AI judge 人工复核交接包](ai-judge-human-handoff.json)，因此 AI 质量门禁尚未通过。
 

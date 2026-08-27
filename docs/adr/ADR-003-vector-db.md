@@ -27,4 +27,4 @@
 
 - 向量检索与业务数据库共享资源，规模扩大时需要单独评估连接池、索引和磁盘容量。
 - AI 账号不持有 `public` 表或 MinIO 凭证；公开结果仍由 Go 按 `approved AND is_deleted=0` 做最终校验。
-- 旧 Qdrant 存储可以作为人工回滚材料保留，但新运行时、启动脚本和 readiness 完全不访问它。
+- 旧 Qdrant 方案和报告仅作为历史对照保留；当前仓库不提供旧存储回滚路径，新运行时、启动脚本和 readiness 完全不访问它。若需要数据恢复，应从 PostgreSQL/MinIO 备份或 approved 帖子重建派生向量。

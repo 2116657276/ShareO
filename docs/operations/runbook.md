@@ -4,7 +4,7 @@
 
 ## 环境与配置
 
-本机运行需要 Go 1.25.1+、Python 3.12、uv、Homebrew PostgreSQL 17（pgvector）、Redis 和 MinIO。AI 评测还需要当前配置的真实 Provider 及本机 47 条图片语料。复制 [`config.yaml.example`](../../config.yaml.example) 为 `config.yaml`，敏感配置只放在未提交的 `.env` 或环境变量中。
+本机运行需要 Go 1.25.1+、Python 3.12、uv、Homebrew PostgreSQL 17（pgvector）、Redis 和 MinIO。AI 评测还需要当前配置的真实 Provider 及本机 47 条图片语料。复制 [`config.yaml.example`](../../config.yaml.example) 为 `config.yaml`，敏感配置只放在未提交的 `.env` 或环境变量中。默认 Go/AI 端口为 `8080`/`8000`；非默认端口必须同步 `.env` 与 `config.yaml` 的 `server.port`，并更新两个服务的 base URL。
 
 ```bash
 cp config.yaml.example config.yaml
@@ -13,7 +13,7 @@ brew install postgresql@17 pgvector redis minio
 brew services start postgresql@17
 brew services start redis
 make bootstrap-postgres
-export SHAREO_INTERNAL_TOKEN='replace-with-a-random-value'
+export SHAREO_INTERNAL_TOKEN="$(openssl rand -hex 32)"
 ```
 
 不要把 API Key、Token、Cookie、Authorization header、代理凭证、个人照片、模型权重或原始 Provider 响应写入仓库。
@@ -26,10 +26,9 @@ export SHAREO_INTERNAL_TOKEN='replace-with-a-random-value'
 make local-doctor
 make local-infra-up
 SHAREO_OPEN_BROWSER=0 make up
-make warm-ai
 ```
 
-`make up` 会加载当前 Go/AI 源码，按需启动由 ShareO 管理的进程，等待 `/healthz` 和三个 capability readiness。它不会重置 PostgreSQL、MinIO 或 Redis 数据。停止项目进程：
+`make up` 会加载当前 Go/AI 源码，按需启动由 ShareO 管理的进程，完成模型预热并等待 `/healthz` 和三个 capability readiness；无需再单独执行 `make warm-ai`。它不会重置 PostgreSQL、MinIO 或 Redis 数据。注意：当前 `/readyz/rag` 只检查 `index_post` consumer，`/readyz/agent` 不检查两个 Streams consumer；Bot 排障仍必须结合 Redis Streams、outbox 和 AI 日志。停止项目进程：
 
 ```bash
 make down
@@ -41,13 +40,14 @@ make local-infra-down
 ```bash
 make doctor
 make logs
-curl --fail http://127.0.0.1:8080/healthz
-curl --fail http://127.0.0.1:8000/healthz
+set -a; . ./.env; set +a
+curl --fail "http://127.0.0.1:${SHAREO_APP_PORT:-8080}/healthz"
+curl --fail "http://127.0.0.1:${SHAREO_AI_PORT:-8000}/healthz"
 curl --fail -H "X-Internal-Token: $SHAREO_INTERNAL_TOKEN" \
-  http://127.0.0.1:8000/readyz/agent
+  "http://127.0.0.1:${SHAREO_AI_PORT:-8000}/readyz/agent"
 ```
 
-没有 LLM 配置时，RAG 和 Agent readiness 返回不可用属于受控降级；社区、普通私聊和非 LLM 搜索不应因此被误判为失败。
+没有 LLM 配置时，RAG 和 Agent readiness 返回不可用属于受控降级；在 PostgreSQL、Redis 和 Go 会话校验正常的前提下，社区、普通私聊和非 LLM 搜索仍可用，不应把 AI readiness 失败误判为整个站点失败。
 
 ## 当前本机语料
 
@@ -64,11 +64,13 @@ make prepare-current-ai-eval VERSION=v2
 ## 检查与回归
 
 ```bash
-make check
+SHAREO_SKIP_CURRENT_EVIDENCE=1 make check
 go test -race ./...
 make test-integration-auto
 make test-api
 ```
+
+`make check` 还会执行当前 Final Freeze 证据门禁；在新的权威运行、三轮 AI 复评和稳定源码指纹收口前，完整命令按设计会报告已知阻塞。日常代码检查使用上面的跳过当前证据选项，不通过删改历史证据绕过门禁。
 
 `make test-integration` 用于已经准备好的独立测试 DSN；它要求 `SHAREO_TEST_POSTGRES_DSN`、`SHAREO_TEST_AI_DATABASE_URL` 和 `SHAREO_TEST_REDIS_URL`，不会把跳过集成测试算作通过。`make test-integration-auto` 会创建一个带 `_test` 后缀的临时 PostgreSQL 数据库，测试结束后保留以便检查。`make test-api` 只通过 HTTP API 创建临时用户、帖子和合成图片，并在退出时清理测试对象，不重置业务数据。
 
@@ -95,7 +97,7 @@ make final-evidence
 
 ## 旧运行时
 
-MySQL、Qdrant、Colima、OrbStack 和 Compose 已从当前运行时退役。旧配置和存储可以人工保留作回滚材料，但启动、健康检查、回填和 seed 脚本不会访问它们。
+MySQL、Qdrant、Colima、OrbStack 和 Compose 已从当前运行时退役。旧配置、旧报告和旧运行记录只作历史对照，当前启动、健康检查、回填和 seed 脚本不会访问它们，也不提供旧向量存储的自动回滚路径。
 
 ## 索引运维
 
@@ -113,8 +115,8 @@ make reconcile-index APPLY=1
 |---|---|---|
 | 页面或图片 404 | Go 日志、MinIO health、对象键 | 确认 MinIO 和 Go 图片代理；数据库记录不等于对象可读 |
 | 语义搜图 503 | `/readyz/image-search`、PostgreSQL pgvector | 等待模型预热，确认 pgvector 表和 index consumer |
-| Bot 不回复 | `/readyz/rag`、AI 日志、`bot_tasks`、`bot_task_outbox` | 检查 outbox 是否 pending、LLM 配置、Redis Streams 和受控重试；重启 Go 会自动补发 |
-| Agent 不可用 | `/readyz/agent`、LLM 配置 | 先确认默认 RAG 和普通私聊仍可用，再检查 Agent readiness |
+| Bot 不回复 | `/readyz/rag`、AI 日志、`bot_tasks`、`bot_task_outbox` | readiness 只代表 `index_post` consumer；还要检查 `bot_tasks` 的 consumer 状态、outbox 是否 pending、LLM 配置和受控重试；重启 Go 会自动补发 |
+| Agent 不可用 | `/readyz/agent`、LLM 配置、两个 consumer 状态 | 先确认默认 RAG 和普通私聊仍可用，再核对 Agent 开关、模型/向量存储、`bot_tasks` consumer 和内部接口；当前 Agent readiness 不会替你检查 consumer |
 | 普通消息已落库但无实时推送 | Redis、WebSocket、`after_id` | REST 数据仍是真相；恢复 Redis 后重新连接并补偿 |
 | 评论提交或点赞报 `like_count` 不存在 | `comments.like_count`、`comment_likes` | 确认使用 `migrations/postgres/001_schema.sql` 初始化的全新 PostgreSQL 数据库；应用启动不会自动迁移 |
 | Bot 消息已落库但任务未发布 | `bot_task_outbox.status`、`next_attempt_at` | 确认 PostgreSQL schema 已初始化，检查 Go publisher 日志；不直接手工重复发送消息 |

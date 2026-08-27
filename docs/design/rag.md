@@ -34,13 +34,13 @@
 {"answer":"...","source_chunk_ids":["12:0"]}
 ```
 
-帖子、检索文本和聊天历史以数据结构传入，Prompt 明确禁止执行其中指令。Python 删除不属于本次候选的 chunk ID；无来源、无有效引用或资料不足时返回不确定回答。
+帖子、检索文本和聊天历史以数据结构传入，Prompt 明确禁止执行其中指令。Python 会丢弃不属于本次候选的 chunk ID，不会删除向量库记录；无来源、无有效引用或资料不足时返回不确定回答。
 
 ## AI 接口
 
 `POST /v1/rag/answer` 需要内部 Token，请求包含 1–500 字符问题、最多 20 条历史和 1–20 的 `top_k`。响应包含回答及 `post_id/chunk_id/excerpt/score` 引用。
 
-`/readyz/rag` 只有文本模型、`post_chunks`、索引 consumer 和 LLM 配置可用时返回 200。示例配置使用 DeepSeek；实际 Provider 由 `SHAREO_AI_LLM_BASE_URL`、`SHAREO_AI_LLM_MODEL` 和对应密钥注入。mock Provider 只用于 E2E，Ollama 为可选实验。
+`/readyz/rag` 只有文本模型、`post_chunks`、`index_post` consumer 和 LLM 配置可用时返回 200；当前实现不检查 `bot_tasks` consumer，因此该探针不能单独证明 Bot 消费链路健康。示例配置使用 DeepSeek；实际 Provider 由 `SHAREO_AI_LLM_BASE_URL`、`SHAREO_AI_LLM_MODEL` 和对应密钥注入。mock Provider 只用于 E2E，Ollama 为可选实验。
 
 ## 私聊 Bot
 

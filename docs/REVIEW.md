@@ -1,10 +1,115 @@
 # ShareO 高级工程审查与当前证据
 
-> 审查基准日期：2026-08-11
+> 最新文档复核日期：2026-08-28；下方 2026-08-12 章节保留为历史审查快照。
 >
-> 本文面向简历项目审查、面试和项目交接，记录本轮发现的问题、已实施修复、当前指标和证据边界。历史 AI 质量报告来自迁移前运行；2026-08-11 的 PostgreSQL/pgvector、API 和本机数据集重验结果单独列出。
+> 本文面向简历项目审查、面试和项目交接，记录历史审查、当前事实和证据边界。当前状态与下一轮执行计划以 [`TASK.md`](../TASK.md) 为准；当前复核评分为 7.4/10。历史 AI 质量报告来自迁移前运行；2026-08-11 的 PostgreSQL/pgvector、API 和本机数据集重验结果单独列出。
 
-## 一、审查结论
+## 2026-08-12 全面工程与面试官复审（历史快照）
+
+### 结论摘要
+
+ShareO 已经明显超过普通课程 Demo：Go/Python 数据所有权、PostgreSQL outbox + Redis Streams、Bot 幂等回调、Go 最终可见性复核、受限只读 Agent 和版本化 AI 评测，足以体现中高级全栈工程能力。当时整体质量约为 **7.5/10**，已经具备简历项目的技术深度，但还没有达到可以不加说明地称为“完整生产级收口”的状态；当前复核评分见本文顶部摘要。
+
+本次复审不改变项目范围，也不建议引入微服务、Kafka、SPA 或复杂计费系统。最需要优先处理的是安全边界和运行事实一致性：Feed 排序参数反射型 XSS、固定内部令牌与全接口监听、Redis 会话撤销 fail-open、公开图片绕过审核、图片解码/存储资源预算，以及搜索和 Bot 缺少跨请求额度。
+
+截至本文“当前工作区的分阶段改进进度”一节所记录的状态，Feed XSS、固定令牌与默认全接口监听、Redis 基础设施故障 fail-open、持久化会话撤销、公开图片可见性、上传对象基础生命周期、像素解码风险、Bot 原子准入和 AI 搜索并发边界均已完成第一轮修复并有回归测试；搜索/聊天入口和 WebSocket 断线补偿也已补上基础边界。全局 LLM 计费额度、通知事务 outbox、构造注入的全面迁移、完整浏览器 E2E 和 Portfolio 资产仍是明确边界，不能把本轮修复夸大为完整生产级治理。
+
+### 当前架构判断
+
+浏览器通过 Go 服务端模板、Bootstrap、Alpine.js 和少量原生 JavaScript 访问 Gin 模块化单体；Go 负责认证、授权、审核、社区、聊天、WebSocket、`public` schema 和 MinIO；Python FastAPI 单进程负责 `ai` schema/pgvector、embedding、RAG、LangGraph 只读 Agent 和两个 Redis Streams consumer。Go 是业务数据唯一写者，Python 只写派生向量，MinIO 凭证不离开 Go。这种拆分与数据所有权和模型运行方式一致，当前规模不需要进一步拆分服务。
+
+前端选择服务端渲染是合理的，但还没有形成 TypeScript 或完整浏览器构建/回归链；后端分层意图清晰，但大量 Service/Repository 仍创建全局 Repository 并依赖全局 DB/Redis，测试隔离性和错误契约的一致性不足。
+
+### 主要优点
+
+- Bot 任务具备事务 outbox、重试、重领、最终兜底、ACK 和 `source_message_id` 幂等，能够支撑事务边界、at-least-once 和故障恢复追问。
+- Go/Python/MinIO 的信任边界清楚，Agent 只拥有语义检索、关键词检索、帖子读取和图片检索四类只读工具。
+- 公开帖子与 Bot 引用由 Go 按 `approved AND is_deleted=0` 最终复核，聊天成员校验、Bot 回调关系校验和引用格式校验较完整。
+- AI 评测不仅看回答文本，还记录 Recall、MRR、nDCG、no-match、引用精度、来源覆盖率、工具选择、注入拒答和延迟，并明确区分本机诊断结果与通用保证。
+- README、ADR、API、数据模型、运行手册和证据边界比普通 Portfolio 项目完整，且没有把受限 Agent 夸大为通用或多 Agent 平台。
+
+### 主要问题与面试风险
+
+下面保留的是复审时的原始风险清单；方括号状态以当前工作区为准，详细改动和测试见“当前工作区的分阶段改进进度”。
+
+#### P0：优先修复
+
+1. **[已修复]** `web/templates/feed/feed.html` 将未枚举校验的 `sort` 放入 Alpine `x-data` JavaScript 字符串，HTML 实体解码后仍可突破表达式上下文，构成登录用户可触发的反射型 XSS。
+2. **[已修复]** `scripts/local_runtime.sh` 在未配置时使用公开固定值 `shareo-local-internal`，而 `cmd/server/main.go` 默认监听 `:port`。局域网客户端可能带已知令牌访问 `/internal`，这与“本机优先”定位不构成充分安全边界。
+
+#### P1：对质量和简历价值影响最大
+
+1. **[已修复（基础会话治理）]** Redis 非 `redis.Nil` 错误时会话认证 fail-open；注销、改密和封禁撤销失败只记录日志，旧 JWT 仍可能访问 REST 写接口，且 REST 与 WebSocket 的 active 状态语义不一致。现在 Redis 故障 fail-closed，JWT 带 `session_version`，注销、改密和状态变更在 PostgreSQL 持久化递增版本，REST/WebSocket 复用同一校验；Redis 不是撤销事实源，但当前仍是受保护请求的会话可用性门槛。
+2. **[已修复]** 公开 API 和私聊读取接口直接序列化完整 `model.User`，Email、Role、Status 等非必要字段会随 Feed、评论、关注、会话和消息响应暴露。社区与聊天读接口现在映射为安全 DTO，认证资料使用独立的 `AuthUser`。
+3. **[已修复（基础生命周期）]** 图片上传先写入 MinIO，公开图片代理只按对象键读取，不绑定帖子审核/删除状态；缺少用户配额、上传 owner、未绑定过期和孤儿回收。现在上传记录带 owner、批次、过期时间和帖子绑定，发帖事务校验归属，启动后定期回收未绑定记录并删除对象，公开读取仍绑定 `approved AND is_deleted=0`；当前仍是有界 best-effort 回收，不承诺完整对象存储盘点或用户级存储配额。
+4. **[已修复（基础准入）]** 公开搜贴/搜图会触发模型推理但没有有界排队；Bot 私聊当前有入口限流和每用户 pending 软上限，但仍没有严格原子额度、会话预算或全局 LLM 预算。现在语义搜贴/搜图共享进程级并发闸门，Bot outbox 在 PostgreSQL 事务内按用户 advisory lock 做原子 pending 上限；全局 LLM 计费、跨实例配额和长期队列仍不在项目范围。
+5. **[已修复]** 文档声称 WebSocket 断线补偿，但客户端重连后没有按最后消息 ID 执行 `after_id` 补拉，存在消息间隙。
+6. **[已部分修复]** 输入校验和错误映射分散在 Handler、Web 表单和 Service；认证、注册并发唯一冲突、密码修改和管理员写操作现在使用稳定业务错误并对未知错误返回通用响应；其余历史 Handler 仍保留少量面向用户输入的 `err.Error()`，构造注入和全局 Repository 清理尚未全面完成。
+7. **[已处理文档边界]** 当前文档明确 PostgreSQL/pgvector 是本机唯一运行时，`compose.yaml` 与 `deploy/config.docker.yaml` 已标注 RETIRED；根目录和 `ai-service/` 的 Dockerfile 仍是未删除的构建材料，但不属于支持的启动入口，也没有在本轮执行。Compose 冷启动证据仍需用户授权后单独形成。另已将遗留 GORM 模型类型标签从 MySQL 专用 `enum/json` 对齐为 PostgreSQL 兼容的 `varchar/jsonb`，避免未来 schema 工具误生成错误 DDL。
+
+#### P2/P3：可维护性、体验和展示层
+
+- **[已部分修复]** Chat 会话列表已增加生产仓储的批量预览查询（成员、最后消息和未读数），并保留轻量仓储回退；全局 Repository/DB/RDB 和 `context.Background()` 使 Service 测试隔离性不足仍是长期债务。
+- Feed 首屏模板和动态 JavaScript 卡片仍有重复；前端 fetch、错误状态和 loading 逻辑重复，模板内联脚本较多。
+- **[已部分修复]** 设置页可以清空邮箱/简介，通知已读操作在服务端失败时不再乐观修改本地状态，个人页增加分页和基础 tab/布局可访问性，根级 MIT LICENSE 已补充；README 产品截图和公开演示数据仍未收口。
+- Final Freeze 证据体系对审计有价值，但当前权威运行号、三轮评测和稳定源码指纹尚未收口，完整 `make check` 因此仍会被文档门禁阻塞。
+
+### 面试官视角
+
+最能体现工程能力的是事务 outbox 与 at-least-once 消费、Go/Python 数据所有权、引用二次校验、Agent 工具白名单和版本化 AI 评测。当前仍像 Demo 的部分是模板内联 JavaScript、部分管理内部响应仍直接使用实体、前端缺少真正的浏览器自动化回归，以及实际 PostgreSQL 运行时和遗留 Compose 配置不一致；社区和聊天读取接口的主要 DTO 泄露问题已在当前工作区收口。
+
+面试官最可能追问：Redis 或 Python 故障时各链路如何降级；Bot 如何避免重复回复；帖子审核/删除后向量如何最终一致；为什么 Agent 没有写权限；RAG 引用为什么由 Go 再校验；WebSocket 断线如何补拉；为什么不用 React、Kafka 或微服务；以及为什么图片 URL 不能作为授权本身。
+
+### 安全审阅摘要
+
+本次标准安全审阅由两条独立静态审阅线完成，并由主审重新验证 source-to-sink 与反证，覆盖 Go、Python、模板、PostgreSQL、Redis、MinIO、内部令牌和本机启动路径。共确认 11 项高置信问题：2 项高、7 项中、2 项低。未发现可报告的 SQL 注入、聊天 IDOR、普通跨站 mutation 绕过、SSRF、任意工具调用或 Bot 跨会话回调。
+
+完整机器生成报告和 canonical artifacts 位于本机安全扫描目录；本仓库只在本文记录稳定结论，不把临时目录路径当作项目契约。安全报告未执行容器或真实服务攻击测试，符合当前禁止 Docker/OrbStack 的约束。
+
+### 本次基线检查（2026-08-12）
+
+| 检查 | 结果 | 说明 |
+|---|---|---|
+| `go vet ./...` | 通过 | 与 `make check` 同步执行 |
+| Go 单元测试 | 通过 | 所有 Go 测试包通过 |
+| Ruff lint / format | 通过 | Python 60 个文件格式检查通过 |
+| Python 非集成测试 | 通过 | 149 passed，4 个 integration tests deselected |
+| Shell 语法检查 | 通过 | `start.sh` 与 `scripts`/`deploy` 脚本通过 |
+| `SHAREO_SKIP_CURRENT_EVIDENCE=1 make check` | 通过 | 代码、Python、Shell、测试门禁通过 |
+| 原样 `make check` | 阻塞 | Final Freeze 权威运行号、三轮评测和稳定源码指纹尚未收口 |
+| Docker/OrbStack/Compose | 未运行 | 用户明确禁止，后续需单独授权 |
+
+### 当前工作区的分阶段改进进度（2026-08-12）
+
+本轮已经按“先建立回归断言，再做最小实现”的方式完成了九个逻辑批次。以下状态只描述当前工作区已经落地并有测试覆盖的代码，不把尚未实现的长期治理项写成已完成：
+
+| 批次 | 已实施内容 | 状态 |
+|---|---|---|
+| 安全与 HTTP 边界 | `sort` 白名单与非执行数据属性、随机内部令牌与 0600 本地状态文件、回环监听默认值、Gin 可信代理关闭、HTTP 超时与头部/请求体上限、搜索/聊天限流 | 已完成 |
+| 会话与 API 契约 | Redis 会话基础设施错误 fail-closed 并返回 503；JWT 持久化 session version；认证资料使用 `AuthUser`，社区与聊天读接口使用安全 DTO/公共帖子、评论和通知读模型；认证/管理员未知错误不透传数据库原文；GORM 模型类型标签与 PostgreSQL 对齐 | 已完成（全局注入仍有边界） |
+| 图片输入与生命周期 | 图片代理关联 `approved AND is_deleted=0` 帖子、对象键校验、`DecodeConfig` 尺寸/总像素预算、损坏图片拒绝、owner/批次/TTL/帖子绑定、定期回收和失败清理 | 已完成（配额与跨存储重试仍有边界） |
+| 搜索、Bot 与实时体验 | 搜贴/搜图入口与 Bot 消息入口限流；共享 AI 并发闸门；PostgreSQL advisory lock 原子 pending 上限；WebSocket 重连按 `after_id` 补拉并去重 | 已完成（跨实例/计费额度仍有边界） |
+| Chat 热点查询与前端状态 | 会话列表批量加载成员、最后消息和未读数；设置字段支持清空；通知已读失败不再错误更新本地状态 | 已完成（注入和脚本去重仍有边界） |
+| 文档与最终验证 | 同步任务、审查、运行手册、数据模型和 API 说明；已完成本机全量代码检查、race、构建和最终整体复审 | 已完成 |
+
+本轮新增或修改的回归覆盖包括 Feed 排序输入、内部启动契约、HTTP server 配置、Redis 会话故障、持久化 session version、缓存 fail-closed、公共用户/帖子/评论/聊天 DTO、可信代理、请求体上限、图片对象键/像素预算/生命周期、Bot pending 原子准入、AI 并发闸门、聊天批量预览，以及聊天页面的断线补偿契约。当前仍未处理跨实例额度与全局 LLM 预算、通知事务 outbox、全面构造注入、完整浏览器 E2E 和 README 截图/公开演示数据等问题；这些属于下一阶段，不应在面试中表述为已解决。
+
+本轮已实际运行的验证为 `SHAREO_SKIP_CURRENT_EVIDENCE=1 make check`、`go test -race -count=1 ./...`、`go build -o /tmp/shareo-server-check ./cmd/server`、Ruff lint/format、149 个 Python 非集成测试和 Shell 语法检查。原样 `make check` 仍只会被 `scripts/check_docs.py` 的 Final Freeze 权威运行号、三轮 AI 复评和稳定源码指纹门禁阻塞；这些既有证据收口问题不应通过修改实现代码绕过。Docker、Docker Compose 和 OrbStack 仍未运行。
+
+### 分阶段改进计划
+
+1. **已完成 Batch 1–5。** 安全边界、API DTO、图片输入、入口限流、WebSocket 补偿和文档/验证收口已落地。
+2. **已完成 Batch 6。** JWT `session_version` 持久化撤销，补充 RowsAffected 检查和认证/管理员错误映射。
+3. **已完成 Batch 7。** 上传 owner/批次/TTL、帖子事务绑定、定期回收和失败清理；仍不承诺全局对象盘点。
+4. **已完成 Batch 8。** Bot 原子 pending 准入与语义搜贴/搜图共享并发闸门；跨实例和计费额度不在范围。
+5. **已完成 Batch 9。** Chat 会话列表批量查询、设置字段清空、通知已读失败回滚和相关测试。
+6. **后续只保留低优先级收口。** 全面构造注入、通知事务 outbox、完整可访问性、README 截图、公开演示数据，以及新的 Final Freeze 证据。
+7. **Docker/Compose 验证。** 必须在代码改进和最终汇报完成后，由用户明确授权；本轮不执行任何 Docker、Docker Compose 或 OrbStack 操作。
+
+
+## 一、当前状态摘要（截至 2026-08-28）
+
+本节汇总当前代码边界、已有本机证据和未完成项；其中带具体运行号或历史日期的结果仍以当次环境为准，不代表本轮重新执行。
 
 ShareO 已具备可用于简历展示的“Go + Python 可评测引用式 RAG 社区系统”基础。本轮最大风险集中在入口可验证性、异步任务耐久性、评论关系完整性、搜图拒答和评测口径，而不是功能数量；主要代码修复和自动化验证已完成，但当前证据仍受 dirty 工作区、评测版本切换和权威指针收口限制。项目包含图文社区、一对一实时私聊、中文语义搜图、正文混合搜贴、带可访问引用的 RAG Bot，以及同一私聊入口中的受限只读知识 Agent。
 
@@ -77,10 +182,11 @@ Agent 不获得 PostgreSQL `public`、MinIO 或 pgvector 写权限，不保存�
 
 | 故障依赖 | 仍保持可用的路径 | 受控降级 | 恢复方式 |
 |---|---|---|---|
-| Python AI 服务 | 社区、普通私聊、关键词搜贴 | 语义搜图返回 503，Bot 任务进入等待或兜底 | AI readiness 恢复后继续处理 |
-| PostgreSQL/pgvector | 社区、普通私聊、关键词搜贴 | 语义搜图和 RAG 受控不可用 | PostgreSQL/pgvector 恢复后 readiness 重新通过 |
+| Python AI 服务 | 社区、普通私聊、关键词搜贴 | 语义搜图返回 503，Bot 任务进入等待或兜底 | 对应 AI readiness 恢复后继续处理 |
+| PostgreSQL 业务库 | 依赖数据库的社区读取、私聊和写入失败 | 不应伪装为 HTTP 200；outbox 也无法持久化 | PostgreSQL 恢复并重新建立连接 |
+| `ai` schema/pgvector（业务库仍正常） | 社区、普通私聊、关键词搜贴 | 语义搜图、RAG/Agent 受控不可用 | AI 数据库恢复后 readiness 重新通过 |
 | MinIO | 文字路径和正文 RAG | 图片代理失败，新图片索引暂停 | MinIO 恢复后重新处理索引任务 |
-| Redis | PostgreSQL 业务写入和普通消息落库 | 缓存、实时推送和异步处理降级 | consumer 重建消费组并继续消费 |
+| Redis | PostgreSQL 公开读在依赖正常时可继续 | 受保护 REST/WS 会话校验 fail-closed；outbox 发布、实时推送和异步处理延迟 | Redis 恢复后登录校验、consumer 和 publisher 恢复 |
 | LLM Provider | 社区、普通私聊和非 LLM 搜索 | Bot/RAG 失败后返回固定兜底 | Provider 恢复并重新预热 |
 
 ## 四、数据与历史结果
@@ -124,6 +230,12 @@ Agent 不获得 PostgreSQL `public`、MinIO 或 pgvector 写权限，不保存�
 ### 2026-08-11 网络中断后重验
 
 网络恢复后重新执行了本机原生运行时和数据集验收。`make test-api` 的社区/API 回归为 48/48，聊天、默认 RAG、显式只读 Agent 和内部鉴权回归为 15/15；`SHAREO_RUNTIME=local bash scripts/test_integration_current.sh` 的 Go PostgreSQL 集成全部通过，Python Redis/pgvector 集成 4/4 通过；`go test -race -count=1 ./...` 与 `SHAREO_SKIP_CURRENT_EVIDENCE=1 make check` 均通过。测试期间产生的临时用户、帖子、对象和聊天记录已按精确范围清理，未进入最终数据集。
+
+### 2026-08-12 最终复审与验证补充
+
+最后一轮针对“PostgreSQL/pgvector 是唯一运行时”重新核对 GORM 模型声明，发现并修正 4 个遗留的 MySQL 专用类型标签：枚举字段改为 `varchar`，消息结构化字段改为 `jsonb`，并新增模型标签回归测试，避免未来 schema 工具生成错误 DDL。复审没有新增 P0/P1 阻塞项；跨实例/计费额度、通知事务 outbox、全面依赖注入、完整浏览器 E2E、README 展示素材和 Final Freeze 权威证据仍按 P2/P3 边界保留。
+
+本次最终本机验证结果：`SHAREO_SKIP_CURRENT_EVIDENCE=1 make check` 通过；`go test -race -count=1 ./...`、`go build -o /tmp/shareo-server-check ./cmd/server`、`go mod verify` 和 `git diff --check` 通过。未跳过证据门禁的 `python3 scripts/check_docs.py` 仍只报告三项已知 Final Freeze 缺口：权威运行指针未切换、当前归档不足三轮 AI 复评、源码指纹尚未稳定；没有出现新的代码、测试或文档结构错误。本轮没有执行 Docker、Docker Compose 或 OrbStack。
 
 最终重验状态如下：业务库只有 `shareo_test` 与 `shareo_bot` 两个用户，47 条帖子全部由固定用户发布并满足 `approved AND is_deleted=0`，47 条 `post_images` 一对一对应；`ai.image_embeddings` 与 `ai.post_chunk_embeddings` 各 47 条，向量列均为 `vector(512)`，两张 HNSW `vector_cosine_ops` 索引存在；MinIO bucket 有 141 个本次对象（47 个原图及派生对象），图片代理、Feed、语义搜图和对账通过；评论、点赞、收藏、关注、通知、聊天、Bot outbox 和系统日志均为空；项目内 `qdrant/` 目录已删除。固定密码只通过未跟踪 `.env` 注入，仓库未写入凭据。
 

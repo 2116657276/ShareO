@@ -1,4 +1,4 @@
-# 本机浏览器 smoke 记录
+# 本机浏览器 smoke 记录（历史快照）
 
 > 日期：2026-08-08（Asia/Shanghai）
 >
@@ -8,7 +8,7 @@
 
 - 使用 `SHAREO_OPEN_BROWSER=0 make up` 启动迁移前的本地栈；当时 Go、AI、Qdrant、MinIO、Redis、搜图、RAG、Agent readiness 和 `/home` 页面检查均通过。该条记录属于历史浏览器 smoke，不代表当前运行时继续使用 Qdrant。
 - 2026-08-11 的当前 PostgreSQL/pgvector 服务、API 回归和图片 seed 重验见 [`docs/REVIEW.md`](../../REVIEW.md)，不把本条历史记录升级为迁移后的浏览器 E2E 证据。
-- 本机已重复执行可检查迁移 `003_comment_likes.sql` 和 `004_bot_task_outbox.sql`。
+- 本条记录中的 `003_comment_likes.sql` 和 `004_bot_task_outbox.sql` 是迁移前的旧文件名。当前仓库事实源已经改为 `migrations/postgres/003_session_version.sql` 和 `migrations/postgres/004_upload_artifacts.sql`；不要按旧文件名重放迁移。
 - 通过注册页创建普通本地 smoke 账号；未修改管理员或 Bot 账号。
 - 使用帖子 `#78`《这只小狗笑得太开心了》验证评论互动；使用另一普通测试账号写入一条未读私聊。
 
