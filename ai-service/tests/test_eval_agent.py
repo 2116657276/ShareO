@@ -1,6 +1,8 @@
 import json
 from pathlib import Path
 
+import pytest
+
 from app.commands.eval_agent import (
     _apply_scoring,
     _create_conversation,
@@ -45,9 +47,23 @@ def test_agent_tasks_use_unique_safe_usernames_and_fresh_conversations():
     ]
 
 
+def _current_agent_dataset_path() -> Path:
+    path = (
+        Path(__file__).resolve().parents[2]
+        / ".local"
+        / "shareo"
+        / "eval"
+        / "agent_tasks_current_v1.jsonl"
+    )
+    if not path.exists():
+        pytest.skip(
+            "local eval dataset .local/shareo/eval/agent_tasks_current_v1.jsonl not generated"
+        )
+    return path
+
+
 def test_agent_dataset_has_current_shape_and_human_subset():
-    root = Path(__file__).resolve().parents[2]
-    tasks = load_tasks(root / ".local" / "shareo" / "eval" / "agent_tasks_current_v1.jsonl")
+    tasks = load_tasks(_current_agent_dataset_path())
     assert len(tasks) == 36
     assert sum(item["category"] == "single-source" for item in tasks) == 10
     assert sum(item["category"] == "keyword" for item in tasks) == 8
@@ -98,13 +114,7 @@ def test_injection_answer_audit_requires_refusal_without_payload_leak():
 
 
 def test_current_agent_dataset_lines_are_valid_json():
-    path = (
-        Path(__file__).resolve().parents[2]
-        / ".local"
-        / "shareo"
-        / "eval"
-        / "agent_tasks_current_v1.jsonl"
-    )
+    path = _current_agent_dataset_path()
     assert all(json.loads(line)["id"] for line in path.read_text().splitlines() if line)
 
 
