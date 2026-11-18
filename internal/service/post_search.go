@@ -21,6 +21,7 @@ import (
 const postSearchCandidateLimit = 200
 
 var ErrPostSearchUnavailable = errors.New("post search unavailable")
+var ErrAISearchBusy = errors.New("ai search capacity exceeded")
 
 const (
 	defaultPostSemanticThreshold = 0.54
@@ -64,6 +65,11 @@ func newHTTPSemanticPostSearcher() *httpSemanticPostSearcher {
 }
 
 func (s *httpSemanticPostSearcher) Search(ctx context.Context, query string, limit int) ([]semanticPostCandidate, error) {
+	release, ok := TryAcquireAISearchSlot()
+	if !ok {
+		return nil, ErrAISearchBusy
+	}
+	defer release()
 	body, err := json.Marshal(map[string]any{"query": query, "limit": limit})
 	if err != nil {
 		return nil, err

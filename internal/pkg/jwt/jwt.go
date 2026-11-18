@@ -8,9 +8,10 @@ import (
 )
 
 type Claims struct {
-	UserID   int64  `json:"user_id"`
-	Username string `json:"username"`
-	Role     string `json:"role"`
+	UserID         int64  `json:"user_id"`
+	Username       string `json:"username"`
+	Role           string `json:"role"`
+	SessionVersion int64  `json:"session_version"`
 	jwt.RegisteredClaims
 }
 
@@ -29,14 +30,17 @@ func ExpireDuration() time.Duration {
 	return expireDuration
 }
 
-func GenerateToken(userID int64, username, role string) (string, error) {
+func GenerateToken(userID int64, username, role string, sessionVersions ...int64) (string, error) {
 	if len(secretKey) == 0 {
 		return "", errors.New("jwt: secret key not initialized")
 	}
+	sessionVersion := int64(1)
+	if len(sessionVersions) > 0 && sessionVersions[0] > 0 {
+		sessionVersion = sessionVersions[0]
+	}
 	claims := Claims{
-		UserID:   userID,
-		Username: username,
-		Role:     role,
+		UserID: userID, Username: username, Role: role,
+		SessionVersion: sessionVersion,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(expireDuration)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),

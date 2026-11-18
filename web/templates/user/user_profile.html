@@ -33,17 +33,17 @@
 
     <div class="feed-toolbar profile-content-toolbar">
         <div class="profile-tabs" role="tablist" aria-label="用户内容">
-            <button class="profile-tab" :class="{active: tab === 'posts'}" @click="switchTab('posts')" type="button">作品</button>
-            <button class="profile-tab" :class="{active: tab === 'likes'}" @click="switchTab('likes')" type="button">点赞</button>
-            {{ if .IsOwnProfile }}<button class="profile-tab" :class="{active: tab === 'favorites'}" @click="switchTab('favorites')" type="button">收藏</button>{{ end }}
+            <button id="profile-posts-tab" class="profile-tab" :class="{active: tab === 'posts'}" @click="switchTab('posts')" type="button" role="tab" aria-controls="profile-posts" :aria-selected="tab === 'posts'">作品</button>
+            <button id="profile-likes-tab" class="profile-tab" :class="{active: tab === 'likes'}" @click="switchTab('likes')" type="button" role="tab" aria-controls="profile-posts" :aria-selected="tab === 'likes'">点赞</button>
+            {{ if .IsOwnProfile }}<button id="profile-favorites-tab" class="profile-tab" :class="{active: tab === 'favorites'}" @click="switchTab('favorites')" type="button" role="tab" aria-controls="profile-posts" :aria-selected="tab === 'favorites'">收藏</button>{{ end }}
         </div>
         <div class="layout-toggle" aria-label="内容布局">
-            <button type="button" :class="{ 'is-active': layout === 'single' }" @click="setLayout('single')" aria-label="单列布局"><i class="bi bi-view-stacked"></i></button>
-            <button type="button" :class="{ 'is-active': layout === 'two' }" @click="setLayout('two')" aria-label="双列布局"><i class="bi bi-view-stacked rotate-90"></i></button>
+            <button type="button" :class="{ 'is-active': layout === 'single' }" @click="setLayout('single')" aria-label="单列布局" :aria-pressed="layout === 'single'"><i class="bi bi-view-stacked"></i></button>
+            <button type="button" :class="{ 'is-active': layout === 'two' }" @click="setLayout('two')" aria-label="双列布局" :aria-pressed="layout === 'two'"><i class="bi bi-view-stacked rotate-90"></i></button>
         </div>
     </div>
 
-    <div class="feed-grid" :class="layout === 'two' ? 'is-two-column' : 'is-single-column'" x-show="posts.length > 0" x-cloak>
+    <div id="profile-posts" class="feed-grid" role="tabpanel" aria-live="polite" :aria-labelledby="'profile-' + tab + '-tab'" :class="layout === 'two' ? 'is-two-column' : 'is-single-column'" x-show="posts.length > 0" x-cloak>
         <template x-for="post in posts" :key="post.id">
             <a :href="`/post/${post.id}`" class="feed-item">
                 <article class="feed-card">
@@ -61,40 +61,50 @@
         <i class="bi bi-cloud-slash" aria-hidden="true"></i><h2 class="h5">作品加载失败</h2><p x-text="errorMessage"></p><button type="button" class="btn btn-outline-secondary" @click="load()">重新加载</button>
     </div>
     <div class="loading-block" x-show="loading" x-cloak role="status"><span class="spinner-border" aria-label="加载中"></span></div>
+    <div class="text-center mt-4" x-show="hasMore && !loading" x-cloak>
+        <button type="button" class="btn btn-outline-secondary" @click="loadMore()">加载更多</button>
+    </div>
     <div class="empty-block surface-panel" x-show="!loading && !errorMessage && posts.length === 0" x-cloak><i class="bi bi-images" aria-hidden="true"></i><p class="mb-0">暂无内容</p></div>
 </section>
 
 <script>
 function profilePage(userId, initialFollowing, isOwnProfile) {
     return {
-        tab: 'posts', posts: [], following: Boolean(initialFollowing), loading: false, errorMessage: '', layout: 'two',
+        tab: 'posts', posts: [], total: 0, page: 1, following: Boolean(initialFollowing), loading: false, errorMessage: '', layout: 'two',
+        get hasMore() { return this.posts.length < this.total; },
         init() {
-            this.layout = window.localStorage.getItem('shareo.profile.layout') === 'single' ? 'single' : 'two';
-            this.load();
+            try { this.layout = window.localStorage.getItem('shareo.profile.layout') === 'single' ? 'single' : 'two'; } catch (_) { this.layout = 'two'; }
+            this.load(true);
         },
         setLayout(mode) {
             this.layout = mode === 'single' ? 'single' : 'two';
-            window.localStorage.setItem('shareo.profile.layout', this.layout);
+            try { window.localStorage.setItem('shareo.profile.layout', this.layout); } catch (_) {}
         },
         displayImageURL(url) { return (url || '').replace(/\/posts\/(original|thumb)\//, '/posts/medium/'); },
-        async load() {
+        async load(reset = true) {
+            if (this.loading) return;
+            if (reset) { this.posts = []; this.total = 0; this.page = 1; }
             this.loading = true; this.errorMessage = '';
             const url = this.tab === 'posts'
-                ? `/api/v1/feed?user_id=${userId}&page=1&page_size=30`
+                ? `/api/v1/feed?user_id=${userId}&page=${this.page}&page_size=30`
                 : (this.tab === 'favorites' && isOwnProfile
-                    ? '/api/v1/favorites?page=1&page_size=30'
-                    : `/api/v1/users/${userId}/likes?page=1&page_size=30`);
+                    ? `/api/v1/favorites?page=${this.page}&page_size=30`
+                    : `/api/v1/users/${userId}/likes?page=${this.page}&page_size=30`);
             try {
                 const response = await fetch(url); const body = await response.json();
                 if (!response.ok || body.code !== 0) throw new Error(body.message || '作品加载失败');
-                this.posts = Array.isArray(body.data?.list) ? body.data.list : [];
+                const list = Array.isArray(body.data?.list) ? body.data.list : [];
+                this.posts = this.page === 1 ? list : [...this.posts, ...list];
+                this.total = Number(body.data?.total) || 0;
+                this.page += 1;
             } catch (error) { this.errorMessage = error.message || '作品服务暂时不可用'; }
             finally { this.loading = false; }
         },
+        loadMore() { return this.load(false); },
         switchTab(tab) {
             if (tab === 'favorites' && !isOwnProfile) return;
             this.tab = tab;
-            this.load();
+            this.load(true);
         },
         async toggleFollow() {
             try {

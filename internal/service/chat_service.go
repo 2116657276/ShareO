@@ -16,8 +16,9 @@ import (
 )
 
 const (
-	MaxMessageLength = 2000
-	presenceTTL      = 60 * time.Second
+	MaxMessageLength          = 2000
+	MaxPendingBotTasksPerUser = 20
+	presenceTTL               = 60 * time.Second
 )
 
 var (
@@ -25,6 +26,7 @@ var (
 	ErrChatForbidden = errors.New("chat forbidden")
 	ErrChatNotFound  = errors.New("chat not found")
 	ErrChatConflict  = errors.New("chat conflict")
+	ErrChatCapacity  = errors.New("chat capacity exceeded")
 )
 
 type ChatRepository interface {
@@ -55,6 +57,13 @@ type CitationPreviewRepository interface {
 	VisiblePostPreviews(context.Context, []int64) (map[int64]model.CitationPreview, error)
 }
 
+// ConversationPreviewRepository is the production fast path for the chat
+// list. Repositories that do not implement it continue to use the small,
+// compatibility fallback below.
+type ConversationPreviewRepository interface {
+	ListConversationPreviews(context.Context, int64) ([]repository.ConversationPreview, error)
+}
+
 // BotTaskOutboxRepository is implemented by the production chat repository.
 // It is optional in the service contract so small test repositories can keep
 // the legacy direct-publish behavior without weakening the production path.
@@ -63,6 +72,12 @@ type BotTaskOutboxRepository interface {
 	ListPendingBotTasks(context.Context, int) ([]model.BotTaskOutbox, error)
 	MarkBotTaskPublished(context.Context, int64) error
 	MarkBotTaskFailed(context.Context, int64, string) error
+}
+
+// BotTaskBudgetRepository is optional so small chat fakes can keep the core
+// message contract without implementing the production queue-budget query.
+type BotTaskBudgetRepository interface {
+	CountPendingBotTasks(context.Context, int64) (int64, error)
 }
 
 type BotReplyMetaRepository interface {
@@ -117,7 +132,7 @@ type WsMessage struct {
 }
 
 type WsMessageData struct {
-	Message *model.Message `json:"message"`
+	Message *PublicMessage `json:"message"`
 }
 
 func (s *ChatService) SendMessage(ctx context.Context, senderID, convID int64, content string, modes ...model.AIMode) (*model.Message, error) {
@@ -155,6 +170,17 @@ func (s *ChatService) SendMessage(ctx context.Context, senderID, convID int64, c
 		message.Meta = &meta
 	}
 	enqueueBotTask := s.aiBridge != nil && botTaskRequired(members, senderID)
+	if enqueueBotTask {
+		if budgetRepo, ok := s.repo.(BotTaskBudgetRepository); ok {
+			pending, err := budgetRepo.CountPendingBotTasks(ctx, senderID)
+			if err != nil {
+				return nil, err
+			}
+			if pending >= MaxPendingBotTasksPerUser {
+				return nil, chatError(ErrChatCapacity, "Bot 消息较多，请稍后再试")
+			}
+		}
+	}
 	var createErr error
 	if outboxRepo, ok := s.repo.(BotTaskOutboxRepository); ok && s.aiBridge != nil {
 		createErr = outboxRepo.CreateMessageWithBotTask(ctx, message, enqueueBotTask)
@@ -162,13 +188,16 @@ func (s *ChatService) SendMessage(ctx context.Context, senderID, convID int64, c
 		createErr = s.repo.CreateMessage(ctx, message)
 	}
 	if createErr != nil {
+		if errors.Is(createErr, repository.ErrBotTaskCapacity) {
+			return nil, chatError(ErrChatCapacity, "Bot 消息较多，请稍后再试")
+		}
 		return nil, createErr
 	}
 	memberIDs := make([]int64, 0, len(members))
 	for _, member := range members {
 		memberIDs = append(memberIDs, member.UserID)
 	}
-	s.hub.SendToUsers(memberIDs, WsMessage{Type: "new_message", Data: WsMessageData{Message: message}})
+	s.hub.SendToUsers(memberIDs, WsMessage{Type: "new_message", Data: WsMessageData{Message: ToPublicMessage(message)}})
 	senderIsBot := false
 	for _, member := range members {
 		if member.UserID == senderID {
@@ -234,6 +263,14 @@ type ConversationWithMeta struct {
 }
 
 func (s *ChatService) ListConversations(ctx context.Context, userID int64) ([]ConversationWithMeta, error) {
+	if previewRepo, ok := s.repo.(ConversationPreviewRepository); ok {
+		previews, err := previewRepo.ListConversationPreviews(ctx, userID)
+		if err != nil {
+			return nil, err
+		}
+		return s.buildConversationPreviews(ctx, userID, previews)
+	}
+
 	conversations, err := s.repo.ListConversations(ctx, userID)
 	if err != nil {
 		return nil, err
@@ -272,6 +309,55 @@ func (s *ChatService) ListConversations(ctx context.Context, userID int64) ([]Co
 		result = append(result, ConversationWithMeta{
 			Conversation: conv, LastMessage: lastMessage, Members: members,
 			UnreadCount: unread, Online: online,
+		})
+	}
+	followedAt, err := s.repo.GetFollowedAt(ctx, userID, peerIDs)
+	if err != nil {
+		return nil, err
+	}
+	for i := range result {
+		for _, member := range result[i].Members {
+			if member.UserID == userID {
+				continue
+			}
+			if timestamp, ok := followedAt[member.UserID]; ok {
+				followed := timestamp
+				result[i].FollowedAt = &followed
+			}
+			break
+		}
+	}
+	sortConversationPreviews(result)
+	return result, nil
+}
+
+func (s *ChatService) buildConversationPreviews(ctx context.Context, userID int64, previews []repository.ConversationPreview) ([]ConversationWithMeta, error) {
+	result := make([]ConversationWithMeta, 0, len(previews))
+	peerIDs := make([]int64, 0, len(previews))
+	for _, preview := range previews {
+		conv := preview.Conversation
+		lastMessage := preview.LastMessage
+		if lastMessage != nil {
+			message := *lastMessage
+			messages := []model.Message{message}
+			if err := s.sanitizeMessageCitations(ctx, messages); err != nil {
+				return nil, err
+			}
+			lastMessage = &messages[0]
+		}
+		members := preview.Members
+		online := false
+		for _, member := range members {
+			if member.UserID != userID && member.User != nil {
+				conv.Title = member.User.Username
+				online = s.IsUserOnline(ctx, member.UserID)
+				peerIDs = append(peerIDs, member.UserID)
+				break
+			}
+		}
+		result = append(result, ConversationWithMeta{
+			Conversation: conv, LastMessage: lastMessage, Members: members,
+			UnreadCount: preview.UnreadCount, Online: online,
 		})
 	}
 	followedAt, err := s.repo.GetFollowedAt(ctx, userID, peerIDs)
@@ -524,7 +610,7 @@ func (s *ChatService) ReplyAsBot(
 	for _, member := range members {
 		memberIDs = append(memberIDs, member.UserID)
 	}
-	s.hub.SendToUsers(memberIDs, WsMessage{Type: "new_message", Data: WsMessageData{Message: message}})
+	s.hub.SendToUsers(memberIDs, WsMessage{Type: "new_message", Data: WsMessageData{Message: ToPublicMessage(message)}})
 	return message, nil
 }
 

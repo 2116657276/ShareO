@@ -2,10 +2,13 @@ package repository
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strconv"
 	"time"
 )
+
+var ErrSessionStoreUnavailable = errors.New("session store unavailable")
 
 // LoginCacheTTL is the TTL for login state cache entries.
 // Set via InitLoginCache after config loading.
@@ -29,16 +32,19 @@ func loginCacheKey(userID int64) string {
 // This enables server-side login state tracking and allows forced logout.
 func CacheLoginToken(ctx context.Context, userID int64, token string, ttl time.Duration) error {
 	if RDB == nil {
-		return fmt.Errorf("redis not initialized")
+		return fmt.Errorf("%w: redis not initialized", ErrSessionStoreUnavailable)
 	}
-	return RDB.Set(ctx, loginCacheKey(userID), token, ttl).Err()
+	if err := RDB.Set(ctx, loginCacheKey(userID), token, ttl).Err(); err != nil {
+		return fmt.Errorf("%w: %v", ErrSessionStoreUnavailable, err)
+	}
+	return nil
 }
 
 // GetLoginToken retrieves the cached JWT token for a user.
 // Returns ("", redis.Nil) if the key does not exist (login expired).
 func GetLoginToken(ctx context.Context, userID int64) (string, error) {
 	if RDB == nil {
-		return "", fmt.Errorf("redis not initialized")
+		return "", fmt.Errorf("%w: redis not initialized", ErrSessionStoreUnavailable)
 	}
 	val, err := RDB.Get(ctx, loginCacheKey(userID)).Result()
 	if err != nil {
@@ -50,15 +56,21 @@ func GetLoginToken(ctx context.Context, userID int64) (string, error) {
 // DeleteLoginToken removes the login cache entry, effectively logging the user out.
 func DeleteLoginToken(ctx context.Context, userID int64) error {
 	if RDB == nil {
-		return fmt.Errorf("redis not initialized")
+		return fmt.Errorf("%w: redis not initialized", ErrSessionStoreUnavailable)
 	}
-	return RDB.Del(ctx, loginCacheKey(userID)).Err()
+	if err := RDB.Del(ctx, loginCacheKey(userID)).Err(); err != nil {
+		return fmt.Errorf("%w: %v", ErrSessionStoreUnavailable, err)
+	}
+	return nil
 }
 
 // RefreshLoginToken extends the TTL of an existing login cache entry.
 func RefreshLoginToken(ctx context.Context, userID int64, ttl time.Duration) error {
 	if RDB == nil {
-		return fmt.Errorf("redis not initialized")
+		return fmt.Errorf("%w: redis not initialized", ErrSessionStoreUnavailable)
 	}
-	return RDB.Expire(ctx, loginCacheKey(userID), ttl).Err()
+	if err := RDB.Expire(ctx, loginCacheKey(userID), ttl).Err(); err != nil {
+		return fmt.Errorf("%w: %v", ErrSessionStoreUnavailable, err)
+	}
+	return nil
 }

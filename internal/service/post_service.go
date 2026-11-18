@@ -38,7 +38,7 @@ type CreatePostReq struct {
 	Images  []string `json:"images"` // image URLs from upload
 }
 
-func (s *PostService) Create(userID int64, req CreatePostReq) (*model.Post, error) {
+func (s *PostService) Create(ctx context.Context, userID int64, req CreatePostReq) (*model.Post, error) {
 	content, images, err := validatePostInput(req.Content, req.Images)
 	if err != nil {
 		return nil, err
@@ -59,7 +59,10 @@ func (s *PostService) Create(userID int64, req CreatePostReq) (*model.Post, erro
 		})
 	}
 
-	if err := s.postRepo.Create(post); err != nil {
+	if err := s.postRepo.CreateWithUploadedArtifacts(ctx, userID, post); err != nil {
+		if errors.Is(err, repository.ErrUploadArtifactInvalid) {
+			return nil, ErrPostInvalid
+		}
 		return nil, err
 	}
 

@@ -30,7 +30,17 @@ BASE="${BASE:-http://127.0.0.1:8080}"
 AI_BASE="$(env_value SHAREO_AI_BASE_URL)"
 AI_BASE="${AI_BASE:-http://127.0.0.1:8000}"
 INTERNAL_TOKEN="$(env_value SHAREO_INTERNAL_TOKEN)"
-INTERNAL_TOKEN="${INTERNAL_TOKEN:-shareo-local-internal}"
+if [ "$INTERNAL_TOKEN" = "replace-with-a-random-value" ]; then
+    INTERNAL_TOKEN=""
+fi
+if [ -z "$INTERNAL_TOKEN" ] && [ -r "${SHAREO_LOCAL_STATE_DIR:-/tmp/shareo-local}/internal-token" ]; then
+    INTERNAL_TOKEN="$(<"${SHAREO_LOCAL_STATE_DIR:-/tmp/shareo-local}/internal-token")"
+fi
+case "$INTERNAL_TOKEN" in
+    shareo-local-internal|replace-with-a-random-value)
+        INTERNAL_TOKEN=""
+        ;;
+esac
 ADMIN_USER="$(env_value SHAREO_TEST_ADMIN_USER)"
 ADMIN_USER="${ADMIN_USER:-demoadmin}"
 ADMIN_PASSWORD="$(env_value SHAREO_TEST_ADMIN_PASSWORD)"

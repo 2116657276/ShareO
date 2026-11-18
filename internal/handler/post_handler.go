@@ -21,10 +21,10 @@ func (h *PostHandler) Create(c *gin.Context) {
 	userID := c.GetInt64("user_id")
 	var req service.CreatePostReq
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.BadRequest(c, err.Error())
+		response.BadRequest(c, "请求参数格式错误")
 		return
 	}
-	post, err := h.svc.Create(userID, req)
+	post, err := h.svc.Create(c.Request.Context(), userID, req)
 	if err != nil {
 		if errors.Is(err, service.ErrPostInvalid) {
 			response.BadRequest(c, "帖子内容或图片参数无效")
@@ -34,7 +34,7 @@ func (h *PostHandler) Create(c *gin.Context) {
 		}
 		return
 	}
-	response.Success(c, post)
+	response.Success(c, service.ToPublicPost(post))
 }
 
 func (h *PostHandler) Update(c *gin.Context) {
@@ -44,7 +44,7 @@ func (h *PostHandler) Update(c *gin.Context) {
 		Content string `json:"content"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.BadRequest(c, err.Error())
+		response.BadRequest(c, "请求参数格式错误")
 		return
 	}
 	post, err := h.svc.Update(userID, postID, req.Content)
@@ -62,7 +62,7 @@ func (h *PostHandler) Update(c *gin.Context) {
 		}
 		return
 	}
-	response.Success(c, post)
+	response.Success(c, service.ToPublicPost(post))
 }
 
 func (h *PostHandler) Delete(c *gin.Context) {
@@ -96,7 +96,7 @@ func (h *PostHandler) GetByID(c *gin.Context) {
 		}
 		return
 	}
-	response.Success(c, post)
+	response.Success(c, service.ToPublicPost(post))
 }
 
 func (h *PostHandler) RecordView(c *gin.Context) {
@@ -181,7 +181,7 @@ func (h *PostHandler) WebCreate(c *gin.Context) {
 		Content: content,
 		Images:  imageURLs,
 	}
-	_, err := h.svc.Create(userID, req)
+	_, err := h.svc.Create(c.Request.Context(), userID, req)
 	if err != nil {
 		if !errors.Is(err, service.ErrPostInvalid) {
 			slog.Warn("web post creation failed", "user_id", userID, "err", err)

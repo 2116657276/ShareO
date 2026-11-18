@@ -73,6 +73,19 @@ def configured(key: str, default: str = "") -> str:
     return os.environ.get(key) or env_file_value(key) or default
 
 
+def runtime_internal_token() -> str:
+    token = configured("SHAREO_INTERNAL_TOKEN")
+    if token and token not in {"shareo-local-internal", "replace-with-a-random-value"}:
+        return token
+    state_dir = pathlib.Path(
+        os.environ.get("SHAREO_LOCAL_STATE_DIR", "/tmp/shareo-local")
+    )
+    try:
+        return (state_dir / "internal-token").read_text(encoding="utf-8").strip()
+    except OSError:
+        return ""
+
+
 DB_HOST = configured("SHAREO_PG_HOST", "127.0.0.1")
 DB_PORT = configured("SHAREO_PG_PORT", "5432")
 DB_NAME = configured("SHAREO_PG_DATABASE", "shareo")
@@ -82,7 +95,7 @@ AI_DB_USER = configured("SHAREO_AI_DB_USER", "shareo_ai")
 AI_DB_PASSWORD = configured("SHAREO_AI_DB_PASSWORD")
 TEST_USERNAME = configured("SHAREO_TEST_USERNAME", "shareo_test")
 TEST_PASSWORD = configured("SHAREO_TEST_PASSWORD")
-INTERNAL_TOKEN = configured("SHAREO_INTERNAL_TOKEN", "shareo-local-internal")
+INTERNAL_TOKEN = runtime_internal_token()
 APP_PORT = configured("SHAREO_APP_PORT", "8080")
 MINIO_ENDPOINT = configured("SHAREO_MINIO_ENDPOINT", "127.0.0.1:9000")
 MINIO_ACCESS_KEY = configured("SHAREO_MINIO_ACCESS_KEY", "minioadmin")
@@ -674,6 +687,12 @@ def main() -> int:
     minio_url = MINIO_ENDPOINT if "://" in MINIO_ENDPOINT else f"http://{MINIO_ENDPOINT}"
     if urllib.parse.urlsplit(minio_url).hostname not in local_hosts:
         print("[FAIL] local photo seed only permits a localhost MinIO endpoint", file=sys.stderr)
+        return 2
+    if not INTERNAL_TOKEN:
+        print(
+            "[FAIL] SHAREO_INTERNAL_TOKEN 未配置，且本机状态目录没有生成的令牌",
+            file=sys.stderr,
+        )
         return 2
 
     STATE_DIR.mkdir(parents=True, exist_ok=True)

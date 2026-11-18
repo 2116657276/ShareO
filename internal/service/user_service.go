@@ -21,12 +21,12 @@ func NewUserService() *UserService {
 
 // ProfileData holds all data needed for the user profile page.
 type ProfileData struct {
-	User        *model.User
+	User        *PublicUser
 	IsFollowing bool
 	Following   int64
 	Followers   int64
 	PostCount   int64
-	Posts       []model.Post
+	Posts       []*PublicPost
 	TotalPosts  int64
 }
 
@@ -54,12 +54,12 @@ func (s *UserService) GetProfile(profileUserID, currentUserID int64) (*ProfileDa
 	posts, total, _ := s.postRepo.Feed(q)
 
 	return &ProfileData{
-		User:        user,
+		User:        ToPublicUser(user),
 		IsFollowing: isFollowing,
 		Following:   following,
 		Followers:   followers,
 		PostCount:   postCount,
-		Posts:       posts,
+		Posts:       ToPublicPosts(posts),
 		TotalPosts:  total,
 	}, nil
 }

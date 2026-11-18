@@ -1,5 +1,5 @@
 {{ template "header" . }}
-<div class="feed-page" x-data="feedPage({{ .Page }}, {{ .Total }}, '{{ .Sort }}')" :class="'feed-layout-' + layout">
+<div class="feed-page" data-page="{{ .Page }}" data-total="{{ .Total }}" data-sort="{{ .Sort }}" x-data="feedPage($el)" :class="'feed-layout-' + layout">
     <div class="page-header">
         <div>
             <div class="eyebrow">COMMUNITY FEED</div>
@@ -119,7 +119,10 @@ function renderPostCard(post) {
     return window.ShareOPostCards.renderPostCard(post, {loading: 'lazy'});
 }
 
-function feedPage(currentPage, totalCount, sort) {
+function feedPage(element) {
+    const currentPage = Number(element.dataset.page) || 1;
+    const totalCount = Number(element.dataset.total) || 0;
+    const sort = element.dataset.sort || 'latest';
     const pageSize = 12;
     const totalPages = Math.ceil(totalCount / pageSize);
     return {
@@ -128,12 +131,16 @@ function feedPage(currentPage, totalCount, sort) {
         searchActive: false, searchQuery: '', searchTotal: 0, searchPage: 1, searchHasMore: false, searchInput: '', errorMessage: '',
 
         init() {
-            this.layout = window.localStorage.getItem('shareo.feed.layout') === 'two' ? 'two' : 'single';
+            try {
+                this.layout = window.localStorage.getItem('shareo.feed.layout') === 'two' ? 'two' : 'single';
+            } catch (_) {
+                this.layout = 'single';
+            }
         },
 
         setLayout(mode) {
             this.layout = mode === 'two' ? 'two' : 'single';
-            window.localStorage.setItem('shareo.feed.layout', this.layout);
+            try { window.localStorage.setItem('shareo.feed.layout', this.layout); } catch (_) {}
         },
 
         async doSearch() {

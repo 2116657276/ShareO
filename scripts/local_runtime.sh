@@ -44,7 +44,7 @@ value_for() {
 load_allowed_env() {
     local key value
     for key in \
-        SHAREO_INTERNAL_TOKEN SHAREO_DB_PASSWORD SHAREO_JWT_SECRET \
+        SHAREO_INTERNAL_TOKEN SHAREO_SERVER_HOST SHAREO_DB_PASSWORD SHAREO_JWT_SECRET \
         SHAREO_MINIO_ACCESS_KEY SHAREO_MINIO_SECRET_KEY SHAREO_REDIS_PASSWORD \
         SHAREO_TRUSTED_ORIGINS SHAREO_AI_BASE_URL SHAREO_AI_REDIS_URL \
         SHAREO_AI_DATABASE_URL SHAREO_AI_GO_BASE_URL SHAREO_AI_INTERNAL_TOKEN \
@@ -68,6 +68,49 @@ load_allowed_env() {
             export "$key=$value"
         fi
     done
+}
+
+generate_internal_token() {
+    if command -v openssl >/dev/null 2>&1; then
+        openssl rand -hex 32
+        return
+    fi
+    if command -v python3 >/dev/null 2>&1; then
+        python3 -c 'import secrets; print(secrets.token_hex(32))'
+        return
+    fi
+    return 1
+}
+
+ensure_internal_token() {
+    local token_file="$STATE_DIR/internal-token" token saved_umask
+    token="$(value_for SHAREO_INTERNAL_TOKEN)"
+    case "$token" in
+    shareo-local-*|replace-with-a-random-value)
+        token=""
+        ;;
+    esac
+    if [ -z "$token" ] && [ -r "$token_file" ]; then
+        token="$(<"$token_file")"
+    fi
+    if [ -z "$token" ]; then
+        token="$(generate_internal_token)" || {
+            fail "openssl or Python is required to generate SHAREO_INTERNAL_TOKEN"
+            return 1
+        }
+        saved_umask="$(umask)"
+        umask 077
+        printf '%s\n' "$token" > "$token_file"
+        chmod 600 "$token_file"
+        umask "$saved_umask"
+    fi
+    [ -n "$token" ] || { fail "SHAREO_INTERNAL_TOKEN is empty"; return 1; }
+    export SHAREO_INTERNAL_TOKEN="$token"
+    case "${SHAREO_AI_INTERNAL_TOKEN:-}" in
+    shareo-local-*|replace-with-a-random-value|"")
+        export SHAREO_AI_INTERNAL_TOKEN="$token"
+        ;;
+    esac
 }
 
 resolve_path() {
@@ -337,6 +380,7 @@ start_local_processes() {
     config_path="$(value_for SHAREO_CONFIG)"; config_path="${config_path:-$PROJECT_DIR/config.yaml}"
     config_path="$(resolve_path "$config_path")"
     [ -f "$config_path" ] || { fail "Go config is missing: $config_path"; return 1; }
+    ensure_internal_token
 
     # Keep an older ignored config.yaml from selecting the retired MySQL
     # endpoint. These defaults are also used by bootstrap_postgres.sh and can
@@ -396,8 +440,6 @@ start_local_processes() {
     export SHAREO_AI_GO_BASE_URL="${SHAREO_AI_GO_BASE_URL:-http://127.0.0.1:$app_port}"
     export SHAREO_AI_MODEL_CACHE_DIR="$model_dir"
     export SHAREO_AI_TEXT_MODEL_CACHE_DIR="${SHAREO_AI_TEXT_MODEL_CACHE_DIR:-$model_dir}"
-    export SHAREO_AI_INTERNAL_TOKEN="${SHAREO_AI_INTERNAL_TOKEN:-${SHAREO_INTERNAL_TOKEN:-shareo-local-internal}}"
-    export SHAREO_INTERNAL_TOKEN="${SHAREO_INTERNAL_TOKEN:-shareo-local-internal}"
     export HF_ENDPOINT="${HF_ENDPOINT:-${SHAREO_AI_HF_ENDPOINT:-https://huggingface.co}}"
     export HF_HOME="${HF_HOME:-$model_dir}"
     export GOCACHE="${GOCACHE:-$cache_root/go-build}"

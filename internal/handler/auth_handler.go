@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"errors"
 	"log/slog"
 	"net/http"
 	"net/url"
@@ -34,12 +35,21 @@ func (h *AuthHandler) disconnectUser(userID int64) {
 func (h *AuthHandler) Register(c *gin.Context) {
 	var req service.RegisterReq
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.BadRequest(c, err.Error())
+		response.BadRequest(c, "请求参数格式错误")
 		return
 	}
 	resp, err := h.svc.Register(req)
 	if err != nil {
-		response.BadRequest(c, err.Error())
+		if errors.Is(err, service.ErrAuthSessionUnavailable) {
+			response.Error(c, http.StatusServiceUnavailable, response.ErrCodeInternal, "登录服务暂不可用，请稍后重试")
+			return
+		}
+		if service.IsAuthClientError(err) {
+			response.BadRequest(c, err.Error())
+		} else {
+			slog.Warn("registration failed", "err", err)
+			response.InternalError(c, "注册暂时无法完成，请稍后重试")
+		}
 		return
 	}
 	// Set cookie for web
@@ -58,12 +68,21 @@ func (h *AuthHandler) Register(c *gin.Context) {
 func (h *AuthHandler) Login(c *gin.Context) {
 	var req service.LoginReq
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.BadRequest(c, err.Error())
+		response.BadRequest(c, "请求参数格式错误")
 		return
 	}
 	resp, err := h.svc.Login(req)
 	if err != nil {
-		response.BadRequest(c, err.Error())
+		if errors.Is(err, service.ErrAuthSessionUnavailable) {
+			response.Error(c, http.StatusServiceUnavailable, response.ErrCodeInternal, "登录服务暂不可用，请稍后重试")
+			return
+		}
+		if service.IsAuthClientError(err) {
+			response.BadRequest(c, err.Error())
+		} else {
+			slog.Warn("login failed", "err", err)
+			response.InternalError(c, "登录暂时无法完成，请稍后重试")
+		}
 		return
 	}
 	// Replacing the Redis session must also revoke old live sockets; otherwise
@@ -85,6 +104,11 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 	// Delete login cache to immediately invalidate the session
 	userID := c.GetInt64("user_id")
 	if userID > 0 {
+		if err := h.svc.RevokeSessions(userID); err != nil {
+			slog.Warn("failed to persist logout revocation", "user_id", userID, "err", err)
+			response.InternalError(c, "退出登录暂时无法完成，请稍后重试")
+			return
+		}
 		if err := repository.DeleteLoginToken(c.Request.Context(), userID); err != nil {
 			slog.Warn("failed to delete login cache", "user_id", userID, "err", err)
 		}
@@ -121,7 +145,7 @@ func (h *AuthHandler) UpdateProfile(c *gin.Context) {
 		Email     string `json:"email"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.BadRequest(c, err.Error())
+		response.BadRequest(c, "请求参数格式错误")
 		return
 	}
 	if err := h.svc.UpdateProfile(userID, req.AvatarURL, req.Bio, req.Email); err != nil {
@@ -148,7 +172,17 @@ func (h *AuthHandler) WebLogin(c *gin.Context) {
 	password := c.PostForm("password")
 	resp, err := h.svc.Login(service.LoginReq{Username: username, Password: password})
 	if err != nil {
-		c.HTML(http.StatusOK, "login.html", userData(c, gin.H{"title": "登录 - ShareO", "Error": err.Error()}))
+		status := http.StatusOK
+		if errors.Is(err, service.ErrAuthSessionUnavailable) {
+			status = http.StatusServiceUnavailable
+		}
+		message := "登录暂时无法完成，请稍后重试"
+		if service.IsAuthClientError(err) {
+			message = err.Error()
+		} else {
+			slog.Warn("web login failed", "err", err)
+		}
+		c.HTML(status, "login.html", userData(c, gin.H{"title": "登录 - ShareO", "Error": message}))
 		return
 	}
 	h.disconnectUser(resp.User.ID)
@@ -174,7 +208,17 @@ func (h *AuthHandler) WebRegister(c *gin.Context) {
 	email := c.PostForm("email")
 	resp, err := h.svc.Register(service.RegisterReq{Username: username, Password: password, Email: email})
 	if err != nil {
-		c.HTML(http.StatusOK, "register.html", userData(c, gin.H{"title": "注册 - ShareO", "Error": err.Error()}))
+		status := http.StatusOK
+		if errors.Is(err, service.ErrAuthSessionUnavailable) {
+			status = http.StatusServiceUnavailable
+		}
+		message := "注册暂时无法完成，请稍后重试"
+		if service.IsAuthClientError(err) {
+			message = err.Error()
+		} else {
+			slog.Warn("web registration failed", "err", err)
+		}
+		c.HTML(status, "register.html", userData(c, gin.H{"title": "注册 - ShareO", "Error": message}))
 		return
 	}
 	http.SetCookie(c.Writer, &http.Cookie{
@@ -209,10 +253,11 @@ func (h *AuthHandler) WebSettings(c *gin.Context) {
 	email := c.PostForm("email")
 	bio := c.PostForm("bio")
 	if err := h.svc.UpdateProfileWeb(userID, email, bio); err != nil {
+		slog.Warn("web profile update failed", "user_id", userID, "err", err)
 		c.HTML(http.StatusOK, "settings.html", userData(c, gin.H{
 			"title": "设置 - ShareO",
 			"Email": email, "Bio": bio,
-			"Error": "保存失败: " + err.Error(),
+			"Error": "保存失败，请稍后重试",
 		}))
 		return
 	}
@@ -235,6 +280,13 @@ func (h *AuthHandler) WebLogout(c *gin.Context) {
 	// Delete login cache to immediately invalidate the session
 	userID := c.GetInt64("user_id")
 	if userID > 0 {
+		if err := h.svc.RevokeSessions(userID); err != nil {
+			slog.Warn("failed to persist web logout revocation", "user_id", userID, "err", err)
+			c.HTML(http.StatusServiceUnavailable, "settings.html", userData(c, gin.H{
+				"title": "设置 - ShareO", "Error": "退出登录暂时无法完成，请稍后重试",
+			}))
+			return
+		}
 		if err := repository.DeleteLoginToken(c.Request.Context(), userID); err != nil {
 			slog.Warn("failed to delete login cache on web logout", "user_id", userID, "err", err)
 		}
@@ -260,11 +312,16 @@ func (h *AuthHandler) ChangePassword(c *gin.Context) {
 		NewPassword string `json:"new_password" binding:"required,min=6"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.BadRequest(c, err.Error())
+		response.BadRequest(c, "请求参数格式错误")
 		return
 	}
 	if err := h.svc.ChangePassword(userID, req.OldPassword, req.NewPassword); err != nil {
-		response.BadRequest(c, err.Error())
+		if service.IsAuthClientError(err) {
+			response.BadRequest(c, err.Error())
+		} else {
+			slog.Warn("password change failed", "user_id", userID, "err", err)
+			response.InternalError(c, "密码暂时无法修改，请稍后重试")
+		}
 		return
 	}
 	h.disconnectUser(userID)
@@ -277,9 +334,15 @@ func (h *AuthHandler) WebChangePassword(c *gin.Context) {
 	oldPassword := c.PostForm("old_password")
 	newPassword := c.PostForm("new_password")
 	if err := h.svc.ChangePassword(userID, oldPassword, newPassword); err != nil {
+		message := "密码暂时无法修改，请稍后重试"
+		if service.IsAuthClientError(err) {
+			message = "密码修改失败: " + err.Error()
+		} else {
+			slog.Warn("web password change failed", "user_id", userID, "err", err)
+		}
 		c.HTML(http.StatusOK, "settings.html", userData(c, gin.H{
 			"title": "设置 - ShareO",
-			"Error": "密码修改失败: " + err.Error(),
+			"Error": message,
 		}))
 		return
 	}

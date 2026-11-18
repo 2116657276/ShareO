@@ -19,6 +19,9 @@ type ChatRepo struct {
 }
 
 var ErrInvalidBotConversation = errors.New("invalid bot conversation")
+var ErrBotTaskCapacity = errors.New("bot task capacity exceeded")
+
+const maxPendingBotTasksPerUser = 20
 
 func NewChatRepo(db *gorm.DB) *ChatRepo { return &ChatRepo{db: db} }
 
@@ -82,6 +85,77 @@ func (r *ChatRepo) ListConversations(ctx context.Context, userID int64) ([]model
 	return conversations, err
 }
 
+type ConversationPreview struct {
+	Conversation model.Conversation
+	LastMessage  *model.Message
+	Members      []model.ConversationMember
+	UnreadCount  int64
+}
+
+// ListConversationPreviews loads the chat list with bounded batch queries:
+// conversations, members, latest messages and unread counts. The service
+// still keeps its fallback path for lightweight repositories and tests.
+func (r *ChatRepo) ListConversationPreviews(ctx context.Context, userID int64) ([]ConversationPreview, error) {
+	conversations, err := r.ListConversations(ctx, userID)
+	if err != nil || len(conversations) == 0 {
+		return []ConversationPreview{}, err
+	}
+	conversationIDs := make([]int64, 0, len(conversations))
+	for _, conversation := range conversations {
+		conversationIDs = append(conversationIDs, conversation.ID)
+	}
+
+	var members []model.ConversationMember
+	if err := r.db.WithContext(ctx).Where("conversation_id IN ?", conversationIDs).
+		Preload("User").Find(&members).Error; err != nil {
+		return nil, err
+	}
+	membersByConversation := make(map[int64][]model.ConversationMember, len(conversationIDs))
+	for _, member := range members {
+		membersByConversation[member.ConversationID] = append(membersByConversation[member.ConversationID], member)
+	}
+
+	var lastMessages []model.Message
+	latest := r.db.WithContext(ctx).Where("conversation_id IN ?", conversationIDs).
+		Where("id IN (?)", r.db.Model(&model.Message{}).Select("MAX(id)").
+			Where("conversation_id IN ?", conversationIDs).Group("conversation_id"))
+	if err := latest.Preload("Sender").Find(&lastMessages).Error; err != nil {
+		return nil, err
+	}
+	lastByConversation := make(map[int64]*model.Message, len(lastMessages))
+	for index := range lastMessages {
+		lastByConversation[lastMessages[index].ConversationID] = &lastMessages[index]
+	}
+
+	type unreadRow struct {
+		ConversationID int64
+		Count          int64
+	}
+	var unreadRows []unreadRow
+	if err := r.db.WithContext(ctx).Table("messages AS m").
+		Select("m.conversation_id, COUNT(*) AS count").
+		Joins("JOIN conversation_members cm ON cm.conversation_id = m.conversation_id").
+		Where("cm.user_id = ? AND m.id > cm.last_read_message_id AND m.sender_id <> ? AND m.conversation_id IN ?", userID, userID, conversationIDs).
+		Group("m.conversation_id").Scan(&unreadRows).Error; err != nil {
+		return nil, err
+	}
+	unreadByConversation := make(map[int64]int64, len(unreadRows))
+	for _, row := range unreadRows {
+		unreadByConversation[row.ConversationID] = row.Count
+	}
+
+	result := make([]ConversationPreview, 0, len(conversations))
+	for _, conversation := range conversations {
+		result = append(result, ConversationPreview{
+			Conversation: conversation,
+			LastMessage:  lastByConversation[conversation.ID],
+			Members:      membersByConversation[conversation.ID],
+			UnreadCount:  unreadByConversation[conversation.ID],
+		})
+	}
+	return result, nil
+}
+
 // GetFollowedAt returns the current user's follow timestamps for the supplied
 // conversation peers. It deliberately keeps relationship metadata out of the
 // conversations table.
@@ -126,6 +200,25 @@ func (r *ChatRepo) CreateMessage(ctx context.Context, msg *model.Message) error 
 // transaction and can therefore be replayed from bot_task_outbox.
 func (r *ChatRepo) CreateMessageWithBotTask(ctx context.Context, msg *model.Message, enqueueBotTask bool) error {
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if enqueueBotTask {
+			// Serialize admission for one sender inside the same transaction as
+			// the message/outbox insert. The service-level count remains a fast
+			// rejection, while this lock closes the concurrent over-admission race.
+			if err := tx.Exec("SELECT pg_advisory_xact_lock(?)", msg.SenderID).Error; err != nil {
+				return err
+			}
+			var pending int64
+			if err := tx.Table("bot_task_outbox AS o").
+				Joins("JOIN messages AS m ON m.id = o.message_id").
+				Where("m.sender_id = ? AND o.status IN ?", msg.SenderID, []string{"pending", "published"}).
+				Where("NOT EXISTS (SELECT 1 FROM bot_replies AS br WHERE br.source_message_id = o.message_id)").
+				Count(&pending).Error; err != nil {
+				return err
+			}
+			if pending >= maxPendingBotTasksPerUser {
+				return ErrBotTaskCapacity
+			}
+		}
 		if err := tx.Create(msg).Error; err != nil {
 			return err
 		}
@@ -154,6 +247,20 @@ func (r *ChatRepo) CreateMessageWithBotTask(ctx context.Context, msg *model.Mess
 		}
 		return nil
 	})
+}
+
+// CountPendingBotTasks counts durable tasks created by a user that have not
+// yet produced a Bot reply. Published tasks remain counted until the callback
+// creates bot_replies, so a fast sender cannot move the pressure from the
+// outbox into Redis or the Python consumer.
+func (r *ChatRepo) CountPendingBotTasks(ctx context.Context, userID int64) (int64, error) {
+	var count int64
+	err := r.db.WithContext(ctx).Table("bot_task_outbox AS o").
+		Joins("JOIN messages AS m ON m.id = o.message_id").
+		Where("m.sender_id = ? AND o.status IN ?", userID, []string{"pending", "published"}).
+		Where("NOT EXISTS (SELECT 1 FROM bot_replies AS br WHERE br.source_message_id = o.message_id)").
+		Count(&count).Error
+	return count, err
 }
 
 func (r *ChatRepo) ListPendingBotTasks(ctx context.Context, limit int) ([]model.BotTaskOutbox, error) {

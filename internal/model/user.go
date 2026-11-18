@@ -5,18 +5,19 @@ import "time"
 const ShareOBotUsername = "shareo_bot"
 
 type User struct {
-	ID           int64      `gorm:"primaryKey;autoIncrement" json:"id"`
-	Username     string     `gorm:"type:varchar(50);uniqueIndex;not null" json:"username"`
-	PasswordHash string     `gorm:"type:varchar(255);not null" json:"-"`
-	Email        string     `gorm:"type:varchar(100);default:''" json:"email"`
-	AvatarURL    string     `gorm:"type:varchar(500);default:''" json:"avatar_url"`
-	Bio          string     `gorm:"type:varchar(200);default:''" json:"bio"`
-	Role         string     `gorm:"type:enum('user','admin');default:'user'" json:"role"`
-	Status       int8       `gorm:"default:1;comment:1=正常 0=封禁" json:"status"`
-	IsBot        int8       `gorm:"default:0;index:idx_users_bot" json:"is_bot"`
-	CreatedAt    time.Time  `gorm:"autoCreateTime" json:"created_at"`
-	UpdatedAt    time.Time  `gorm:"autoUpdateTime" json:"updated_at"`
-	FollowedAt   *time.Time `gorm:"-" json:"followed_at,omitempty"`
+	ID             int64      `gorm:"primaryKey;autoIncrement" json:"id"`
+	Username       string     `gorm:"type:varchar(50);uniqueIndex;not null" json:"username"`
+	PasswordHash   string     `gorm:"type:varchar(255);not null" json:"-"`
+	Email          string     `gorm:"type:varchar(100);default:''" json:"email"`
+	AvatarURL      string     `gorm:"type:varchar(500);default:''" json:"avatar_url"`
+	Bio            string     `gorm:"type:varchar(200);default:''" json:"bio"`
+	Role           string     `gorm:"type:varchar(10);default:'user'" json:"role"`
+	Status         int8       `gorm:"default:1;comment:1=正常 0=封禁" json:"status"`
+	IsBot          int8       `gorm:"default:0;index:idx_users_bot" json:"is_bot"`
+	SessionVersion int64      `gorm:"not null;default:1" json:"-"`
+	CreatedAt      time.Time  `gorm:"autoCreateTime" json:"created_at"`
+	UpdatedAt      time.Time  `gorm:"autoUpdateTime" json:"updated_at"`
+	FollowedAt     *time.Time `gorm:"-" json:"followed_at,omitempty"`
 
 	// Associations
 	Posts    []Post    `gorm:"foreignKey:UserID" json:"posts,omitempty"`

@@ -2,19 +2,41 @@ package handler
 
 import (
 	"bytes"
+	"context"
+	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/zhoujianlin/ShareO/internal/pkg/response"
 	"github.com/zhoujianlin/ShareO/internal/pkg/upload"
+	"github.com/zhoujianlin/ShareO/internal/repository"
 )
 
-type UploadHandler struct{}
+type UploadHandler struct {
+	postRepo     *repository.PostRepo
+	artifactRepo uploadArtifactStore
+}
 
-func NewUploadHandler() *UploadHandler { return &UploadHandler{} }
+type uploadArtifactStore interface {
+	Register(context.Context, int64, string, []string, time.Time) error
+}
+
+func NewUploadHandler(postRepo *repository.PostRepo, artifactRepos ...uploadArtifactStore) *UploadHandler {
+	repo := repository.NewPostRepo()
+	if postRepo != nil {
+		repo = postRepo
+	}
+	var artifactRepo uploadArtifactStore = repository.NewUploadArtifactRepo()
+	if len(artifactRepos) > 0 && artifactRepos[0] != nil {
+		artifactRepo = artifactRepos[0]
+	}
+	return &UploadHandler{postRepo: repo, artifactRepo: artifactRepo}
+}
 
 func (h *UploadHandler) UploadImage(c *gin.Context) {
 	// Enforce max body size (50MB + overhead)
@@ -70,7 +92,20 @@ func (h *UploadHandler) UploadImage(c *gin.Context) {
 
 	result, err := upload.ProcessAndUpload(reader, header.Size, detectedType, header.Filename)
 	if err != nil {
+		if errors.Is(err, upload.ErrInvalidImage) || errors.Is(err, upload.ErrImageTooLarge) {
+			response.BadRequest(c, "图片内容无效或尺寸过大")
+			return
+		}
 		response.InternalError(c, "图片上传失败，请稍后重试")
+		return
+	}
+	objectKeys := upload.ObjectKeys(result)
+	if err := h.artifactRepo.Register(c.Request.Context(), c.GetInt64("user_id"), result.UploadID, objectKeys, time.Now().Add(24*time.Hour)); err != nil {
+		if removeErr := upload.RemoveObjects(c.Request.Context(), objectKeys); removeErr != nil {
+			slog.Warn("failed to remove unregistered upload objects", "user_id", c.GetInt64("user_id"), "err", removeErr)
+		}
+		slog.Warn("failed to register upload artifacts", "user_id", c.GetInt64("user_id"), "err", err)
+		response.InternalError(c, "图片上传暂时无法完成，请稍后重试")
 		return
 	}
 
@@ -82,6 +117,20 @@ func (h *UploadHandler) UploadImage(c *gin.Context) {
 
 func (h *UploadHandler) ServeImage(c *gin.Context) {
 	objectName := strings.TrimPrefix(c.Param("objectName"), "/")
+	if !validImageObjectName(objectName) {
+		c.Status(http.StatusNotFound)
+		return
+	}
+	visible, err := h.postRepo.IsApprovedImage(c.Request.Context(), objectName)
+	if err != nil {
+		slog.Warn("image visibility lookup failed", "object_name", objectName, "err", err)
+		c.Status(http.StatusServiceUnavailable)
+		return
+	}
+	if !visible {
+		c.Status(http.StatusNotFound)
+		return
+	}
 
 	// HEAD request: just return headers
 	if c.Request.Method == http.MethodHead {
@@ -105,6 +154,7 @@ func (h *UploadHandler) ServeImage(c *gin.Context) {
 	defer obj.Close()
 
 	c.Header("Content-Type", contentType)
+	c.Header("X-Content-Type-Options", "nosniff")
 	c.Header("Cache-Control", "public, max-age=86400, immutable")
 	c.Stream(func(w io.Writer) bool {
 		buf := make([]byte, 32*1024)
@@ -118,4 +168,10 @@ func (h *UploadHandler) ServeImage(c *gin.Context) {
 			}
 		}
 	})
+}
+
+func validImageObjectName(objectName string) bool {
+	return strings.HasPrefix(objectName, "posts/") &&
+		!strings.ContainsAny(objectName, "\\\x00?#") &&
+		!strings.Contains(objectName, "..")
 }

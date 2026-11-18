@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/zhoujianlin/ShareO/internal/model"
+	"github.com/zhoujianlin/ShareO/internal/repository"
 	"gorm.io/gorm"
 )
 
@@ -28,6 +29,34 @@ type fakeChatRepo struct {
 	botReply      *model.Message
 	botCreated    bool
 	followedAt    map[int64]time.Time
+}
+
+type fakeBudgetChatRepo struct {
+	*fakeChatRepo
+	pending int64
+	err     error
+}
+
+type capacityOutboxChatRepo struct {
+	*fakeChatRepo
+	fakeBotOutbox
+}
+
+type fakePreviewChatRepo struct {
+	*fakeChatRepo
+	previews []repository.ConversationPreview
+}
+
+func (f *fakePreviewChatRepo) ListConversationPreviews(context.Context, int64) ([]repository.ConversationPreview, error) {
+	return f.previews, nil
+}
+
+func (f *capacityOutboxChatRepo) CreateMessageWithBotTask(context.Context, *model.Message, bool) error {
+	return repository.ErrBotTaskCapacity
+}
+
+func (f *fakeBudgetChatRepo) CountPendingBotTasks(context.Context, int64) (int64, error) {
+	return f.pending, f.err
 }
 
 func (f *fakeChatRepo) ValidateActiveUsers(_ context.Context, ids []int64) error {
@@ -129,6 +158,35 @@ func TestMessageLimitsAndBroadcast(t *testing.T) {
 	}
 }
 
+func TestBotMessageRejectsWhenUserPendingBudgetIsFull(t *testing.T) {
+	user := &model.User{ID: 1, Status: model.UserStatusActive}
+	bot := &model.User{ID: 2, Username: model.ShareOBotUsername, IsBot: 1, Status: model.UserStatusActive}
+	repo := &fakeBudgetChatRepo{fakeChatRepo: &fakeChatRepo{
+		conversation: &model.Conversation{ID: 5}, isMember: true,
+		members: []model.ConversationMember{{UserID: user.ID, User: user}, {UserID: bot.ID, User: bot}},
+	}, pending: MaxPendingBotTasksPerUser}
+	svc := NewChatService(repo, fakePresence{}, &fakeHub{}, NewAIBridge(nil))
+	if _, err := svc.SendMessage(context.Background(), user.ID, 5, "问题"); !errors.Is(err, ErrChatCapacity) {
+		t.Fatalf("capacity error = %v, want ErrChatCapacity", err)
+	}
+	if repo.createdMsg != nil {
+		t.Fatal("message should not be persisted when the Bot budget is full")
+	}
+}
+
+func TestBotMessageMapsAtomicRepositoryCapacityToChatCapacity(t *testing.T) {
+	user := &model.User{ID: 1, Status: model.UserStatusActive}
+	bot := &model.User{ID: 2, Username: model.ShareOBotUsername, IsBot: 1, Status: model.UserStatusActive}
+	repo := &capacityOutboxChatRepo{fakeChatRepo: &fakeChatRepo{
+		conversation: &model.Conversation{ID: 5}, isMember: true,
+		members: []model.ConversationMember{{UserID: user.ID, User: user}, {UserID: bot.ID, User: bot}},
+	}}
+	svc := NewChatService(repo, fakePresence{}, &fakeHub{}, NewAIBridge(nil))
+	if _, err := svc.SendMessage(context.Background(), user.ID, 5, "问题"); !errors.Is(err, ErrChatCapacity) {
+		t.Fatalf("capacity error = %v, want ErrChatCapacity", err)
+	}
+}
+
 func TestPaginationConflictAndUnreadDelegation(t *testing.T) {
 	repo := &fakeChatRepo{conversation: &model.Conversation{ID: 5}, isMember: true, unread: 7}
 	svc, _ := newChatServiceForTest(repo)
@@ -162,6 +220,27 @@ func TestConversationSortUsesLastMessageThenFollowedAt(t *testing.T) {
 		if got[i] != want[i] {
 			t.Fatalf("sorted IDs=%v, want %v", got, want)
 		}
+	}
+}
+
+func TestListConversationsUsesBatchPreviewsWhenRepositorySupportsIt(t *testing.T) {
+	peer := &model.User{ID: 8, Username: "friend", Status: model.UserStatusActive}
+	repo := &fakePreviewChatRepo{
+		fakeChatRepo: &fakeChatRepo{},
+		previews: []repository.ConversationPreview{{
+			Conversation: model.Conversation{ID: 4, CreatedAt: time.Now()},
+			Members:      []model.ConversationMember{{UserID: 2}, {UserID: peer.ID, User: peer}},
+			LastMessage:  &model.Message{ID: 11, Content: "hello", CreatedAt: time.Now()},
+			UnreadCount:  3,
+		}},
+	}
+	svc := NewChatService(repo, fakePresence{}, &fakeHub{})
+	items, err := svc.ListConversations(context.Background(), 2)
+	if err != nil || len(items) != 1 {
+		t.Fatalf("items=%v err=%v", items, err)
+	}
+	if items[0].Title != "friend" || items[0].UnreadCount != 3 || items[0].LastMessage == nil {
+		t.Fatalf("unexpected preview=%+v", items[0])
 	}
 }
 

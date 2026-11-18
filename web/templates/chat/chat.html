@@ -237,6 +237,19 @@ function chatApp() {
             }
         },
         loadMore() { if (this.messages.length) this.loadMsgs(this.messages[0].id); },
+        async loadNewer(after = 0) {
+            if (!this.activeConv || !after) return;
+            try {
+                const response = await fetch(`/api/v1/conversations/${this.activeConv}/messages?limit=100&after_id=${after}`);
+                const body = await this.readJSON(response);
+                if (!response.ok || body.code !== 0) throw new Error(body.message || '消息同步失败');
+                for (const message of (body.data?.messages || [])) this.appendMsg(message);
+                const latest = this.messages[this.messages.length - 1];
+                if (latest) await this.markRead(latest.id);
+            } catch (error) {
+                this.errorMessage = error.message || '消息同步失败，请稍后重试';
+            }
+        },
         async sendMsg() {
             const content = this.newMsg.trim();
             if (!content || this.sending || !this.activeConv) return;
@@ -285,7 +298,11 @@ function chatApp() {
         connectWS() {
             const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
             this.ws = new WebSocket(`${protocol}//${location.host}/ws`);
-            this.ws.onopen = () => { this.reconnectDelay = 1000; };
+            this.ws.onopen = () => {
+                this.reconnectDelay = 1000;
+                const latest = this.messages[this.messages.length - 1];
+                if (latest && this.activeConv && this.view === 'detail') this.loadNewer(latest.id);
+            };
             this.ws.onmessage = event => {
                 try {
                     const payload = JSON.parse(event.data);

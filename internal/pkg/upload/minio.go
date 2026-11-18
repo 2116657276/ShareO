@@ -61,3 +61,26 @@ func GetImage(objectName string) (io.ReadCloser, string, error) {
 	}
 	return obj, stat.ContentType, nil
 }
+
+// RemoveObjects deletes a bounded set of generated upload objects. It is used
+// when metadata registration fails or an expired unbound upload is collected.
+func RemoveObjects(ctx context.Context, objectNames []string) error {
+	if Client == nil || len(objectNames) == 0 {
+		return nil
+	}
+	var firstErr error
+	seen := make(map[string]struct{}, len(objectNames))
+	for _, objectName := range objectNames {
+		if objectName == "" {
+			continue
+		}
+		if _, ok := seen[objectName]; ok {
+			continue
+		}
+		seen[objectName] = struct{}{}
+		if err := Client.RemoveObject(ctx, bucketName, objectName, minio.RemoveObjectOptions{}); err != nil && firstErr == nil {
+			firstErr = err
+		}
+	}
+	return firstErr
+}

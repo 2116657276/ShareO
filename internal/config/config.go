@@ -21,6 +21,7 @@ type Config struct {
 }
 
 type ServerConfig struct {
+	Host           string   `mapstructure:"host"`
 	Port           int      `mapstructure:"port"`
 	Mode           string   `mapstructure:"mode"`
 	TrustedOrigins []string `mapstructure:"trusted_origins"`
@@ -134,7 +135,11 @@ func Load(path string) (*Config, error) {
 //	SHAREO_MINIO_SECRET_KEY  — MinIO secret key
 //	SHAREO_REDIS_PASSWORD    — Redis password
 //	SHAREO_TRUSTED_ORIGINS   — comma-separated exact origins for browser/WS requests
+//	SHAREO_SERVER_HOST       — Go HTTP bind host (defaults to 127.0.0.1)
 func applyEnvOverrides(cfg *Config) {
+	if v := os.Getenv("SHAREO_SERVER_HOST"); v != "" {
+		cfg.Server.Host = v
+	}
 	if v := os.Getenv("SHAREO_DB_USER"); v != "" {
 		cfg.Database.User = v
 	}
@@ -177,6 +182,9 @@ func applyEnvOverrides(cfg *Config) {
 
 // Validate checks that required config fields are present and valid.
 func (c *Config) Validate() error {
+	if strings.TrimSpace(c.Server.Host) == "" {
+		c.Server.Host = "127.0.0.1"
+	}
 	if c.Server.Port <= 0 || c.Server.Port > 65535 {
 		return fmt.Errorf("server.port must be between 1 and 65535, got %d", c.Server.Port)
 	}

@@ -33,7 +33,17 @@ APP_PORT="${APP_PORT:-8080}"
 AI_PORT="$(env_value SHAREO_AI_PORT)"
 AI_PORT="${AI_PORT:-8000}"
 INTERNAL_TOKEN="$(env_value SHAREO_INTERNAL_TOKEN)"
-INTERNAL_TOKEN="${INTERNAL_TOKEN:-shareo-local-internal}"
+if [ "$INTERNAL_TOKEN" = "replace-with-a-random-value" ]; then
+    INTERNAL_TOKEN=""
+fi
+if [ -z "$INTERNAL_TOKEN" ] && [ -r "${SHAREO_LOCAL_STATE_DIR:-/tmp/shareo-local}/internal-token" ]; then
+    INTERNAL_TOKEN="$(<"${SHAREO_LOCAL_STATE_DIR:-/tmp/shareo-local}/internal-token")"
+fi
+case "$INTERNAL_TOKEN" in
+    shareo-local-internal|replace-with-a-random-value)
+        INTERNAL_TOKEN=""
+        ;;
+esac
 AI_URL="http://127.0.0.1:$AI_PORT"
 
 check_http() {
@@ -46,6 +56,11 @@ check_http() {
 check_http "Go app health" "http://127.0.0.1:$APP_PORT/healthz"
 check_http "AI service health" "$AI_URL/healthz"
 check_http "MinIO health" "http://127.0.0.1:9000/minio/health/live"
+
+if [ -z "$INTERNAL_TOKEN" ]; then
+    echo "[FAIL] SHAREO_INTERNAL_TOKEN 未配置，且本机状态目录没有生成的令牌" >&2
+    exit 1
+fi
 
 if command -v redis-cli >/dev/null 2>&1 && [ "$(redis-cli -h 127.0.0.1 -p 6379 ping 2>/dev/null || true)" = "PONG" ]; then
     echo "[PASS] Redis ping"

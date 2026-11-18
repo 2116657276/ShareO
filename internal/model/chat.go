@@ -38,7 +38,7 @@ type Message struct {
 	ConversationID int64     `gorm:"not null;index:idx_conv_msg,priority:1" json:"conversation_id"`
 	SenderID       int64     `gorm:"not null" json:"sender_id"`
 	Content        string    `gorm:"type:text;not null" json:"content"`
-	Meta           *string   `gorm:"type:json;default:null" json:"meta,omitempty"`
+	Meta           *string   `gorm:"type:jsonb;default:null" json:"meta,omitempty"`
 	CreatedAt      time.Time `gorm:"autoCreateTime" json:"created_at"`
 
 	// Association
@@ -63,7 +63,7 @@ type BotTaskOutbox struct {
 	ID             int64      `gorm:"primaryKey;autoIncrement" json:"id"`
 	ConversationID int64      `gorm:"not null;index:idx_bot_outbox_pending,priority:1" json:"conversation_id"`
 	MessageID      int64      `gorm:"not null;uniqueIndex:uk_bot_outbox_message" json:"message_id"`
-	Status         string     `gorm:"type:enum('pending','published');not null;default:'pending';index:idx_bot_outbox_pending,priority:2" json:"status"`
+	Status         string     `gorm:"type:varchar(10);not null;default:'pending';index:idx_bot_outbox_pending,priority:2" json:"status"`
 	Attempts       int        `gorm:"not null;default:0" json:"attempts"`
 	NextAttemptAt  time.Time  `gorm:"not null;index:idx_bot_outbox_pending,priority:3" json:"next_attempt_at"`
 	LastError      string     `gorm:"type:varchar(500);not null;default:''" json:"last_error"`

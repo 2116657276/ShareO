@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import os
+import secrets
 import time
 from contextlib import asynccontextmanager
 from typing import Literal
@@ -22,9 +23,10 @@ from app.rag.embedding import TextEmbedder
 from app.rag.pipeline import RAGPipeline
 from app.rag.provider import LLMError, OpenAICompatibleProvider
 from app.rag.vectorstore import TextVectorStore
-from app.workers.runtime import STREAM_INDEX_POST, WorkerRuntime
+from app.workers.runtime import STREAM_BOT_TASKS, STREAM_INDEX_POST, WorkerRuntime
 
 logger = logging.getLogger(__name__)
+UNSAFE_INTERNAL_TOKENS = frozenset({"shareo-local-internal", "replace-with-a-random-value"})
 embedder = ImageEmbedder()
 vector_database = PostgresVectorDatabase(settings.database_url)
 vector_store = ImageVectorStore(vector_database, settings.image_collection)
@@ -204,9 +206,10 @@ async def readyz():
 
 
 def require_internal_token(token: str | None) -> None:
-    if not settings.internal_token:
+    configured = (settings.internal_token or "").strip()
+    if not configured or configured in UNSAFE_INTERNAL_TOKENS:
         raise HTTPException(status_code=503, detail="internal token is not configured")
-    if token != settings.internal_token:
+    if token is None or not secrets.compare_digest(token, configured):
         raise HTTPException(status_code=401, detail="unauthorized")
 
 
@@ -267,6 +270,7 @@ async def rag_readyz(x_internal_token: str | None = Header(default=None)):
     status = {
         "model": text_embedder.metadata(),
         "consumer": consumers.get(STREAM_INDEX_POST, "stopped"),
+        "bot_consumer": consumers.get(STREAM_BOT_TASKS, "stopped"),
         "llm": "configured" if llm_provider.configured else "missing_configuration",
         "llm_model": settings.llm_model,
         "text_embedding_model": settings.text_embedding_model,
@@ -274,7 +278,12 @@ async def rag_readyz(x_internal_token: str | None = Header(default=None)):
             "SHAREO_AI_TEXT_EMBEDDING_REVISION", "unresolved"
         ),
     }
-    if not text_embedder.loaded or status["consumer"] != "running" or not llm_provider.configured:
+    if (
+        not text_embedder.loaded
+        or status["consumer"] != "running"
+        or status["bot_consumer"] != "running"
+        or not llm_provider.configured
+    ):
         return JSONResponse({"status": "degraded", **status}, status_code=503)
     try:
         return {
@@ -307,12 +316,18 @@ async def agent_readyz(x_internal_token: str | None = Header(default=None)):
             "SHAREO_AI_TEXT_EMBEDDING_REVISION", "unresolved"
         ),
         "rag_consumer": consumers.get(STREAM_INDEX_POST, "stopped"),
+        "bot_consumer": consumers.get(STREAM_BOT_TASKS, "stopped"),
         "prompt_version": settings.agent_prompt_version,
         "trace_version": settings.agent_trace_version,
         "source_fingerprint": PROCESS_SOURCE_FINGERPRINT,
         "process_started_at": PROCESS_STARTED_AT,
     }
-    if not settings.agent_enabled or not llm_provider.configured:
+    if (
+        not settings.agent_enabled
+        or not llm_provider.configured
+        or status["rag_consumer"] != "running"
+        or status["bot_consumer"] != "running"
+    ):
         return JSONResponse({"status": "degraded", **status}, status_code=503)
     try:
         vector_meta = await text_vector_store.metadata()

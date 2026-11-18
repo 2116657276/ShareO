@@ -4,7 +4,6 @@ set -euo pipefail
 
 PROJECT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$PROJECT_DIR"
-AI_URL="${SHAREO_AI_BASE_URL:-http://127.0.0.1:8000}"
 
 env_value() {
     local key="$1" line value
@@ -23,16 +22,26 @@ env_value() {
     done < .env 2>/dev/null || true
 }
 
-INTERNAL_TOKEN="$(env_value SHAREO_INTERNAL_TOKEN)"
+AI_PORT="${SHAREO_AI_PORT:-$(env_value SHAREO_AI_PORT)}"
+AI_PORT="${AI_PORT:-8000}"
+AI_URL="${SHAREO_AI_BASE_URL:-$(env_value SHAREO_AI_BASE_URL)}"
+AI_URL="${AI_URL:-http://127.0.0.1:$AI_PORT}"
+
+INTERNAL_TOKEN="${SHAREO_INTERNAL_TOKEN:-$(env_value SHAREO_INTERNAL_TOKEN)}"
+if [ "$INTERNAL_TOKEN" = "replace-with-a-random-value" ]; then
+    INTERNAL_TOKEN=""
+fi
+if [ -z "$INTERNAL_TOKEN" ] && [ -r "${SHAREO_LOCAL_STATE_DIR:-/tmp/shareo-local}/internal-token" ]; then
+    INTERNAL_TOKEN="$(<"${SHAREO_LOCAL_STATE_DIR:-/tmp/shareo-local}/internal-token")"
+fi
+case "$INTERNAL_TOKEN" in
+    shareo-local-internal|replace-with-a-random-value)
+        INTERNAL_TOKEN=""
+        ;;
+esac
 if [ -z "$INTERNAL_TOKEN" ]; then
-    case "$AI_URL" in
-        http://127.0.0.1:*|http://localhost:*)
-            INTERNAL_TOKEN="shareo-local-internal"
-            ;;
-        *)
-            INTERNAL_TOKEN="shareo-dev-internal"
-            ;;
-    esac
+    echo "[FAIL] SHAREO_INTERNAL_TOKEN 未配置，且本机状态目录没有生成的令牌" >&2
+    exit 1
 fi
 headers=(-H "X-Internal-Token: $INTERNAL_TOKEN" -H 'Content-Type: application/json')
 

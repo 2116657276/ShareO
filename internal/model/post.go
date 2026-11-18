@@ -10,7 +10,7 @@ type Post struct {
 	ViewCount     int        `gorm:"default:0" json:"view_count"`
 	LikeCount     int        `gorm:"default:0" json:"like_count"`
 	CommentCount  int        `gorm:"default:0" json:"comment_count"`
-	Status        string     `gorm:"type:enum('pending','approved','rejected');default:'pending';index:idx_posts_status,priority:1" json:"status"`
+	Status        string     `gorm:"type:varchar(10);default:'pending';index:idx_posts_status,priority:1" json:"status"`
 	ReviewComment string     `gorm:"type:varchar(500);default:''" json:"review_comment"`
 	ReviewedBy    *int64     `json:"reviewed_by"`
 	ReviewedAt    *time.Time `json:"reviewed_at"`

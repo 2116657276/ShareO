@@ -74,3 +74,26 @@ func TestRateLimit_HandlerNonNil(t *testing.T) {
 	// Should not panic
 	handler(c)
 }
+
+func TestRateLimitIdentityPrefersAuthenticatedUser(t *testing.T) {
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest("GET", "/api/v1/test", nil)
+	c.Request.RemoteAddr = "192.0.2.10:1234"
+	c.Set("user_id", int64(42))
+
+	if got := rateLimitIdentity(c); got != "user:42" {
+		t.Fatalf("rateLimitIdentity() = %q, want user:42", got)
+	}
+}
+
+func TestRateLimitIdentityUsesPeerIPForAnonymousRequest(t *testing.T) {
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest("GET", "/api/v1/test", nil)
+	c.Request.RemoteAddr = "192.0.2.10:1234"
+
+	if got := rateLimitIdentity(c); got != "ip:192.0.2.10" {
+		t.Fatalf("rateLimitIdentity() = %q, want ip:192.0.2.10", got)
+	}
+}

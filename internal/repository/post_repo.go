@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"context"
 	"errors"
 	"log/slog"
 	"sort"
@@ -8,6 +9,7 @@ import (
 	"time"
 
 	"github.com/zhoujianlin/ShareO/internal/model"
+	"github.com/zhoujianlin/ShareO/internal/pkg/upload"
 	"gorm.io/gorm"
 )
 
@@ -111,6 +113,30 @@ func (r *PostRepo) Create(post *model.Post) error {
 	return DB.Create(post).Error
 }
 
+func (r *PostRepo) CreateWithUploadedArtifacts(ctx context.Context, userID int64, post *model.Post) error {
+	if post == nil || post.UserID != userID || len(post.Images) == 0 {
+		return ErrUploadArtifactInvalid
+	}
+	objectKeys := make([]string, 0, len(post.Images))
+	for _, image := range post.Images {
+		objectKey, err := upload.ObjectKeyFromImageURL(image.ImageURL)
+		if err != nil {
+			return ErrUploadArtifactInvalid
+		}
+		objectKeys = append(objectKeys, objectKey)
+	}
+	db := DB
+	if db == nil {
+		return errors.New("database not initialized")
+	}
+	return db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(post).Error; err != nil {
+			return err
+		}
+		return NewUploadArtifactRepo(tx).BindForPost(ctx, tx, userID, post.ID, objectKeys)
+	})
+}
+
 func (r *PostRepo) FindByID(id int64) (*model.Post, error) {
 	var post model.Post
 	err := DB.Preload("User").Preload("Images", func(db *gorm.DB) *gorm.DB {
@@ -154,6 +180,30 @@ func (r *PostRepo) FindByIDLight(id int64) (*model.Post, error) {
 		return nil, nil
 	}
 	return &post, err
+}
+
+// IsApprovedImage reports whether the image URL or bound upload artifact is
+// attached to a published, non-deleted post. Storage keys are never treated as
+// public on their own; the database relationship is the visibility boundary.
+func (r *PostRepo) IsApprovedImage(ctx context.Context, objectName string) (bool, error) {
+	if DB == nil {
+		return false, errors.New("database not initialized")
+	}
+	var allowed bool
+	err := DB.WithContext(ctx).Raw(`
+		SELECT EXISTS (
+			SELECT 1 FROM post_images pi
+			JOIN posts p ON p.id = pi.post_id
+			WHERE pi.image_url = ? AND p.status = ? AND p.is_deleted = 0
+		) OR EXISTS (
+			SELECT 1 FROM upload_artifacts ua
+			JOIN posts p ON p.id = ua.post_id
+			WHERE ua.object_key = ? AND p.status = ? AND p.is_deleted = 0
+		)`,
+		"/api/v1/images/"+objectName, model.StatusApproved,
+		objectName, model.StatusApproved,
+	).Scan(&allowed).Error
+	return allowed, err
 }
 
 // GetIndexPayload returns only approved, non-deleted post data required by the
@@ -217,8 +267,14 @@ func (r *PostRepo) Update(post *model.Post) error {
 }
 
 func (r *PostRepo) SoftDelete(id, userID int64) error {
-	return DB.Model(&model.Post{}).Where("id = ? AND user_id = ?", id, userID).
-		Update("is_deleted", 1).Error
+	return DB.Transaction(func(tx *gorm.DB) error {
+		result := tx.Model(&model.Post{}).Where("id = ? AND user_id = ?", id, userID).
+			Update("is_deleted", 1)
+		if result.Error != nil || result.RowsAffected == 0 {
+			return result.Error
+		}
+		return NewUploadArtifactRepo(tx).ReleaseForPost(context.Background(), tx, id)
+	})
 }
 
 // FeedQuery holds all possible feed query parameters
@@ -299,11 +355,27 @@ func (r *PostRepo) UpdateStatus(id int64, status, comment string, reviewerID int
 	if comment != "" {
 		updates["review_comment"] = comment
 	}
-	return DB.Model(&model.Post{}).Where("id = ?", id).Updates(updates).Error
+	result := DB.Model(&model.Post{}).Where("id = ?", id).Updates(updates)
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return gorm.ErrRecordNotFound
+	}
+	return nil
 }
 
 func (r *PostRepo) AdminSoftDelete(id int64) error {
-	return DB.Model(&model.Post{}).Where("id = ?", id).Update("is_deleted", 1).Error
+	return DB.Transaction(func(tx *gorm.DB) error {
+		result := tx.Model(&model.Post{}).Where("id = ?", id).Update("is_deleted", 1)
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected == 0 {
+			return gorm.ErrRecordNotFound
+		}
+		return NewUploadArtifactRepo(tx).ReleaseForPost(context.Background(), tx, id)
+	})
 }
 
 func (r *PostRepo) CountByStatus(status string) int64 {

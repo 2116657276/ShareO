@@ -6,11 +6,13 @@ import (
 	"html/template"
 	"log"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -27,6 +29,42 @@ var (
 	mediumToThumbRE = regexp.MustCompile(`/posts/medium/`)
 	anyToMediumRE   = regexp.MustCompile(`/posts/(original|thumb)/`)
 )
+
+type uploadArtifactCleaner interface {
+	DeleteExpiredUnbound(context.Context, time.Time, int) ([]string, error)
+}
+
+type uploadObjectRemover func(context.Context, []string) error
+
+func cleanupExpiredUploadArtifacts(ctx context.Context, cleaner uploadArtifactCleaner, remove uploadObjectRemover) error {
+	keys, err := cleaner.DeleteExpiredUnbound(ctx, time.Now(), 200)
+	if err != nil {
+		return err
+	}
+	if len(keys) == 0 {
+		return nil
+	}
+	return remove(ctx, keys)
+}
+
+func runUploadArtifactCleanup(ctx context.Context, cleaner uploadArtifactCleaner) {
+	cleanup := func() {
+		if err := cleanupExpiredUploadArtifacts(ctx, cleaner, upload.RemoveObjects); err != nil {
+			slog.Warn("upload artifact cleanup failed", "err", err)
+		}
+	}
+	cleanup()
+	ticker := time.NewTicker(30 * time.Minute)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			cleanup()
+		}
+	}
+}
 
 func main() {
 	// Load config
@@ -65,6 +103,9 @@ func main() {
 	if err := initWithRetry("MinIO", func() error { return upload.Init(cfg.MinIO) }); err != nil {
 		log.Fatalf("Failed to init MinIO: %v", err)
 	}
+	cleanupCtx, stopCleanup := context.WithCancel(context.Background())
+	defer stopCleanup()
+	go runUploadArtifactCleanup(cleanupCtx, repository.NewUploadArtifactRepo())
 
 	// Init JWT
 	jwt.Init(cfg.JWT.Secret, cfg.JWT.ExpireHours)
@@ -119,7 +160,7 @@ func main() {
 		c.JSON(http.StatusOK, gin.H{"status": "ok", "service": "ShareO"})
 	})
 
-	addr := fmt.Sprintf(":%d", cfg.Server.Port)
+	addr := net.JoinHostPort(cfg.Server.Host, strconv.Itoa(cfg.Server.Port))
 	slog.Info("ShareO server starting", "addr", addr, "mode", cfg.Server.Mode)
 	slog.Info("MinIO bucket configured", "bucket", cfg.MinIO.Bucket)
 
@@ -128,16 +169,13 @@ func main() {
 	fmt.Println("========================================")
 	fmt.Println("  ShareO - 拍摄与作品管理系统")
 	fmt.Println("========================================")
-	fmt.Printf("  Web:     http://localhost%s\n", addr)
+	fmt.Printf("  Web:     http://%s\n", addr)
 	fmt.Println("  管理员账号：由本机初始化配置提供")
 	fmt.Printf("  用户:    注册后登录\n")
 	fmt.Println("========================================")
 
 	// Graceful shutdown with signal handling
-	srv := &http.Server{
-		Addr:    addr,
-		Handler: protectedHandler,
-	}
+	srv := newHTTPServer(addr, protectedHandler)
 
 	go func() {
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
@@ -156,6 +194,18 @@ func main() {
 		log.Fatalf("Server forced to shutdown: %v", err)
 	}
 	slog.Info("server exited")
+}
+
+func newHTTPServer(addr string, handler http.Handler) *http.Server {
+	return &http.Server{
+		Addr:              addr,
+		Handler:           handler,
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       2 * time.Minute,
+		WriteTimeout:      60 * time.Second,
+		IdleTimeout:       2 * time.Minute,
+		MaxHeaderBytes:    1 << 20,
+	}
 }
 
 func initWithRetry(name string, initialize func() error) error {

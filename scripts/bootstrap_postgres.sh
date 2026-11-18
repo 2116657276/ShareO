@@ -92,7 +92,9 @@ SQL
 
 "${admin_env[@]}" psql "${admin_args[@]}" --dbname "$PG_DATABASE" --set=ON_ERROR_STOP=1 \
     -f "$PROJECT_DIR/migrations/postgres/001_schema.sql" \
-    -f "$PROJECT_DIR/migrations/postgres/002_vector.sql"
+    -f "$PROJECT_DIR/migrations/postgres/002_vector.sql" \
+    -f "$PROJECT_DIR/migrations/postgres/003_session_version.sql" \
+    -f "$PROJECT_DIR/migrations/postgres/004_upload_artifacts.sql"
 
 "${admin_env[@]}" psql "${admin_args[@]}" --dbname "$PG_DATABASE" --quiet --set=ON_ERROR_STOP=1 \
     -v db_name="$PG_DATABASE" -v app_role="$APP_ROLE" -v ai_role="$AI_ROLE" <<'SQL' >/dev/null

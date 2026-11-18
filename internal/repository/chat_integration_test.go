@@ -46,7 +46,7 @@ func TestLightweightBaselineSchema(t *testing.T) {
 	expected := []string{
 		"bot_replies", "bot_task_outbox", "comment_likes", "comments", "conversation_members",
 		"conversations", "favorites", "follows", "likes", "messages", "notifications", "post_images",
-		"posts", "system_logs", "users",
+		"posts", "system_logs", "upload_artifacts", "users",
 	}
 	var tables []string
 	if err := db.Raw(`SELECT table_name FROM information_schema.tables

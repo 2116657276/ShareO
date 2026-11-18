@@ -179,6 +179,9 @@ func (s *FeedService) InvalidateCache() {
 }
 
 func (s *FeedService) getCachedFeed() ([]model.Post, int64, bool) {
+	if repository.RDB == nil {
+		return nil, 0, false
+	}
 	ctx := context.Background()
 	key := "feed:latest:page1"
 	bytes, err := repository.RDB.Get(ctx, key).Bytes()

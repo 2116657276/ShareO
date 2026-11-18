@@ -83,7 +83,7 @@ services:
       SHAREO_JWT_SECRET: ${SHAREO_JWT_SECRET:-shareo-compose-development-secret}
       SHAREO_MINIO_ACCESS_KEY: ${SHAREO_MINIO_ACCESS_KEY:-minioadmin}
       SHAREO_MINIO_SECRET_KEY: ${SHAREO_MINIO_SECRET_KEY:-minioadmin}
-      SHAREO_INTERNAL_TOKEN: ${SHAREO_INTERNAL_TOKEN:-shareo-dev-internal}
+      SHAREO_INTERNAL_TOKEN: ${SHAREO_INTERNAL_TOKEN:?SHAREO_INTERNAL_TOKEN must be set to a random value}
       SHAREO_AI_BASE_URL: http://ai-service:8000
     ports:
       - "${SHAREO_APP_PORT:-8080}:8080"
@@ -114,7 +114,7 @@ services:
       SHAREO_AI_REDIS_URL: redis://redis:6379/0
       SHAREO_AI_QDRANT_URL: http://qdrant:6333
       SHAREO_AI_GO_BASE_URL: http://app:8080
-      SHAREO_AI_INTERNAL_TOKEN: ${SHAREO_INTERNAL_TOKEN:-shareo-dev-internal}
+      SHAREO_AI_INTERNAL_TOKEN: ${SHAREO_INTERNAL_TOKEN:?SHAREO_INTERNAL_TOKEN must be set to a random value}
       SHAREO_AI_MODEL_CACHE_DIR: /models
       SHAREO_AI_EMBEDDING_REVISION: ${SHAREO_AI_EMBEDDING_REVISION:-36e679e65c2a2fead755ae21162091293ad37834}
       HF_ENDPOINT: ${SHAREO_AI_HF_ENDPOINT:-https://huggingface.co}

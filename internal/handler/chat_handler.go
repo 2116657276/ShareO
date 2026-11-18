@@ -96,7 +96,7 @@ func (h *ChatHandler) ListConversations(c *gin.Context) {
 		handleChatError(c, err)
 		return
 	}
-	response.Success(c, conversations)
+	response.Success(c, service.ToPublicConversations(conversations))
 }
 
 func (h *ChatHandler) CreateConversation(c *gin.Context) {
@@ -113,7 +113,7 @@ func (h *ChatHandler) CreateConversation(c *gin.Context) {
 		handleChatError(c, err)
 		return
 	}
-	response.Success(c, conversation)
+	response.Success(c, service.ToPublicConversationModel(conversation))
 }
 
 func (h *ChatHandler) GetMessages(c *gin.Context) {
@@ -144,7 +144,7 @@ func (h *ChatHandler) GetMessages(c *gin.Context) {
 		handleChatError(c, err)
 		return
 	}
-	response.Success(c, gin.H{"messages": messages, "has_more": afterID == 0 && len(messages) >= limit})
+	response.Success(c, gin.H{"messages": service.ToPublicMessages(messages), "has_more": afterID == 0 && len(messages) >= limit})
 }
 
 func (h *ChatHandler) SendMessage(c *gin.Context) {
@@ -163,7 +163,7 @@ func (h *ChatHandler) SendMessage(c *gin.Context) {
 		handleChatError(c, err)
 		return
 	}
-	response.Success(c, message)
+	response.Success(c, service.ToPublicMessage(message))
 }
 
 func (h *ChatHandler) MarkRead(c *gin.Context) {
@@ -209,7 +209,7 @@ func (h *ChatHandler) SearchUsers(c *gin.Context) {
 		handleChatError(c, err)
 		return
 	}
-	response.Success(c, users)
+	response.Success(c, service.ToPublicUsers(users))
 }
 
 func parsePositiveQuery(c *gin.Context, name string) (int64, bool) {
@@ -231,6 +231,8 @@ func handleChatError(c *gin.Context, err error) {
 		message = detail
 	}
 	switch {
+	case errors.Is(err, service.ErrChatCapacity):
+		response.Error(c, http.StatusTooManyRequests, response.ErrCodeRateLimit, message)
 	case errors.Is(err, service.ErrChatInvalid):
 		response.BadRequest(c, message)
 	case errors.Is(err, service.ErrChatForbidden):

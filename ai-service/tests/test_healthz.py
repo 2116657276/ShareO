@@ -71,6 +71,16 @@ async def test_search_readyz_reports_warming(monkeypatch):
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("unsafe", ["shareo-local-internal", "replace-with-a-random-value"])
+async def test_internal_endpoints_reject_known_placeholder_tokens(monkeypatch, unsafe):
+    monkeypatch.setattr(main.settings, "internal_token", unsafe)
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        resp = await client.get("/readyz/image-search", headers={"X-Internal-Token": unsafe})
+    assert resp.status_code == 503
+
+
+@pytest.mark.asyncio
 async def test_search_readyz_reports_model_and_collection(monkeypatch):
     monkeypatch.setattr(main.settings, "internal_token", "secret")
     monkeypatch.setattr(main.embedder, "_model", object())
@@ -133,7 +143,12 @@ async def test_rag_readyz_requires_llm_configuration(monkeypatch):
     monkeypatch.setattr(
         main.app.state,
         "worker_runtime",
-        SimpleNamespace(status=lambda: {main.STREAM_INDEX_POST: "running"}),
+        SimpleNamespace(
+            status=lambda: {
+                main.STREAM_INDEX_POST: "running",
+                main.STREAM_BOT_TASKS: "running",
+            }
+        ),
         raising=False,
     )
     transport = ASGITransport(app=app)
@@ -153,7 +168,12 @@ async def test_rag_readyz_reports_model_collection_and_provider(monkeypatch):
     monkeypatch.setattr(
         main.app.state,
         "worker_runtime",
-        SimpleNamespace(status=lambda: {main.STREAM_INDEX_POST: "running"}),
+        SimpleNamespace(
+            status=lambda: {
+                main.STREAM_INDEX_POST: "running",
+                main.STREAM_BOT_TASKS: "running",
+            }
+        ),
         raising=False,
     )
     store = AsyncMock()
@@ -164,6 +184,33 @@ async def test_rag_readyz_reports_model_collection_and_provider(monkeypatch):
         resp = await client.get("/readyz/rag", headers={"X-Internal-Token": "secret"})
     assert resp.status_code == 200
     assert resp.json()["vector_store"]["collection"] == "post_chunks"
+    assert resp.json()["bot_consumer"] == "running"
+
+
+@pytest.mark.asyncio
+async def test_rag_readyz_degrades_when_bot_consumer_stopped(monkeypatch):
+    monkeypatch.setattr(main.settings, "internal_token", "secret")
+    monkeypatch.setattr(main.text_embedder, "_model", object())
+    monkeypatch.setattr(main.text_embedder, "_state", "ready")
+    monkeypatch.setattr(main.llm_provider, "base_url", "http://llm/v1")
+    monkeypatch.setattr(main.llm_provider, "api_key", "secret")
+    monkeypatch.setattr(
+        main.app.state,
+        "worker_runtime",
+        SimpleNamespace(
+            status=lambda: {
+                main.STREAM_INDEX_POST: "running",
+                main.STREAM_BOT_TASKS: "stopped",
+            }
+        ),
+        raising=False,
+    )
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        resp = await client.get("/readyz/rag", headers={"X-Internal-Token": "secret"})
+    assert resp.status_code == 503
+    assert resp.json()["status"] == "degraded"
+    assert resp.json()["bot_consumer"] == "stopped"
 
 
 @pytest.mark.asyncio
@@ -215,7 +262,12 @@ async def test_agent_readyz_reports_versions_and_requires_provider(monkeypatch):
     monkeypatch.setattr(
         main.app.state,
         "worker_runtime",
-        SimpleNamespace(status=lambda: {main.STREAM_INDEX_POST: "running"}),
+        SimpleNamespace(
+            status=lambda: {
+                main.STREAM_INDEX_POST: "running",
+                main.STREAM_BOT_TASKS: "running",
+            }
+        ),
         raising=False,
     )
     store = AsyncMock()
@@ -226,10 +278,42 @@ async def test_agent_readyz_reports_versions_and_requires_provider(monkeypatch):
         resp = await client.get("/readyz/agent", headers={"X-Internal-Token": "secret"})
     assert resp.status_code == 200
     assert resp.json()["status"] == "ready"
+    assert resp.json()["rag_consumer"] == "running"
+    assert resp.json()["bot_consumer"] == "running"
     assert resp.json()["trace_version"] == main.settings.agent_trace_version
     assert resp.json()["image_model"]["model"] == main.embedder.model_name
     assert len(resp.json()["source_fingerprint"]) == 64
     assert resp.json()["process_started_at"].endswith("+00:00")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("rag_state", "bot_state"),
+    [("stopped", "running"), ("running", "stopped")],
+)
+async def test_agent_readyz_degrades_when_consumer_stopped(monkeypatch, rag_state, bot_state):
+    monkeypatch.setattr(main.settings, "internal_token", "secret")
+    monkeypatch.setattr(main.settings, "agent_enabled", True)
+    monkeypatch.setattr(main.llm_provider, "base_url", "http://llm/v1")
+    monkeypatch.setattr(main.llm_provider, "api_key", "secret")
+    monkeypatch.setattr(
+        main.app.state,
+        "worker_runtime",
+        SimpleNamespace(
+            status=lambda: {
+                main.STREAM_INDEX_POST: rag_state,
+                main.STREAM_BOT_TASKS: bot_state,
+            }
+        ),
+        raising=False,
+    )
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        resp = await client.get("/readyz/agent", headers={"X-Internal-Token": "secret"})
+    assert resp.status_code == 503
+    assert resp.json()["status"] == "degraded"
+    assert resp.json()["rag_consumer"] == rag_state
+    assert resp.json()["bot_consumer"] == bot_state
 
 
 @pytest.mark.asyncio

@@ -3,6 +3,7 @@ package middleware
 import (
 	"log/slog"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -25,8 +26,7 @@ var setExpireScript = redis.NewScript(`
 // window: fixed window (INCR + EXPIRE)
 func RateLimit(maxRequests int, window time.Duration) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		ip := c.ClientIP()
-		key := "ratelimit:" + ip + ":" + c.Request.URL.Path
+		key := "ratelimit:" + rateLimitIdentity(c) + ":" + c.Request.URL.Path
 
 		// Fail-open when Redis is not initialized or unavailable
 		if repository.RDB == nil {
@@ -55,4 +55,11 @@ func RateLimit(maxRequests int, window time.Duration) gin.HandlerFunc {
 
 		c.Next()
 	}
+}
+
+func rateLimitIdentity(c *gin.Context) string {
+	if userID := c.GetInt64("user_id"); userID > 0 {
+		return "user:" + strconv.FormatInt(userID, 10)
+	}
+	return "ip:" + c.ClientIP()
 }

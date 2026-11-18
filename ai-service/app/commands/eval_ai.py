@@ -592,13 +592,27 @@ def _read_local_env(name: str, default: str = "") -> str:
     return default
 
 
+def _runtime_internal_token() -> str:
+    for candidate in (
+        os.environ.get("SHAREO_INTERNAL_TOKEN", "").strip(),
+        os.environ.get("SHAREO_AI_INTERNAL_TOKEN", "").strip(),
+        _read_local_env("SHAREO_INTERNAL_TOKEN").strip(),
+        _read_local_env("SHAREO_AI_INTERNAL_TOKEN").strip(),
+    ):
+        if candidate and candidate not in {"shareo-local-internal", "replace-with-a-random-value"}:
+            return candidate
+    state_dir = Path(os.environ.get("SHAREO_LOCAL_STATE_DIR") or "/tmp/shareo-local")
+    try:
+        token = (state_dir / "internal-token").read_text(encoding="utf-8").strip()
+    except OSError:
+        return ""
+    if token in {"shareo-local-internal", "replace-with-a-random-value"}:
+        return ""
+    return token
+
+
 def _runtime_metadata(ai_base_url: str) -> dict[str, Any]:
-    fallback = (
-        "shareo-local-internal"
-        if ai_base_url.startswith(("http://127.0.0.1:", "http://localhost:"))
-        else "shareo-dev-internal"
-    )
-    token = _read_local_env("SHAREO_INTERNAL_TOKEN", fallback)
+    token = _runtime_internal_token()
     metadata: dict[str, Any] = {"status": "unavailable", "ai_base_url": ai_base_url}
     try:
         with httpx.Client(base_url=ai_base_url, timeout=10.0, trust_env=False) as client:

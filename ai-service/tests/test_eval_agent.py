@@ -263,3 +263,21 @@ def test_scoring_template_can_render_verified_scores(tmp_path):
         scores=[4],
     )
     assert "| 1.0 | 4 |" in path.read_text(encoding="utf-8")
+
+
+def test_runtime_internal_token_env_and_state_dir_fallback(monkeypatch, tmp_path):
+    from app.commands import eval_agent
+
+    monkeypatch.setattr(
+        eval_agent, "_read_local_env", lambda name, default="": "shareo-local-internal"
+    )
+    monkeypatch.setenv("SHAREO_INTERNAL_TOKEN", "env-primary-token")
+    assert eval_agent._runtime_internal_token() == "env-primary-token"
+
+    monkeypatch.delenv("SHAREO_INTERNAL_TOKEN", raising=False)
+    monkeypatch.delenv("SHAREO_AI_INTERNAL_TOKEN", raising=False)
+    state_dir = tmp_path / "state"
+    state_dir.mkdir()
+    (state_dir / "internal-token").write_text("replace-with-a-random-value\n", encoding="utf-8")
+    monkeypatch.setenv("SHAREO_LOCAL_STATE_DIR", str(state_dir))
+    assert eval_agent._runtime_internal_token() == ""

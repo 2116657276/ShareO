@@ -53,7 +53,7 @@ func (h *SocialHandler) getLikesByUser(c *gin.Context, userID int64) {
 		return
 	}
 	response.Success(c, response.PageResponse{
-		List: posts, Total: total, Page: page, PageSize: pageSize,
+		List: service.ToPublicPosts(posts), Total: total, Page: page, PageSize: pageSize,
 	})
 }
 
@@ -84,7 +84,7 @@ func (h *SocialHandler) GetFollowing(c *gin.Context) {
 		response.InternalError(c, "关注列表暂时无法加载，请稍后重试")
 		return
 	}
-	response.Success(c, gin.H{"list": users, "total": total})
+	response.Success(c, gin.H{"list": service.ToPublicUsers(users), "total": total})
 }
 
 func (h *SocialHandler) GetFollowers(c *gin.Context) {
@@ -96,7 +96,7 @@ func (h *SocialHandler) GetFollowers(c *gin.Context) {
 		response.InternalError(c, "粉丝列表暂时无法加载，请稍后重试")
 		return
 	}
-	response.Success(c, gin.H{"list": users, "total": total})
+	response.Success(c, gin.H{"list": service.ToPublicUsers(users), "total": total})
 }
 
 // --- Comment ---
@@ -125,7 +125,7 @@ func (h *SocialHandler) CreateComment(c *gin.Context) {
 		}
 		return
 	}
-	response.Success(c, comment)
+	response.Success(c, service.ToPublicComment(comment))
 }
 func (h *SocialHandler) GetComments(c *gin.Context) {
 	postID := getInt64Param(c, "id")
@@ -136,7 +136,7 @@ func (h *SocialHandler) GetComments(c *gin.Context) {
 		response.InternalError(c, "评论暂时无法加载，请稍后重试")
 		return
 	}
-	response.Success(c, gin.H{"list": comments, "total": total})
+	response.Success(c, gin.H{"list": service.ToPublicComments(comments), "total": total})
 }
 
 func (h *SocialHandler) ToggleCommentLike(c *gin.Context) {

@@ -85,18 +85,31 @@ function notifications() {
         },
 
         async markAllRead() {
-            await fetch('/api/v1/notifications/read-all', { method: 'PUT' });
-            this.items.forEach(n => n.is_read = 1);
-            this.unreadCount = 0;
-            window.dispatchEvent(new Event('shareo:unread-refresh'));
+            try {
+                const response = await fetch('/api/v1/notifications/read-all', { method: 'PUT' });
+                const body = await response.json().catch(() => ({}));
+                if (!response.ok || body.code !== 0) throw new Error(body.message || '通知状态更新失败');
+                this.items.forEach(n => n.is_read = 1);
+                this.unreadCount = 0;
+                window.dispatchEvent(new Event('shareo:unread-refresh'));
+            } catch (error) {
+                this.errorMessage = error.message || '通知状态更新失败，请稍后重试';
+            }
         },
 
         async openNotif(n) {
             if (n.is_read === 0) {
-                await fetch('/api/v1/notifications/' + n.id + '/read', { method: 'PUT' });
-                n.is_read = 1;
-                this.unreadCount = Math.max(0, this.unreadCount - 1);
-                window.dispatchEvent(new Event('shareo:unread-refresh'));
+                try {
+                    const response = await fetch('/api/v1/notifications/' + n.id + '/read', { method: 'PUT' });
+                    const body = await response.json().catch(() => ({}));
+                    if (!response.ok || body.code !== 0) throw new Error(body.message || '通知状态更新失败');
+                    n.is_read = 1;
+                    this.unreadCount = Math.max(0, this.unreadCount - 1);
+                    window.dispatchEvent(new Event('shareo:unread-refresh'));
+                } catch (error) {
+                    this.errorMessage = error.message || '通知状态更新失败，请稍后重试';
+                    return;
+                }
             }
 			if (n.target_id > 0 && (n.type === 'like' || n.type === 'comment')) {
                 window.location.href = '/post/' + n.target_id;

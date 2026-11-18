@@ -14,6 +14,7 @@ import (
 	"github.com/zhoujianlin/ShareO/internal/model"
 	"github.com/zhoujianlin/ShareO/internal/pkg/response"
 	"github.com/zhoujianlin/ShareO/internal/repository"
+	"github.com/zhoujianlin/ShareO/internal/service"
 )
 
 type imageSearchAIResult struct {
@@ -81,6 +82,12 @@ func imageSearchScoreThreshold() float64 {
 }
 
 func (h *ImageSearchHandler) Search(c *gin.Context) {
+	release, ok := service.TryAcquireAISearchSlot()
+	if !ok {
+		response.Error(c, http.StatusTooManyRequests, response.ErrCodeRateLimit, "搜索请求较多，请稍后再试")
+		return
+	}
+	defer release()
 	started := time.Now()
 	query := strings.TrimSpace(c.Query("q"))
 	if query == "" || utf8.RuneCountInString(query) > 200 {
@@ -168,7 +175,7 @@ func (h *ImageSearchHandler) Search(c *gin.Context) {
 			"image_id": item.ImageID, "post_id": item.PostID,
 			"image_url": "/api/v1/images/" + strings.TrimPrefix(item.ObjectKey, "/"),
 			"score":     item.Score,
-			"post":      post,
+			"post":      service.ToPublicPost(&post),
 		})
 	}
 	slog.Info("semantic image search complete", "query_length", utf8.RuneCountInString(query), "results", len(results), "duration_ms", time.Since(started).Milliseconds())

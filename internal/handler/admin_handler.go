@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"errors"
 	"log/slog"
 	"net/http"
 
@@ -14,6 +15,19 @@ import (
 type AdminHandler struct {
 	svc          *service.AdminService
 	disconnector interface{ DisconnectUser(int64) }
+}
+
+func respondAdminMutationError(c *gin.Context, operation string, err error) {
+	if service.IsAdminClientError(err) {
+		if errors.Is(err, service.ErrPostNotFound) || errors.Is(err, service.ErrAdminUserNotFound) {
+			response.NotFound(c, err.Error())
+			return
+		}
+		response.BadRequest(c, err.Error())
+		return
+	}
+	slog.Warn("admin mutation failed", "operation", operation, "err", err)
+	response.InternalError(c, "管理操作暂时无法完成，请稍后重试")
 }
 
 func NewAdminHandler(disconnector ...interface{ DisconnectUser(int64) }) *AdminHandler {
@@ -72,7 +86,7 @@ func (h *AdminHandler) DeletePost(c *gin.Context) {
 	postID := getInt64Param(c, "id")
 	adminID := c.GetInt64("user_id")
 	if err := h.svc.DeletePost(postID, adminID); err != nil {
-		response.BadRequest(c, err.Error())
+		respondAdminMutationError(c, "delete_post", err)
 		return
 	}
 	response.Success(c, nil)
@@ -118,7 +132,7 @@ func (h *AdminHandler) ApprovePost(c *gin.Context) {
 	postID := getInt64Param(c, "id")
 	// Approve without overwriting review_comment (preserve any previous rejection reason)
 	if err := h.svc.ReviewPost(postID, model.StatusApproved, "", reviewerID); err != nil {
-		response.BadRequest(c, err.Error())
+		respondAdminMutationError(c, "approve_post", err)
 		return
 	}
 	response.Success(c, nil)
@@ -135,7 +149,7 @@ func (h *AdminHandler) RejectPost(c *gin.Context) {
 		return
 	}
 	if err := h.svc.ReviewPost(postID, model.StatusRejected, req.Comment, reviewerID); err != nil {
-		response.BadRequest(c, err.Error())
+		respondAdminMutationError(c, "reject_post", err)
 		return
 	}
 	response.Success(c, nil)
@@ -168,18 +182,20 @@ func (h *AdminHandler) UpdateUserStatus(c *gin.Context) {
 		Status int8 `json:"status"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.BadRequest(c, err.Error())
+		response.BadRequest(c, "请求参数格式错误")
 		return
 	}
 	if err := h.svc.UpdateUserStatus(adminID, userID, req.Status); err != nil {
-		response.BadRequest(c, err.Error())
+		respondAdminMutationError(c, "update_user_status", err)
 		return
 	}
-	if req.Status == model.UserStatusBanned && h.disconnector != nil {
+	if req.Status == model.UserStatusBanned {
 		if err := repository.DeleteLoginToken(c.Request.Context(), userID); err != nil {
 			slog.Warn("failed to revoke banned user's login cache", "user_id", userID, "err", err)
 		}
-		h.disconnector.DisconnectUser(userID)
+		if h.disconnector != nil {
+			h.disconnector.DisconnectUser(userID)
+		}
 	}
 	response.Success(c, nil)
 }

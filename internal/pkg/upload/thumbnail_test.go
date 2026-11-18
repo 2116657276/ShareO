@@ -125,3 +125,58 @@ func TestThumbSizeConstants(t *testing.T) {
 		t.Errorf("MediumSize = %d, want 1200", MediumSize)
 	}
 }
+
+func TestValidateImageConfigBoundsPixelBudget(t *testing.T) {
+	if err := validateImageConfig(image.Config{Width: 6000, Height: 4000}); err != nil {
+		t.Fatalf("expected a common 24MP image to pass: %v", err)
+	}
+	if err := validateImageConfig(image.Config{Width: 5000, Height: 5000}); err == nil {
+		t.Fatal("expected images over the pixel budget to be rejected")
+	}
+	if err := validateImageConfig(image.Config{Width: MaxImageDimension + 1, Height: 1}); err == nil {
+		t.Fatal("expected images over the dimension limit to be rejected")
+	}
+}
+
+func TestObjectKeyFromImageURLAndBatchID(t *testing.T) {
+	url := "/api/v1/images/posts/medium/2026/08/12/550e8400-e29b-41d4-a716-446655440000.jpg"
+	key, err := ObjectKeyFromImageURL(url)
+	if err != nil {
+		t.Fatalf("ObjectKeyFromImageURL error: %v", err)
+	}
+	if key != "posts/medium/2026/08/12/550e8400-e29b-41d4-a716-446655440000.jpg" {
+		t.Fatalf("object key = %q", key)
+	}
+	if got := BatchIDFromObjectKey(key); got != "550e8400-e29b-41d4-a716-446655440000" {
+		t.Fatalf("batch ID = %q", got)
+	}
+}
+
+func TestObjectKeyFromImageURLRejectsExternalOrInvalidPaths(t *testing.T) {
+	for _, value := range []string{
+		"https://example.com/api/v1/images/posts/medium/file.jpg",
+		"/api/v1/images/avatars/file.jpg",
+		"/api/v1/images/posts/../secret.jpg",
+		"/api/v1/images/posts/medium/file.jpg?x=1",
+	} {
+		if _, err := ObjectKeyFromImageURL(value); err == nil {
+			t.Fatalf("ObjectKeyFromImageURL(%q) unexpectedly succeeded", value)
+		}
+	}
+}
+
+func TestExtensionForContentType(t *testing.T) {
+	cases := map[string]string{
+		"image/jpeg": ".jpg",
+		"image/png":  ".png",
+		"image/webp": ".webp",
+		"image/gif":  ".gif",
+		"image/tiff": ".jpg",
+		"":           ".jpg",
+	}
+	for contentType, want := range cases {
+		if got := extensionForContentType(contentType); got != want {
+			t.Fatalf("extensionForContentType(%q) = %q, want %q", contentType, got, want)
+		}
+	}
+}

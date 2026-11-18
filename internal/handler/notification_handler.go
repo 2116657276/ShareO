@@ -31,7 +31,7 @@ func (h *NotificationHandler) List(c *gin.Context) {
 		return
 	}
 	response.Success(c, response.PageResponse{
-		List: list, Total: total, Page: page, PageSize: pageSize,
+		List: service.ToPublicNotifications(list), Total: total, Page: page, PageSize: pageSize,
 	})
 }
 

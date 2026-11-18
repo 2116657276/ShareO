@@ -128,6 +128,19 @@ def read_env_value(name: str, default: str = "") -> str:
     return default
 
 
+def runtime_internal_token(state_dir: Path | None = None) -> str:
+    token = read_env_value("SHAREO_INTERNAL_TOKEN")
+    if token and token not in {"shareo-local-internal", "replace-with-a-random-value"}:
+        return token
+    resolved_state_dir = state_dir or Path(
+        read_env_value("SHAREO_LOCAL_STATE_DIR", str(LOCAL_STATE_DIR))
+    )
+    try:
+        return (resolved_state_dir / "internal-token").read_text(encoding="utf-8").strip()
+    except OSError:
+        return ""
+
+
 def command_output(
     args: list[str],
     *,
@@ -213,7 +226,7 @@ def readiness_snapshot() -> dict[str, Any]:
     ai_port = read_env_value("SHAREO_AI_PORT", "8000")
     app_url = f"http://127.0.0.1:{app_port}"
     ai_url = f"http://127.0.0.1:{ai_port}"
-    token = read_env_value("SHAREO_INTERNAL_TOKEN", "shareo-local-internal")
+    token = runtime_internal_token()
     endpoints = {
         "go_healthz": request_json(f"{app_url}/healthz"),
         "ai_healthz": request_json(f"{ai_url}/healthz"),
@@ -250,7 +263,10 @@ def runtime_snapshot(readiness: dict[str, Any]) -> dict[str, Any]:
         "uv": command_output(["uv", "--version"]),
         "platform": platform.platform(),
         "network_environment": os.environ.get("SHAREO_EVAL_NETWORK", "unspecified"),
-        "configured_keys": {key: bool(read_env_value(key)) for key in configured_keys},
+        "configured_keys": {
+            key: bool(runtime_internal_token()) if key == "SHAREO_INTERNAL_TOKEN" else bool(read_env_value(key))
+            for key in configured_keys
+        },
         "readiness": readiness,
         "dataset_hashes": dataset_snapshot(),
         "safe_env": {
@@ -320,11 +336,12 @@ def build_env(local_state: Path) -> dict[str, str]:
             no_proxy = f"{no_proxy},{host}" if no_proxy else host
     env["NO_PROXY"] = no_proxy
     env["no_proxy"] = no_proxy
-    env["SHAREO_INTERNAL_TOKEN"] = read_env_value(
-        "SHAREO_INTERNAL_TOKEN", "shareo-local-internal"
-    )
-    env["SHAREO_AI_INTERNAL_TOKEN"] = read_env_value(
-        "SHAREO_AI_INTERNAL_TOKEN", env["SHAREO_INTERNAL_TOKEN"]
+    env["SHAREO_INTERNAL_TOKEN"] = runtime_internal_token(local_state)
+    ai_token = read_env_value("SHAREO_AI_INTERNAL_TOKEN")
+    env["SHAREO_AI_INTERNAL_TOKEN"] = (
+        ai_token
+        if ai_token and ai_token not in {"shareo-local-internal", "replace-with-a-random-value"}
+        else env["SHAREO_INTERNAL_TOKEN"]
     )
     env.setdefault("GOCACHE", str(ROOT / ".cache/shareo/go-build"))
     env.setdefault("GOMODCACHE", str(ROOT / ".cache/shareo/go-mod"))

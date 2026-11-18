@@ -156,6 +156,20 @@ func TestGenerateToken_DifferentUsers(t *testing.T) {
 	}
 }
 
+func TestGenerateTokenCarriesSessionVersion(t *testing.T) {
+	token, err := GenerateToken(42, "versioned", "user", 7)
+	if err != nil {
+		t.Fatalf("GenerateToken failed: %v", err)
+	}
+	claims, err := ParseToken(token)
+	if err != nil {
+		t.Fatalf("ParseToken failed: %v", err)
+	}
+	if claims.SessionVersion != 7 {
+		t.Fatalf("session version = %d, want 7", claims.SessionVersion)
+	}
+}
+
 func TestToken_ContainsExpiry(t *testing.T) {
 	token, err := GenerateToken(1, "testuser", "user")
 	if err != nil {

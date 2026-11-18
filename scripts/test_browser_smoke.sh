@@ -46,7 +46,7 @@ mkdir -p "$PLAYWRIGHT_DAEMON_DIR"
 STARTED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 STARTED_MS="$(python3 -c 'import time; print(int(time.time() * 1000))')"
 
-SUFFIX="$(date +%s%N | tail -c 11)"
+SUFFIX="$(python3 -c 'import time; print(str(time.time_ns())[-10:])')"
 USER_A="resume-smoke-a-$SUFFIX"
 USER_B="resume-smoke-b-$SUFFIX"
 EMAIL_A="$USER_A@shareo.local"

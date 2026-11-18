@@ -19,6 +19,15 @@ type FeedHandler struct {
 
 func NewFeedHandler() *FeedHandler { return &FeedHandler{svc: service.NewFeedService()} }
 
+func normalizeFeedSort(value string) string {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "hot":
+		return "hot"
+	default:
+		return "latest"
+	}
+}
+
 func (h *FeedHandler) Search(c *gin.Context) {
 	q := strings.TrimSpace(c.Query("q"))
 	if q == "" || utf8.RuneCountInString(q) > 200 {
@@ -30,6 +39,10 @@ func (h *FeedHandler) Search(c *gin.Context) {
 
 	posts, total, err := h.svc.Search(c.Request.Context(), q, page, pageSize, currentUserID)
 	if err != nil {
+		if errors.Is(err, service.ErrAISearchBusy) {
+			response.Error(c, http.StatusTooManyRequests, response.ErrCodeRateLimit, "搜索请求较多，请稍后再试")
+			return
+		}
 		if errors.Is(err, service.ErrPostSearchUnavailable) {
 			response.Error(c, http.StatusServiceUnavailable, response.ErrCodeInternal, "搜索暂不可用")
 			return
@@ -37,13 +50,13 @@ func (h *FeedHandler) Search(c *gin.Context) {
 		response.InternalError(c, "搜索失败，请稍后重试")
 		return
 	}
-	respondPage(c, page, pageSize, posts, total)
+	respondPage(c, page, pageSize, service.ToPublicPosts(posts), total)
 }
 
 func (h *FeedHandler) GetFeed(c *gin.Context) {
 	var req service.FeedReq
 	if err := c.ShouldBindQuery(&req); err != nil {
-		response.BadRequest(c, err.Error())
+		response.BadRequest(c, "分页参数格式错误")
 		return
 	}
 	currentUserID := c.GetInt64("user_id")
@@ -60,7 +73,7 @@ func (h *FeedHandler) GetFeed(c *gin.Context) {
 	totalPages := (int(total) + pageSize - 1) / pageSize
 
 	response.Success(c, response.PageResponse{
-		List:       posts,
+		List:       service.ToPublicPosts(posts),
 		Total:      total,
 		Page:       req.Page,
 		PageSize:   pageSize,
@@ -71,7 +84,7 @@ func (h *FeedHandler) GetFeed(c *gin.Context) {
 func (h *FeedHandler) GetFollowingFeed(c *gin.Context) {
 	var req service.FeedReq
 	if err := c.ShouldBindQuery(&req); err != nil {
-		response.BadRequest(c, err.Error())
+		response.BadRequest(c, "分页参数格式错误")
 		return
 	}
 	posts, total, err := h.svc.GetFollowingFeed(req, c.GetInt64("user_id"))
@@ -88,15 +101,18 @@ func (h *FeedHandler) GetFollowingFeed(c *gin.Context) {
 		page = 1
 	}
 	response.Success(c, response.PageResponse{
-		List: posts, Total: total, Page: page, PageSize: pageSize,
+		List: service.ToPublicPosts(posts), Total: total, Page: page, PageSize: pageSize,
 		TotalPages: (int(total) + pageSize - 1) / pageSize,
 	})
 }
 
 func (h *FeedHandler) HomePage(c *gin.Context) {
 	currentUserID := c.GetInt64("user_id")
-	sortBy := c.DefaultQuery("sort", "latest")
+	sortBy := normalizeFeedSort(c.DefaultQuery("sort", "latest"))
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	if page <= 0 {
+		page = 1
+	}
 
 	req := service.FeedReq{
 		Sort:     sortBy,
@@ -118,7 +134,7 @@ func (h *FeedHandler) HomePage(c *gin.Context) {
 
 	c.HTML(http.StatusOK, "feed.html", userData(c, gin.H{
 		"title":      "ShareO - 发现美好",
-		"Posts":      posts,
+		"Posts":      service.ToPublicPosts(posts),
 		"Total":      total,
 		"Page":       page,
 		"TotalPages": totalPages,

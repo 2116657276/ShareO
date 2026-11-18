@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"context"
 	"errors"
 	"log/slog"
 	"net/http"
@@ -14,11 +15,15 @@ import (
 )
 
 var (
-	ErrMissingToken   = errors.New("missing token")
-	ErrInvalidToken   = errors.New("invalid token")
-	ErrExpiredSession = errors.New("expired session")
-	ErrReplacedToken  = errors.New("replaced token")
+	ErrMissingToken       = errors.New("missing token")
+	ErrInvalidToken       = errors.New("invalid token")
+	ErrExpiredSession     = errors.New("expired session")
+	ErrReplacedToken      = errors.New("replaced token")
+	ErrSessionUnavailable = errors.New("session store unavailable")
 )
+
+var loginTokenLookup func(context.Context, int64) (string, error) = repository.GetLoginToken
+var sessionVersionLookup func(context.Context, int64) (int64, error) = repository.NewUserRepo().GetSessionVersion
 
 // AuthenticateRequest performs the same JWT and Redis-backed session checks
 // for HTTP handlers and WebSocket handshakes.
@@ -39,15 +44,23 @@ func AuthenticateRequest(r *http.Request, refresh bool) (*jwt.Claims, string, er
 	if err != nil {
 		return nil, "", ErrInvalidToken
 	}
-	cachedToken, err := repository.GetLoginToken(r.Context(), claims.UserID)
+	cachedToken, err := loginTokenLookup(r.Context(), claims.UserID)
 	if err != nil {
 		if errors.Is(err, redis.Nil) {
 			return nil, "", ErrExpiredSession
 		}
 		slog.Warn("Redis error checking login cache", "user_id", claims.UserID, "err", err)
-		return claims, token, nil // Preserve the project's fail-open Redis policy.
+		return nil, "", ErrSessionUnavailable
 	}
 	if cachedToken != token {
+		return nil, "", ErrReplacedToken
+	}
+	currentVersion, err := sessionVersionLookup(r.Context(), claims.UserID)
+	if err != nil {
+		slog.Warn("database error checking session version", "user_id", claims.UserID, "err", err)
+		return nil, "", ErrSessionUnavailable
+	}
+	if currentVersion <= 0 || claims.SessionVersion != currentVersion {
 		return nil, "", ErrReplacedToken
 	}
 	if refresh {
@@ -67,6 +80,15 @@ func AuthRequired() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		claims, _, err := AuthenticateRequest(c.Request, true)
 		if err != nil {
+			if errors.Is(err, ErrSessionUnavailable) {
+				if isWebRequest(c) {
+					c.String(http.StatusServiceUnavailable, "登录服务暂时不可用，请稍后重试")
+				} else {
+					response.Error(c, http.StatusServiceUnavailable, response.ErrCodeInternal, "登录服务暂时不可用，请稍后重试")
+				}
+				c.Abort()
+				return
+			}
 			if isWebRequest(c) {
 				http.SetCookie(c.Writer, &http.Cookie{
 					Name: "token", Value: "", Path: "/", MaxAge: -1, HttpOnly: true,
@@ -111,29 +133,14 @@ func AdminRequired() gin.HandlerFunc {
 	}
 }
 
-// OptionalAuth tries to parse auth but doesn't block
+// OptionalAuth tries to authenticate the request via AuthenticateRequest but falls back to anonymous on failure
 func OptionalAuth() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		authHeader := c.GetHeader("Authorization")
-		if authHeader == "" {
-			token, _ := c.Cookie("token")
-			if token != "" {
-				authHeader = "Bearer " + token
-			}
-		}
-
-		if authHeader == "" {
+		claims, _, err := AuthenticateRequest(c.Request, false)
+		if err != nil {
 			c.Set("user_id", int64(0))
 			c.Set("username", "")
 			c.Set("role", "")
-			c.Next()
-			return
-		}
-
-		token := strings.TrimPrefix(authHeader, "Bearer ")
-		claims, err := jwt.ParseToken(token)
-		if err != nil {
-			c.Set("user_id", int64(0))
 			c.Next()
 			return
 		}
@@ -148,12 +155,7 @@ func OptionalAuth() gin.HandlerFunc {
 // RedirectIfAuth redirects to home if already logged in (for login/register pages)
 func RedirectIfAuth() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		token, err := c.Cookie("token")
-		if err != nil || token == "" {
-			c.Next()
-			return
-		}
-		claims, err := jwt.ParseToken(token)
+		claims, _, err := AuthenticateRequest(c.Request, false)
 		if err == nil && claims.UserID > 0 {
 			c.Redirect(http.StatusFound, "/")
 			c.Abort()

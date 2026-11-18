@@ -150,3 +150,20 @@ def test_evaluate_rag_counts_failed_and_no_answer_queries(monkeypatch):
     assert report["complete_source_coverage_rate"] == 0.6667
     assert report["citation_precision_rate"] == 0.6667
     assert report["citation_accessible_rate"] == 0.6667
+
+
+def test_runtime_internal_token_env_and_state_dir_fallback(monkeypatch, tmp_path):
+    monkeypatch.setattr(
+        eval_ai, "_read_local_env", lambda name, default="": "replace-with-a-random-value"
+    )
+    monkeypatch.setenv("SHAREO_INTERNAL_TOKEN", "shareo-local-internal")
+    monkeypatch.setenv("SHAREO_AI_INTERNAL_TOKEN", "env-ai-token")
+    assert eval_ai._runtime_internal_token() == "env-ai-token"
+
+    monkeypatch.delenv("SHAREO_INTERNAL_TOKEN", raising=False)
+    monkeypatch.delenv("SHAREO_AI_INTERNAL_TOKEN", raising=False)
+    state_dir = tmp_path / "state"
+    state_dir.mkdir()
+    (state_dir / "internal-token").write_text("file-token\n", encoding="utf-8")
+    monkeypatch.setenv("SHAREO_LOCAL_STATE_DIR", str(state_dir))
+    assert eval_ai._runtime_internal_token() == "file-token"

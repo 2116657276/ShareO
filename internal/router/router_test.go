@@ -87,3 +87,21 @@ func TestFollowingFeedRequiresAuthentication(t *testing.T) {
 		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusUnauthorized)
 	}
 }
+
+func TestSetupRouterDoesNotTrustForwardedClientIPByDefault(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	engine := SetupRouter()
+	engine.GET("/__test/client-ip", func(c *gin.Context) {
+		c.String(http.StatusOK, c.ClientIP())
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/__test/client-ip", nil)
+	req.RemoteAddr = "192.0.2.10:1234"
+	req.Header.Set("X-Forwarded-For", "198.51.100.20")
+	recorder := httptest.NewRecorder()
+	engine.ServeHTTP(recorder, req)
+
+	if got := recorder.Body.String(); got != "192.0.2.10" {
+		t.Fatalf("client IP = %q, want direct peer IP", got)
+	}
+}

@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -88,6 +89,7 @@ func TestAuthRequired_ValidToken(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to generate token: %v", err)
 	}
+	allowTestSession(t, token)
 
 	r := gin.New()
 	r.Use(AuthRequired())
@@ -113,6 +115,7 @@ func TestAuthRequired_CookieToken(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to generate token: %v", err)
 	}
+	allowTestSession(t, token)
 
 	r := gin.New()
 	r.Use(AuthRequired())
@@ -218,6 +221,7 @@ func TestOptionalAuth_WithToken(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to generate token: %v", err)
 	}
+	allowTestSession(t, token)
 
 	r := gin.New()
 	r.Use(OptionalAuth())
@@ -234,6 +238,46 @@ func TestOptionalAuth_WithToken(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Errorf("expected 200, got %d", w.Code)
 	}
+	if w.Body.String() != `{"user_id":3}` {
+		t.Errorf("expected user_id=3, got %s", w.Body.String())
+	}
+}
+
+func TestOptionalAuth_RevokedSessionFallsBackToAnonymous(t *testing.T) {
+	token, err := jwt.GenerateToken(31, "revokedopt", "user", 1)
+	if err != nil {
+		t.Fatalf("failed to generate token: %v", err)
+	}
+	previousTokenLookup := loginTokenLookup
+	previousVersionLookup := sessionVersionLookup
+	loginTokenLookup = func(context.Context, int64) (string, error) { return token, nil }
+	sessionVersionLookup = func(context.Context, int64) (int64, error) { return 2, nil }
+	t.Cleanup(func() {
+		loginTokenLookup = previousTokenLookup
+		sessionVersionLookup = previousVersionLookup
+	})
+
+	r := gin.New()
+	r.Use(OptionalAuth())
+	r.GET("/test", func(c *gin.Context) {
+		c.JSON(200, gin.H{
+			"user_id":  c.GetInt64("user_id"),
+			"username": c.GetString("username"),
+			"role":     c.GetString("role"),
+		})
+	})
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("GET", "/test", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	if w.Body.String() != `{"role":"","user_id":0,"username":""}` {
+		t.Fatalf("expected anonymous context on revoked session, got %s", w.Body.String())
+	}
 }
 
 func TestRedirectIfAuth_LoggedIn(t *testing.T) {
@@ -241,6 +285,7 @@ func TestRedirectIfAuth_LoggedIn(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to generate token: %v", err)
 	}
+	allowTestSession(t, token)
 
 	r := gin.New()
 	r.Use(RedirectIfAuth())
@@ -255,6 +300,36 @@ func TestRedirectIfAuth_LoggedIn(t *testing.T) {
 
 	if w.Code != http.StatusFound {
 		t.Errorf("expected 302 redirect, got %d", w.Code)
+	}
+}
+
+func TestRedirectIfAuth_RevokedSessionDoesNotRedirect(t *testing.T) {
+	token, err := jwt.GenerateToken(41, "revokedredirect", "user", 1)
+	if err != nil {
+		t.Fatalf("failed to generate token: %v", err)
+	}
+	previousTokenLookup := loginTokenLookup
+	previousVersionLookup := sessionVersionLookup
+	loginTokenLookup = func(context.Context, int64) (string, error) { return "", nil }
+	sessionVersionLookup = func(context.Context, int64) (int64, error) { return 1, nil }
+	t.Cleanup(func() {
+		loginTokenLookup = previousTokenLookup
+		sessionVersionLookup = previousVersionLookup
+	})
+
+	r := gin.New()
+	r.Use(RedirectIfAuth())
+	r.GET("/login", func(c *gin.Context) {
+		c.JSON(200, gin.H{"page": "login"})
+	})
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("GET", "/login", nil)
+	req.AddCookie(&http.Cookie{Name: "token", Value: token})
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 login page for revoked cookie, got %d", w.Code)
 	}
 }
 

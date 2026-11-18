@@ -39,3 +39,21 @@ func TestInternalTokenAuth(t *testing.T) {
 	}
 
 }
+
+func TestInternalTokenAuthRejectsKnownPlaceholder(t *testing.T) {
+	for _, token := range []string{"shareo-local-internal", "replace-with-a-random-value"} {
+		t.Run(token, func(t *testing.T) {
+			t.Setenv("SHAREO_INTERNAL_TOKEN", token)
+			r := gin.New()
+			r.Use(InternalTokenAuth())
+			r.GET("/internal/test", func(c *gin.Context) { c.Status(http.StatusNoContent) })
+			recorder := httptest.NewRecorder()
+			req := httptest.NewRequest(http.MethodGet, "/internal/test", nil)
+			req.Header.Set("X-Internal-Token", token)
+			r.ServeHTTP(recorder, req)
+			if recorder.Code != http.StatusServiceUnavailable {
+				t.Fatalf("status=%d want=%d", recorder.Code, http.StatusServiceUnavailable)
+			}
+		})
+	}
+}

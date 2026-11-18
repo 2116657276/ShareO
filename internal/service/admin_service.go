@@ -7,6 +7,15 @@ import (
 
 	"github.com/zhoujianlin/ShareO/internal/model"
 	"github.com/zhoujianlin/ShareO/internal/repository"
+	"gorm.io/gorm"
+)
+
+var (
+	ErrAdminReviewInvalid = errors.New("审核状态无效")
+	ErrAdminSelfBan       = errors.New("不能封禁自己")
+	ErrAdminUserNotFound  = errors.New("用户不存在")
+	ErrAdminProtectedUser = errors.New("不能封禁其他管理员")
+	ErrAdminStatusInvalid = errors.New("状态值无效")
 )
 
 type AdminService struct {
@@ -40,10 +49,13 @@ func (s *AdminService) DeletePost(postID int64, adminID int64) error {
 		return err
 	}
 	if post == nil {
-		return errors.New("帖子不存在")
+		return ErrPostNotFound
 	}
 
 	if err := s.postRepo.AdminSoftDelete(postID); err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return ErrPostNotFound
+		}
 		return err
 	}
 	publishIndexAction("delete", postID)
@@ -54,9 +66,12 @@ func (s *AdminService) DeletePost(postID int64, adminID int64) error {
 
 func (s *AdminService) ReviewPost(postID int64, status, comment string, reviewerID int64) error {
 	if status != model.StatusApproved && status != model.StatusRejected {
-		return errors.New("审核状态无效")
+		return ErrAdminReviewInvalid
 	}
 	err := s.postRepo.UpdateStatus(postID, status, comment, reviewerID)
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return ErrPostNotFound
+	}
 	if err == nil {
 		if status == model.StatusApproved {
 			publishIndexAction("upsert", postID)
@@ -87,26 +102,41 @@ func (s *AdminService) ListUsers(page, pageSize int, role string, status *int) (
 
 func (s *AdminService) UpdateUserStatus(adminID, targetUserID int64, status int8) error {
 	if adminID == targetUserID {
-		return errors.New("不能封禁自己")
+		return ErrAdminSelfBan
 	}
 	targetUser, err := s.userRepo.FindByID(targetUserID)
 	if err != nil {
 		return err
 	}
 	if targetUser == nil {
-		return errors.New("用户不存在")
+		return ErrAdminUserNotFound
 	}
 	if targetUser.Role == "admin" {
-		return errors.New("不能封禁其他管理员")
+		return ErrAdminProtectedUser
 	}
 	if status != model.UserStatusBanned && status != model.UserStatusActive {
-		return errors.New("状态值无效")
+		return ErrAdminStatusInvalid
 	}
 	if err := s.userRepo.UpdateStatus(targetUserID, status); err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return ErrAdminUserNotFound
+		}
 		return err
 	}
 	s.writeAdminLog(adminID, "update_user_status", fmt.Sprintf("user_id=%d status=%d", targetUserID, status))
 	return nil
+}
+
+func IsAdminClientError(err error) bool {
+	for _, candidate := range []error{
+		ErrPostNotFound, ErrAdminReviewInvalid, ErrAdminSelfBan, ErrAdminUserNotFound,
+		ErrAdminProtectedUser, ErrAdminStatusInvalid,
+	} {
+		if errors.Is(err, candidate) {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *AdminService) writeAdminLog(adminID int64, action, detail string) {

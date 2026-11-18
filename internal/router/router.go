@@ -9,7 +9,6 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/zhoujianlin/ShareO/internal/handler"
 	"github.com/zhoujianlin/ShareO/internal/middleware"
-	jwtpkg "github.com/zhoujianlin/ShareO/internal/pkg/jwt"
 	"github.com/zhoujianlin/ShareO/internal/pkg/queue"
 	"github.com/zhoujianlin/ShareO/internal/repository"
 	"github.com/zhoujianlin/ShareO/internal/service"
@@ -18,10 +17,14 @@ import (
 
 func SetupRouter(trustedOrigins ...string) *gin.Engine {
 	r := gin.Default()
+	// The native runtime has no implicit reverse proxy. Do not trust
+	// X-Forwarded-For from direct clients; deployments must opt in explicitly.
+	_ = r.SetTrustedProxies(nil)
 
 	r.Static("/static", "web/static") // 在 NoCache 之前挂载，静态资源可被浏览器缓存
 	r.Use(middleware.NoCache())
 	r.Use(gzip.Gzip(gzip.DefaultCompression)) // gzip压缩，大幅减少HTML/JSON/CSS传输
+	r.Use(middleware.RequestBodyLimit(middleware.DefaultRequestBodyLimit, "/api/v1/upload"))
 
 	// WebSocket Hub — shared across chat, auth revocation, and admin actions.
 	hub := ws.NewHub()
@@ -32,10 +35,10 @@ func SetupRouter(trustedOrigins ...string) *gin.Engine {
 	socialH := handler.NewSocialHandler()
 	adminH := handler.NewAdminHandler(hub)
 	userH := handler.NewUserHandler()
-	uploadH := handler.NewUploadHandler()
 	notifH := handler.NewNotificationHandler()
 	favoriteH := handler.NewFavoriteHandler()
 	postRepo := repository.NewPostRepo()
+	uploadH := handler.NewUploadHandler(postRepo, repository.NewUploadArtifactRepo())
 	imageSearchH := handler.NewImageSearchHandler(postRepo)
 
 	// Chat
@@ -54,12 +57,7 @@ func SetupRouter(trustedOrigins ...string) *gin.Engine {
 	// 已登录admin → /admin
 	// 已登录user → /home
 	r.GET("/", func(c *gin.Context) {
-		token, err := c.Cookie("token")
-		if err != nil || token == "" {
-			authH.LoginPage(c)
-			return
-		}
-		claims, err := jwtpkg.ParseToken(token)
+		claims, _, err := middleware.AuthenticateRequest(c.Request, false)
 		if err != nil {
 			authH.LoginPage(c)
 			return
@@ -71,8 +69,9 @@ func SetupRouter(trustedOrigins ...string) *gin.Engine {
 		}
 	})
 
-	// Rate limit auth endpoints: 10 requests per minute per IP
+	// Rate limit auth endpoints: 10 requests per minute per authenticated user or peer IP
 	authLimiter := middleware.RateLimit(10, 1*time.Minute)
+	searchLimiter := middleware.RateLimit(30, 1*time.Minute)
 
 	// === Public API ===
 	api := r.Group("/api/v1")
@@ -84,8 +83,8 @@ func SetupRouter(trustedOrigins ...string) *gin.Engine {
 		pub.Use(middleware.OptionalAuth())
 		{
 			pub.GET("/feed", feedH.GetFeed)
-			pub.GET("/search", feedH.Search)
-			pub.GET("/search/images", imageSearchH.Search)
+			pub.GET("/search", searchLimiter, feedH.Search)
+			pub.GET("/search/images", searchLimiter, imageSearchH.Search)
 			pub.GET("/posts/:id", postH.GetByID)
 			pub.POST("/posts/:id/view", postH.RecordView)
 			pub.GET("/posts/:id/comments", socialH.GetComments)
@@ -102,6 +101,7 @@ func SetupRouter(trustedOrigins ...string) *gin.Engine {
 		// Rate limit write operations
 		postLimiter := middleware.RateLimit(30, 1*time.Minute)
 		uploadLimiter := middleware.RateLimit(20, 1*time.Minute)
+		chatMessageLimiter := middleware.RateLimit(30, 1*time.Minute)
 
 		authAPI.GET("/auth/me", authH.Me)
 		authAPI.GET("/feed/following", feedH.GetFollowingFeed)
@@ -133,7 +133,7 @@ func SetupRouter(trustedOrigins ...string) *gin.Engine {
 		authAPI.GET("/conversations", chatH.ListConversations)
 		authAPI.POST("/conversations", chatH.CreateConversation)
 		authAPI.GET("/conversations/:id/messages", chatH.GetMessages)
-		authAPI.POST("/conversations/:id/messages", chatH.SendMessage)
+		authAPI.POST("/conversations/:id/messages", chatMessageLimiter, chatH.SendMessage)
 		authAPI.PUT("/conversations/:id/read", chatH.MarkRead)
 		authAPI.GET("/conversations/unread-count", chatH.UnreadCount)
 	}

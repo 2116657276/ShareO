@@ -11,6 +11,7 @@ CREATE TABLE IF NOT EXISTS users (
     role VARCHAR(10) NOT NULL DEFAULT 'user' CHECK (role IN ('user', 'admin')),
     status SMALLINT NOT NULL DEFAULT 1 CHECK (status IN (0, 1)),
     is_bot SMALLINT NOT NULL DEFAULT 0 CHECK (is_bot IN (0, 1)),
+    session_version BIGINT NOT NULL DEFAULT 1,
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT uk_users_username UNIQUE (username)

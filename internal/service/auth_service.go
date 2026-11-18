@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"strings"
 
@@ -15,6 +16,19 @@ import (
 type AuthService struct {
 	userRepo *repository.UserRepo
 }
+
+var ErrAuthSessionUnavailable = errors.New("auth session unavailable")
+
+var (
+	ErrInvalidCredentials = errors.New("用户名或密码错误")
+	ErrAccountBanned      = errors.New("账号已被封禁")
+	ErrUsernameInvalid    = errors.New("用户名包含非法字符")
+	ErrUsernameTooShort   = errors.New("用户名至少2个字符")
+	ErrUsernameTaken      = errors.New("用户名已存在")
+	ErrPasswordTooShort   = errors.New("新密码至少6个字符")
+	ErrOriginalPassword   = errors.New("原密码错误")
+	ErrUserNotFound       = errors.New("用户不存在")
+)
 
 func NewAuthService() *AuthService {
 	return &AuthService{userRepo: repository.NewUserRepo()}
@@ -32,16 +46,16 @@ type LoginReq struct {
 }
 
 type AuthResp struct {
-	Token string      `json:"token"`
-	User  *model.User `json:"user"`
+	Token string    `json:"token"`
+	User  *AuthUser `json:"user"`
 }
 
 func validateLoginCandidate(user *model.User) error {
 	if user == nil || user.IsBot != 0 {
-		return errors.New("用户名或密码错误")
+		return ErrInvalidCredentials
 	}
 	if user.Status == 0 {
-		return errors.New("账号已被封禁")
+		return ErrAccountBanned
 	}
 	return nil
 }
@@ -50,10 +64,10 @@ func (s *AuthService) Register(req RegisterReq) (*AuthResp, error) {
 	req.Username = strings.TrimSpace(req.Username)
 	// Sanitize: reject HTML/script characters
 	if strings.ContainsAny(req.Username, "<>\"'&/\\") {
-		return nil, errors.New("用户名包含非法字符")
+		return nil, ErrUsernameInvalid
 	}
 	if len(req.Username) < 2 {
-		return nil, errors.New("用户名至少2个字符")
+		return nil, ErrUsernameTooShort
 	}
 
 	existing, err := s.userRepo.FindByUsername(req.Username)
@@ -61,7 +75,7 @@ func (s *AuthService) Register(req RegisterReq) (*AuthResp, error) {
 		return nil, err
 	}
 	if existing != nil {
-		return nil, errors.New("用户名已存在")
+		return nil, ErrUsernameTaken
 	}
 
 	hashed, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
@@ -77,20 +91,29 @@ func (s *AuthService) Register(req RegisterReq) (*AuthResp, error) {
 		Status:       model.UserStatusActive,
 	}
 	if err := s.userRepo.Create(user); err != nil {
+		if repository.IsUniqueViolation(err) {
+			return nil, ErrUsernameTaken
+		}
 		return nil, err
 	}
 
-	token, err := jwt.GenerateToken(user.ID, user.Username, user.Role)
+	if user.SessionVersion <= 0 {
+		user.SessionVersion = 1
+	}
+	token, err := jwt.GenerateToken(user.ID, user.Username, user.Role, user.SessionVersion)
 	if err != nil {
 		return nil, err
 	}
 
 	// Cache login state in Redis for 30-min sliding window
 	if err := repository.CacheLoginToken(context.Background(), user.ID, token, repository.LoginCacheTTL); err != nil {
+		if errors.Is(err, repository.ErrSessionStoreUnavailable) {
+			return nil, fmt.Errorf("%w: 登录服务暂不可用", ErrAuthSessionUnavailable)
+		}
 		slog.Warn("failed to cache login token", "user_id", user.ID, "err", err)
 	}
 
-	return &AuthResp{Token: token, User: user}, nil
+	return &AuthResp{Token: token, User: ToAuthUser(user)}, nil
 }
 
 func (s *AuthService) Login(req LoginReq) (*AuthResp, error) {
@@ -104,24 +127,34 @@ func (s *AuthService) Login(req LoginReq) (*AuthResp, error) {
 	}
 
 	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(req.Password)); err != nil {
-		return nil, errors.New("用户名或密码错误")
+		return nil, ErrInvalidCredentials
 	}
 
-	token, err := jwt.GenerateToken(user.ID, user.Username, user.Role)
+	if user.SessionVersion <= 0 {
+		user.SessionVersion = 1
+	}
+	token, err := jwt.GenerateToken(user.ID, user.Username, user.Role, user.SessionVersion)
 	if err != nil {
 		return nil, err
 	}
 
 	// Cache login state in Redis for sliding window
 	if err := repository.CacheLoginToken(context.Background(), user.ID, token, repository.LoginCacheTTL); err != nil {
+		if errors.Is(err, repository.ErrSessionStoreUnavailable) {
+			return nil, fmt.Errorf("%w: 登录服务暂不可用", ErrAuthSessionUnavailable)
+		}
 		slog.Warn("failed to cache login token", "user_id", user.ID, "err", err)
 	}
 
-	return &AuthResp{Token: token, User: user}, nil
+	return &AuthResp{Token: token, User: ToAuthUser(user)}, nil
 }
 
-func (s *AuthService) GetProfile(userID int64) (*model.User, error) {
-	return s.userRepo.FindByID(userID)
+func (s *AuthService) GetProfile(userID int64) (*AuthUser, error) {
+	user, err := s.userRepo.FindByID(userID)
+	if err != nil {
+		return nil, err
+	}
+	return ToAuthUser(user), nil
 }
 
 func (s *AuthService) UpdateProfile(userID int64, avatarURL, bio, email string) error {
@@ -137,39 +170,32 @@ func (s *AuthService) UpdateProfile(userID int64, avatarURL, bio, email string) 
 // UpdateProfileWeb only updates fields submitted via the web settings form (email, bio).
 // It does NOT touch avatar_url, preventing the form from clearing API-uploaded avatars.
 func (s *AuthService) UpdateProfileWeb(userID int64, email, bio string) error {
-	updates := map[string]interface{}{}
-	if email != "" {
-		updates["email"] = email
-	}
-	if bio != "" {
-		updates["bio"] = bio
-	}
-	if len(updates) == 0 {
-		return nil
-	}
-	return s.userRepo.UpdateFields(userID, updates)
+	return s.userRepo.UpdateFields(userID, map[string]interface{}{
+		"email": email,
+		"bio":   bio,
+	})
 }
 
 // ChangePassword validates the old password, updates to the new one, and clears login cache.
 func (s *AuthService) ChangePassword(userID int64, oldPassword, newPassword string) error {
 	if len(newPassword) < 6 {
-		return errors.New("新密码至少6个字符")
+		return ErrPasswordTooShort
 	}
 	user, err := s.userRepo.FindByID(userID)
 	if err != nil {
 		return err
 	}
 	if user == nil {
-		return errors.New("用户不存在")
+		return ErrUserNotFound
 	}
 	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(oldPassword)); err != nil {
-		return errors.New("原密码错误")
+		return ErrOriginalPassword
 	}
 	hashed, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
 	if err != nil {
 		return err
 	}
-	if err := s.userRepo.UpdateFields(userID, map[string]interface{}{"password_hash": string(hashed)}); err != nil {
+	if err := s.userRepo.UpdatePasswordAndBumpSession(context.Background(), userID, string(hashed)); err != nil {
 		return err
 	}
 	// Force re-login by deleting login cache
@@ -177,4 +203,23 @@ func (s *AuthService) ChangePassword(userID int64, oldPassword, newPassword stri
 		slog.Warn("failed to delete login cache on password change", "user_id", userID, "err", err)
 	}
 	return nil
+}
+
+// RevokeSessions invalidates all previously issued JWTs for the user. Redis
+// deletion remains a fast-path cleanup, while the database version is the
+// durable revocation source.
+func (s *AuthService) RevokeSessions(userID int64) error {
+	return s.userRepo.BumpSessionVersion(context.Background(), userID)
+}
+
+func IsAuthClientError(err error) bool {
+	for _, candidate := range []error{
+		ErrInvalidCredentials, ErrAccountBanned, ErrUsernameInvalid, ErrUsernameTooShort, ErrUsernameTaken,
+		ErrPasswordTooShort, ErrOriginalPassword, ErrUserNotFound,
+	} {
+		if errors.Is(err, candidate) {
+			return true
+		}
+	}
+	return false
 }

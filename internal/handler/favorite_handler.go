@@ -47,5 +47,5 @@ func (h *FavoriteHandler) List(c *gin.Context) {
 		response.InternalError(c, "收藏列表加载失败")
 		return
 	}
-	response.Success(c, response.PageResponse{List: posts, Total: total, Page: page, PageSize: pageSize})
+	response.Success(c, response.PageResponse{List: service.ToPublicPosts(posts), Total: total, Page: page, PageSize: pageSize})
 }

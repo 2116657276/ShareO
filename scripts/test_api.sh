@@ -139,7 +139,9 @@ echo ""
 echo "=== 2. 帖子与Feed测试 ==="
 
 # Create a valid 1x1 PNG without exposing shell quoting to binary bytes.
-TMPIMG=$(mktemp /tmp/shareo-testimg.XXXXXX.png)
+TMPIMG_BASE=$(mktemp /tmp/shareo-testimg.XXXXXX)
+TMPIMG="${TMPIMG_BASE}.png"
+mv "$TMPIMG_BASE" "$TMPIMG"
 python3 - "$TMPIMG" <<'PY'
 import base64
 import pathlib
