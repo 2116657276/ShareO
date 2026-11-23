@@ -86,6 +86,7 @@ services:
     restart: unless-stopped
 
   minio:
+    image: ${SHAREO_ORBSTACK_MINIO_IMAGE:-shareo-orbstack-minio:latest}
     build:
       context: ..
       dockerfile: deploy/Dockerfile.minio
@@ -113,6 +114,7 @@ services:
 
   app:
     platform: linux/arm64
+    image: ${SHAREO_ORBSTACK_APP_IMAGE:-shareo-orbstack-app:latest}
     build:
       context: ..
       dockerfile: Dockerfile
@@ -139,7 +141,7 @@ services:
       SHAREO_POST_SEARCH_SEMANTIC_THRESHOLD: ${SHAREO_POST_SEARCH_SEMANTIC_THRESHOLD:-0.54}
       SHAREO_IMAGE_SEARCH_SCORE_THRESHOLD: ${SHAREO_IMAGE_SEARCH_SCORE_THRESHOLD:-0.39}
     ports:
-      - "127.0.0.1:18080:8080"
+      - "127.0.0.1:${SHAREO_ORBSTACK_APP_PORT:-18080}:8080"
     depends_on:
       postgres:
         condition: service_healthy
@@ -159,7 +161,7 @@ services:
 
   ai-service:
     platform: linux/arm64
-    image: shareo-orbstack-ai:local
+    image: ${SHAREO_ORBSTACK_AI_IMAGE:-shareo-orbstack-ai:local}
     build: *ai-build
     environment: *ai-environment
     volumes:
@@ -181,10 +183,30 @@ services:
       start_period: 30s
     restart: unless-stopped
 
+  llm-fixture:
+    platform: linux/arm64
+    image: ${SHAREO_ORBSTACK_AI_IMAGE:-shareo-orbstack-ai:local}
+    build: *ai-build
+    profiles: ["fixture"]
+    command:
+      - uvicorn
+      - app.testing.mock_llm:app
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=3)"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+    restart: unless-stopped
+
   ai-warmup:
     platform: linux/arm64
     profiles: ["warmup"]
-    image: shareo-orbstack-ai:local
+    image: ${SHAREO_ORBSTACK_AI_IMAGE:-shareo-orbstack-ai:local}
     build: *ai-build
     environment: *ai-environment
     volumes:
@@ -201,10 +223,10 @@ services:
 
 volumes:
   postgres_data:
-    name: shareo-orbstack-postgres-data
+    name: ${SHAREO_ORBSTACK_VOLUME_PREFIX:-shareo-orbstack}-postgres-data
   redis_data:
-    name: shareo-orbstack-redis-data
+    name: ${SHAREO_ORBSTACK_VOLUME_PREFIX:-shareo-orbstack}-redis-data
   minio_data:
-    name: shareo-orbstack-minio-data
+    name: ${SHAREO_ORBSTACK_VOLUME_PREFIX:-shareo-orbstack}-minio-data
   ai_model_cache:
-    name: shareo-orbstack-ai-model-cache
+    name: ${SHAREO_ORBSTACK_VOLUME_PREFIX:-shareo-orbstack}-ai-model-cache
