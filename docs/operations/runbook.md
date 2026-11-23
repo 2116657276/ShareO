@@ -128,7 +128,7 @@ curl --fail http://127.0.0.1:18080/healthz
 
 需要与已有试跑并行验收时，使用隔离参数：`SHAREO_ORBSTACK_APP_PORT` 指定不同宿主机端口，`SHAREO_ORBSTACK_VOLUME_PREFIX` 指定独立卷前缀，`SHAREO_ORBSTACK_APP_IMAGE`/`SHAREO_ORBSTACK_AI_IMAGE`/`SHAREO_ORBSTACK_MINIO_IMAGE` 指定独立镜像标签。`--profile fixture` 会启动不发宿主端口的 `llm-fixture` 服务；将 `SHAREO_AI_LLM_BASE_URL` 设为 `http://llm-fixture:8000/v1` 即可走本地固定响应。完整隔离试跑、验收结果和 3 分钟演示见 [隔离演示](orbstack-demo.md)。
 
-试跑仅使用合成账号、合成图片和试跑卷。暂停时执行 `pilot stop`，保留卷以便继续验证。恢复时执行 `pilot up --detach --wait`。
+试跑仅使用合成账号、合成图片和试跑卷。暂停时执行 `pilot --profile fixture stop`，保留卷以便继续验证。恢复时执行 `pilot --profile fixture up --detach --wait`。
 
 ## 索引运维
 

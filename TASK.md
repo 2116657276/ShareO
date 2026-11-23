@@ -187,3 +187,12 @@ Docker、Docker Compose 和 OrbStack 在上述改进完成、适用检查通过�
 - [x] 记录 1/10/100 个普通会话的 Redis `EXISTS`、`MGET`、估算往返和 20 次接口耗时基线；完整条件和 3 分钟演示见 [OrbStack 隔离演示](docs/operations/orbstack-demo.md)。
 
 本轮不改变业务代码，也不宣称真实 LLM 质量、并发能力或生产 SLA。合并决定留给用户。
+
+### 2026-11-23 验收可靠性复验
+
+- [x] 审核基线保持 `79b54f2`。`scripts/orbstack_smoke.py` 在写入前校验 loopback、Compose 项目、发布端口、容器归属、状态目录和卷前缀；错误端口、非 loopback 和原 `shareo-orbstack` 项目均提前失败。
+- [x] 演示阶段强制 `--demo` 和本地固定响应 LLM；初始化要求五个核心服务明确 healthy、`postgres-init` 已退出且退出码为 `0`、fixture 健康。
+- [x] 在全新项目 `shareo-orbstack-fresh-20261123` 和 `127.0.0.1:18092` 复验空库、审核检索、Bot 引用、`XADD` 补发、重复回调、内部 `401` 和 presence。重复回调同时校验 HTTP 与数据库；`401` 按 `source_message_id` 验证 Stream pending。
+- [x] PR 基线 presence 使用 `EXISTS`；1/10/100 会话在 20 次请求内分别产生 20/200/2000 次命令和估算往返，中位耗时 1.929/2.693/10.911 ms，p95 为 3.010/4.582/15.319 ms。
+
+本地 `perf/chat-presence-batch`（`63b50d6`）保持独立，本轮不推送、不合并，也不把基线采样写成优化收益。复验细节见 [OrbStack 隔离演示](docs/operations/orbstack-demo.md)。
