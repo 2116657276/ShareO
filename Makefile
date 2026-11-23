@@ -11,8 +11,8 @@
 	worktree-manifest test-evidence-tools test-browser-smoke resume-audit final-evidence \
 	backfill-index reconcile-index bootstrap-postgres
 
-# Local host services are the only supported runtime. PostgreSQL 17, Redis and
-# MinIO run as host services; no container runtime is consulted.
+# Make targets use native PostgreSQL 17, Redis and MinIO. The isolated
+# OrbStack pilot is operated separately via docs/operations/runbook.md.
 SHAREO_RUNTIME ?= local
 LOCAL_CACHE_ROOT ?= $(CURDIR)/.cache/shareo
 GO_CACHE_DIR ?= $(LOCAL_CACHE_ROOT)/go-build
@@ -63,7 +63,7 @@ prepare-current-ai-eval:
 	python3 scripts/prepare_current_ai_eval.py --version $${VERSION:-v2}
 
 compose-up compose-reload-ai compose-down compose-reset compose-logs:
-	@echo "[FAIL] Compose runtime is retired; use the native PostgreSQL/Redis/MinIO runtime" >&2
+	@echo "[FAIL] Legacy Compose target retired. Use make up or see docs/operations/runbook.md for the OrbStack pilot." >&2
 	@exit 2
 
 check: check-go check-python check-shell check-docs

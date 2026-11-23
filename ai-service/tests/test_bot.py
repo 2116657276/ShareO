@@ -2,6 +2,7 @@
 
 import json
 from collections.abc import Callable
+from unittest.mock import AsyncMock
 
 import httpx
 import pytest
@@ -17,6 +18,7 @@ from app.workers.bot import (
     positive_int,
     _safe_answer,
 )
+from app.workers.consumer import StreamConsumer
 
 
 class FakeProvider:
@@ -110,6 +112,49 @@ def assert_callback(request: httpx.Request, content: str) -> None:
     assert payload["content"] == content
 
 
+async def assert_worker_failure_is_not_acked(
+    worker: BotTaskHandler,
+    fields: dict[str, str],
+    *,
+    use_fallback: bool = False,
+    attempts: int = 1,
+) -> Exception:
+    redis = AsyncMock()
+    redis.xpending_range.return_value = [{"times_delivered": attempts}]
+    errors: list[Exception] = []
+
+    async def invoke(stream_id: str, task_fields: dict[str, str]) -> None:
+        try:
+            if use_fallback:
+                await worker.fallback(stream_id, task_fields)
+            else:
+                await worker(stream_id, task_fields)
+        except Exception as exc:
+            errors.append(exc)
+            raise
+
+    async def fail_task(_stream_id: str, _task_fields: dict[str, str]) -> None:
+        raise RuntimeError("exhausted")
+
+    consumer = StreamConsumer(
+        redis,
+        "bot_tasks",
+        "tests",
+        "test-worker",
+        max_retries=3,
+        dead_letter_handler=invoke if use_fallback else None,
+    )
+    await consumer._process_message(
+        fail_task if use_fallback else invoke,
+        "1-0",
+        fields,
+    )
+
+    assert len(errors) == 1
+    redis.xack.assert_not_awaited()
+    return errors[0]
+
+
 def test_positive_int_rejects_noncanonical_values():
     assert positive_int({"id": "12"}, "id") == 12
     for raw in ("", "0", "01", "+1", "1.0", True, 2**63):
@@ -126,12 +171,12 @@ def test_safe_answer_strips_nonempty_provider_result():
     assert _safe_answer("  可以使用三脚架。 ") == "可以使用三脚架。"
 
 
-@pytest.mark.parametrize("status_code", [400, 401, 403, 404, 422, 499])
+@pytest.mark.parametrize("status_code", [400, 403, 404, 422, 499])
 def test_all_client_errors_are_permanent_callbacks(status_code: int):
     assert is_permanent_http_error(status_code)
 
 
-@pytest.mark.parametrize("status_code", [200, 399, 500, 503])
+@pytest.mark.parametrize("status_code", [200, 399, 401, 500, 503])
 def test_server_errors_and_successes_are_not_permanent_callbacks(status_code: int):
     assert not is_permanent_http_error(status_code)
 
@@ -293,3 +338,69 @@ async def test_transient_callback_error_is_retried_by_consumer():
     with pytest.raises(httpx.HTTPStatusError):
         await worker("1-0", {"message_id": "9", "conversation_id": "7"})
     await client.aclose()
+
+
+@pytest.mark.asyncio
+async def test_unauthorized_task_fetch_is_retryable_and_not_acked():
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        return httpx.Response(401, json={"message": "unauthorized"})
+
+    client = transport_for(handler)
+    worker = BotTaskHandler(client, FakePipeline(), "http://go.test", "test-token")
+    error = await assert_worker_failure_is_not_acked(
+        worker, {"message_id": "9", "conversation_id": "7"}
+    )
+    await client.aclose()
+
+    assert isinstance(error, httpx.HTTPStatusError)
+    assert error.response.status_code == 401
+    assert [request.method for request in requests] == ["GET"]
+
+
+@pytest.mark.asyncio
+async def test_unauthorized_callback_is_retryable_and_not_acked():
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        if request.method == "GET":
+            return httpx.Response(200, json={"data": task_payload()})
+        return httpx.Response(401, json={"message": "unauthorized"})
+
+    client = transport_for(handler)
+    worker = BotTaskHandler(client, FakePipeline(), "http://go.test", "test-token")
+    error = await assert_worker_failure_is_not_acked(
+        worker, {"message_id": "9", "conversation_id": "7"}
+    )
+    await client.aclose()
+
+    assert isinstance(error, httpx.HTTPStatusError)
+    assert error.response.status_code == 401
+    assert [request.method for request in requests] == ["GET", "POST"]
+
+
+@pytest.mark.asyncio
+async def test_unauthorized_final_fallback_is_retryable_and_not_acked():
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        assert json.loads(request.content)["content"] == FALLBACK_MESSAGE
+        return httpx.Response(401, json={"message": "unauthorized"})
+
+    client = transport_for(handler)
+    worker = BotTaskHandler(client, FakePipeline(), "http://go.test", "test-token")
+    error = await assert_worker_failure_is_not_acked(
+        worker,
+        {"message_id": "9", "conversation_id": "7"},
+        use_fallback=True,
+        attempts=4,
+    )
+    await client.aclose()
+
+    assert isinstance(error, httpx.HTTPStatusError)
+    assert error.response.status_code == 401
+    assert [request.method for request in requests] == ["POST"]

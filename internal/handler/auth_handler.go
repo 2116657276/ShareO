@@ -32,6 +32,8 @@ func (h *AuthHandler) disconnectUser(userID int64) {
 	}
 }
 
+const registrationSessionUnavailableMessage = "账号已创建，登录服务暂不可用，请稍后直接登录"
+
 func (h *AuthHandler) Register(c *gin.Context) {
 	var req service.RegisterReq
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -40,8 +42,8 @@ func (h *AuthHandler) Register(c *gin.Context) {
 	}
 	resp, err := h.svc.Register(req)
 	if err != nil {
-		if errors.Is(err, service.ErrAuthSessionUnavailable) {
-			response.Error(c, http.StatusServiceUnavailable, response.ErrCodeInternal, "登录服务暂不可用，请稍后重试")
+		if errors.Is(err, service.ErrRegistrationSessionUnavailable) {
+			response.Error(c, http.StatusServiceUnavailable, response.ErrCodeInternal, registrationSessionUnavailableMessage)
 			return
 		}
 		if service.IsAuthClientError(err) {
@@ -209,11 +211,11 @@ func (h *AuthHandler) WebRegister(c *gin.Context) {
 	resp, err := h.svc.Register(service.RegisterReq{Username: username, Password: password, Email: email})
 	if err != nil {
 		status := http.StatusOK
-		if errors.Is(err, service.ErrAuthSessionUnavailable) {
-			status = http.StatusServiceUnavailable
-		}
 		message := "注册暂时无法完成，请稍后重试"
-		if service.IsAuthClientError(err) {
+		if errors.Is(err, service.ErrRegistrationSessionUnavailable) {
+			status = http.StatusServiceUnavailable
+			message = registrationSessionUnavailableMessage
+		} else if service.IsAuthClientError(err) {
 			message = err.Error()
 		} else {
 			slog.Warn("web registration failed", "err", err)

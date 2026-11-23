@@ -6,7 +6,7 @@
 
 | 能力 | 用户入口 | 核心依赖 | 当前状态 | 主要证据 |
 |---|---|---|---|---|
-| 注册、登录、资料、改密、退出 | `/login`、`/register`、`/settings` | Go、PostgreSQL、Redis 当前令牌校验 | 已实现；Redis 不可用时受保护请求 fail-closed | 认证单测与接口回归 |
+| 注册、登录、资料、改密、退出 | `/login`、`/register`、`/settings` | Go、PostgreSQL、Redis 当前令牌校验 | Redis 不可用时受保护请求 fail-closed。注册账户已落库而会话写入失败时，API 和 Web 返回 `503`，提示恢复后直接登录 | [认证故障验证](REVIEW.md#2026-11-23-首轮优化与-orbstack-验证) |
 | 响应式界面与主题 | 全部页面、“设置和动态” | 共享模板、CSS、浏览器本地偏好 | 已实现手机/桌面响应式布局；默认 ShareO 琥珀色，可切换经典黑白主题；两套主题保持低对比度 | 浏览器 smoke、模板契约与静态检查 |
 | 图文发布与编辑 | `/post/create`、`/post/:id/edit` | PostgreSQL、MinIO | 已实现 | 上传/帖子测试 |
 | Feed与帖子详情 | `/home`、`/post/:id` | PostgreSQL、Redis缓存 | 单/双列均使用 1200px 高清中图，新上传采用 JPEG 90% 质量；人工 smoke 已覆盖 Feed，完整移动端/实时 WebSocket仍未形成浏览器自动化证据 | 社区回归 |
@@ -20,7 +20,7 @@
 | 关注动态 | `/following`、`/api/v1/feed/following` | PostgreSQL、现有 follows 与 Feed | 完整关注用户名单独显示；关注对象没有帖子时仍显示用户资料，动态使用同一帖子流 | 关注动态接口、可见性与分页测试 |
 | 响应式帖子流与评论热度 | `/home`、`/following`、`/post/:id` | PostgreSQL、静态 CSS/JS | 双主题低对比度布局；帖子多图横向轮播；主页展示高赞评论；评论可点赞/取消点赞；网页评论失败显示稳定提示 | 静态模板、迁移和接口契约审查 |
 | 正文向量检索 | 内部能力 | FastEmbed、Psycopg 3、pgvector | 已实现 | PostgreSQL pgvector round-trip |
-| 私聊 RAG Bot | `/chat` 中 `shareo_bot` | PostgreSQL outbox、Redis Streams、RAG、LLM | 已实现；消息与任务 outbox 同事务，publisher 可重试补发；可见引用响应增加帖子图片、作者和摘要预览 | 集成测试、当前报告 v1 RAG 机器评测；完整来源覆盖率 `0.9333`、引用精度 `0.9000`、可访问率 `100%`，详见 Final Freeze |
+| 私聊 RAG Bot | `/chat` 中 `shareo_bot` | PostgreSQL outbox、Redis Streams、RAG、LLM | 消息与任务 outbox 同事务，publisher 可重试补发。内部 `401` 时保留 pending 条目供 Worker 重领。可见引用包含帖子图片、作者和摘要预览 | [故障恢复和引用验证](REVIEW.md#2026-11-23-首轮优化与-orbstack-验证)。历史 v1 RAG 机器评测见 Final Freeze |
 | 只读社区知识 Agent | 搜索页“问问小O”进入专属 Agent 会话 | LangGraph、RAG、pgvector、Go 内部只读接口 | Bot 不出现在普通私聊列表；复用既有会话与 `ai_mode=agent`，按问题意图收窄工具面，不新增公开 Agent API | 当前报告 v1 的 36 条真实 Provider 评测；完整来源覆盖率 `0.9722`、引用精度 `0.9583`、禁止/额外工具 `0`、注入拒答失败 `0` |
 
 ## 内容可见性

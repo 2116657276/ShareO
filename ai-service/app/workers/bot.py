@@ -18,7 +18,7 @@ MAX_CALLBACK_CITATIONS = 5
 
 
 def is_permanent_http_error(status_code: int) -> bool:
-    return 400 <= status_code < 500
+    return 400 <= status_code < 500 and status_code != 401
 
 
 def positive_int(fields: dict[str, Any], name: str) -> int:

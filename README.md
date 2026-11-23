@@ -42,7 +42,7 @@ ai_mode=agent → LangGraph → 四类只读工具 → 脱敏轨迹 → 引用�
 
 ## 简历与技术面试展示重点
 
-这个项目最适合展示“边界清楚、异步链路可恢复、AI 结果可验证”的全栈工程能力，而不是展示框架数量。推荐从以下四条主线讲解：
+面试可以从数据所有权、异步恢复、请求准入、Agent 权限和检索评测五方面展开。
 
 - Go 是 `public` 业务数据和权限的唯一写者，Python 只负责 `ai` schema 的派生向量；跨服务返回的帖子和引用由 Go 再做 `approved AND is_deleted=0` 可见性复核。
 - 私聊 Bot 使用 PostgreSQL 事务 outbox、Redis Streams 的 at-least-once 消费和 `source_message_id` 幂等，能解释故障重试、重领、兜底和重复回调。
@@ -54,7 +54,11 @@ ai_mode=agent → LangGraph → 四类只读工具 → 脱敏轨迹 → 引用�
 
 ## 快速开始
 
-环境要求和完整启动说明见 [用户使用指南](docs/USER_GUIDE.md)。首次运行可执行：
+默认开发入口为 Homebrew 原生环境。Apple Silicon 用户可以按 [OrbStack 隔离试跑](docs/operations/runbook.md#orbstack-隔离试跑) 使用独立端口、卷和合成数据。
+
+### Homebrew 原生启动
+
+首次配置和依赖安装见 [用户使用指南](docs/USER_GUIDE.md)。
 
 ```bash
 cp config.yaml.example config.yaml
@@ -65,11 +69,17 @@ make up
 
 `make up` 会检测并启动本机依赖、启动 Go/AI 服务、执行 readiness 检查，并默认打开网页。不需要自动打开浏览器时使用 `SHAREO_OPEN_BROWSER=0 make up`。
 
-默认 Go/AI 端口分别为 `8080` 和 `8000`。`SHAREO_APP_PORT`、`SHAREO_AI_PORT` 由本机启动脚本用于选择端口和探活；Go 进程本身的监听端口仍来自 `config.yaml` 的 `server.port`，因此修改非默认端口时必须同步修改配置文件和 `.env`，并保持 `SHAREO_AI_BASE_URL`、`SHAREO_AI_GO_BASE_URL` 与实际端口一致。该入口统一工作仍列在 `TASK.md` 的 `BASE-03`。
+默认 Go/AI 端口分别为 `8080` 和 `8000`。本机脚本把 `SHAREO_APP_PORT` 传给 Go，并用于探活和默认 AI 回调地址。直接启动 Go 时，显式 `SHAREO_APP_PORT` 优先于 `config.yaml` 的 `server.port`。若配置了显式 `SHAREO_AI_BASE_URL` 或 `SHAREO_AI_GO_BASE_URL`，请将它们与实际监听地址同步。
 
-本机运行只使用 Homebrew PostgreSQL 17、pgvector、Redis 和 MinIO；不会启动或读取旧 MySQL、Qdrant、Colima、OrbStack 或 Compose 数据。全新图片数据集使用 `CONFIRM=YES make local-photo-seed`，该命令会先校验空业务库、备份并清空指定 MinIO bucket，再为本地图片目录中的 47 张图片创建固定测试用户帖子。
+宿主机的全新图片数据集使用 `CONFIRM=YES make local-photo-seed`，该命令会先校验空业务库、备份并清空指定 MinIO bucket，再为本地图片目录中的 47 张图片创建固定测试用户帖子。
 
-基础检查：
+### OrbStack 隔离试跑
+
+启动配置、健康检查和停止步骤见 [运行手册](docs/operations/runbook.md#orbstack-隔离试跑)。试跑已验证空库初始化、合成数据的发布与检索、私聊推送、Bot 故障恢复和重启持久性。Bot 使用固定响应服务，真实模型质量仍待复评。详见 [试跑记录](docs/REVIEW.md#2026-11-23-首轮优化与-orbstack-验证)。
+
+### 验证
+
+以下 API 和集成测试使用原生环境。
 
 ```bash
 SHAREO_SKIP_CURRENT_EVIDENCE=1 make check
