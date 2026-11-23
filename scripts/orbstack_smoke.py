@@ -139,7 +139,9 @@ def request(
     expect: int | tuple[int, ...] = 200,
     **kwargs: Any,
 ) -> httpx.Response:
-    headers = {"Authorization": f"Bearer {token}"} if token else {}
+    headers = dict(kwargs.pop("headers", {}) or {})
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
     response = client.request(method, base + path, headers=headers, **kwargs)
     expected = (expect,) if isinstance(expect, int) else expect
     if response.status_code not in expected:

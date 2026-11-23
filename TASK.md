@@ -178,3 +178,12 @@ Docker、Docker Compose 和 OrbStack 在上述改进完成、适用检查通过�
 - [x] 验证空库初始化、注册、发帖审核、图文检索、固定响应 Bot、WebSocket 以及试跑服务重启的持久性。复验发布失败补偿、`401` 后 Worker 重领、重复回调、撤审过滤，并测量 1/10/100 个普通会话的 SQL 与 Redis 命令数。 [验收记录](docs/REVIEW.md#2026-11-23-首轮优化与-orbstack-验证)
 
 原生入口见 [用户使用指南](docs/USER_GUIDE.md)，独立容器入口见 [运行手册](docs/operations/runbook.md#orbstack-隔离试跑)。试跑只使用合成数据。完整 Stream 丢失后重放已发布任务、会话在线状态批量读取、真实模型复评均待处理。
+
+### 2026-11-23 干净检出复验与草稿交付
+
+- [x] 从 `origin/orbstack` 的 `5888b63` 建立独立 worktree。支持的运行改动为 `d445a34`：Compose 端口、卷名前缀和镜像可配置，新增仅 `fixture` profile 启用的固定响应 LLM，以及可重复执行的 `scripts/orbstack_smoke.py`。
+- [x] 在 `shareo-orbstack-clean-20261123` 项目和 `127.0.0.1:18090` 完成新凭据、独立卷、独立模型缓存卷的真实试跑；旧 `18080` 试跑和 Homebrew 服务保持运行。
+- [x] 空库、角色 schema 隔离、待审核不可见、审核后正文/图片检索、Bot 引用、WebSocket、`XADD` 失败补发、重复回调和内部 `401` 重领均通过。最终 outbox 无 pending，每个来源消息只有一条业务回复。
+- [x] 记录 1/10/100 个普通会话的 Redis `EXISTS`、`MGET`、估算往返和 20 次接口耗时基线；完整条件和 3 分钟演示见 [OrbStack 隔离演示](docs/operations/orbstack-demo.md)。
+
+本轮不改变业务代码，也不宣称真实 LLM 质量、并发能力或生产 SLA。合并决定留给用户。

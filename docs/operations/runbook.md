@@ -101,7 +101,7 @@ make final-evidence
 
 ## OrbStack 隔离试跑
 
-在 Apple Silicon 上使用 `orbstack` context 启动独立的 `shareo-orbstack` 项目。运行时包括 Go、单进程 Python、PostgreSQL 17/pgvector、Redis 和 MinIO。MinIO 从固定官方源码版本构建。浏览器入口为 `http://127.0.0.1:18080`，其他服务使用项目内网络。
+在 Apple Silicon 上使用 `orbstack` context 启动独立的 `shareo-orbstack` 项目。运行时包括 Go、单进程 Python、PostgreSQL 17/pgvector、Redis 和 MinIO。MinIO 从固定官方源码版本构建。浏览器入口默认为 `http://127.0.0.1:18080`，其他服务使用项目内网络。
 
 在仓库根目录执行以下命令。首次复制后，按 [`deploy/env.orbstack.example`](../../deploy/env.orbstack.example) 的说明填入独立随机凭据。已有试跑配置可以直接复用。
 
@@ -125,6 +125,8 @@ curl --fail http://127.0.0.1:18080/healthz
 ```
 
 `pilot ps --all` 应显示 `postgres-init` 以退出码 `0` 完成，五个长驻服务处于 `healthy`。模型缓存使用独立命名卷，首次加载需要下载模型权重。可用 `pilot --profile warmup run --rm ai-warmup` 先填充该卷。LLM 地址和密钥默认留空，此时 Bot 提示 Provider 不可用，RAG 和 Agent readiness 为降级。做固定响应验证时，将 LLM 地址指向同一试跑网络内的测试服务。
+
+需要与已有试跑并行验收时，使用隔离参数：`SHAREO_ORBSTACK_APP_PORT` 指定不同宿主机端口，`SHAREO_ORBSTACK_VOLUME_PREFIX` 指定独立卷前缀，`SHAREO_ORBSTACK_APP_IMAGE`/`SHAREO_ORBSTACK_AI_IMAGE`/`SHAREO_ORBSTACK_MINIO_IMAGE` 指定独立镜像标签。`--profile fixture` 会启动不发宿主端口的 `llm-fixture` 服务；将 `SHAREO_AI_LLM_BASE_URL` 设为 `http://llm-fixture:8000/v1` 即可走本地固定响应。完整隔离试跑、验收结果和 3 分钟演示见 [隔离演示](orbstack-demo.md)。
 
 试跑仅使用合成账号、合成图片和试跑卷。暂停时执行 `pilot stop`，保留卷以便继续验证。恢复时执行 `pilot up --detach --wait`。
 
