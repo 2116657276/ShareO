@@ -1,8 +1,80 @@
 # ShareO 高级工程审查与当前证据
 
-> 最新文档复核日期：2026-08-28；下方 2026-08-12 章节保留为历史审查快照。
+> 最新文档复核日期为 2026-11-23。2026-08-12 章节为历史审查快照。
 >
 > 本文面向简历项目审查、面试和项目交接，记录历史审查、当前事实和证据边界。当前状态与下一轮执行计划以 [`TASK.md`](../TASK.md) 为准；当前复核评分为 7.4/10。历史 AI 质量报告来自迁移前运行；2026-08-11 的 PostgreSQL/pgvector、API 和本机数据集重验结果单独列出。
+
+## 2026-11-23 只读评审
+
+本次以 `ffd195c` 和已有工作区为基线，沿启动脚本、认证、Bot 队列和会话列表检查正常入口。6 项 Go 定向测试、55 项 Python 单元测试和两个启动脚本的语法检查通过。下表记录修复前的状态，后续实测见 [OrbStack 验证](#2026-11-23-首轮优化与-orbstack-验证)。
+
+| 优先级 | 发现与影响 |
+| --- | --- |
+| P1 | `SHAREO_APP_PORT` 已被脚本用于探活和默认回调地址，但 Go 监听端口仍从 YAML 读取。仅修改环境变量会造成监听与探活不一致。 |
+| P1 | Bot 内部取任务或回调遇到 `401` 被作为永久失败，正常返回后 Redis consumer 会 ACK。未回复的 `published` outbox 仍占用用户额度。Redis 在发布后丢失 Stream 数据也有待处理记录悬挂的问题。 |
+| P2 | 注册先创建账户，再向 Redis 写会话。Redis 写失败会返回通用 `503`，账户实际已经存在，用户按提示重试注册会得到用户名冲突。 |
+| P2 | 会话、成员、最新消息与未读数已有批量查询。在线状态的本地 Hub 未命中后仍逐会话查 Redis，带引用的预览也会单独复核。基线需分别计数。 |
+
+OrbStack 试跑复用 Go 与 Python 的镜像构建骨架及 PostgreSQL 初始迁移。旧 Compose 仍连接 MySQL/Qdrant。Go 镜像原构建上下文包含未排除的本机 `.env`、`.local` 和缓存目录，容器构建前须缩小上下文范围。
+
+## 2026-11-23 首轮优化与 OrbStack 验证
+
+Go 启动时校验并优先使用 `SHAREO_APP_PORT`，未设置时使用 YAML。API 与 Web 注册在账户已落库、会话写 Redis 失败时返回 `503` 和“账号已创建，登录服务暂不可用，请稍后直接登录”，且不设置会话 Cookie。Bot 取任务、回调和终止兜底遇到内部 `401` 时保留 Redis pending 条目供重领。
+
+`ffd195c` 加本轮工作区改动通过 230 项 Go 测试、157 项 Python 非集成测试、`go vet`、Shell 语法和 Compose 配置验证。四项 Python 集成测试未纳入该批次。
+
+独立 `shareo-orbstack` 项目在 OrbStack `linux/arm64` 启动 Go、Python、PostgreSQL 17.12（pgvector 0.8.7）、Redis 和 MinIO。空卷初始化退出码为 0，两个应用角色各自只能向所属 schema 插入。五个长驻服务报告健康，Go `/healthz` 和 Python `/readyz` 均返回 `200`。MinIO 镜像改用官方源码固定标签构建，避免依赖本次拉取被拒的旧镜像。操作见 [本地运行手册](operations/runbook.md)。
+
+合成数据通过注册、上传 PNG、发帖审核、公开图片读取、私聊持久化、WebSocket 实时下发和中文语义搜图。单独禁止试跑 Redis 的 `SET` 后，API 与 Web 注册均返回约定的 `503`，恢复权限后两个已创建的账号均能直接登录。
+
+正文与图片使用实际 embedding 模型写入 pgvector。中文正文查询返回审核通过的合成帖子，Bot 通过同网络固定响应服务生成带该帖子引用的回复。模型加载后，RAG 和 Agent readiness 均返回 `200`，两者报告 Bot consumer 正在运行。
+
+故障验证覆盖以下场景。
+
+- 暂时禁止 Redis `XADD`，观察 PostgreSQL outbox 保持 `pending` 且重试次数增长。恢复后任务发布并回复。对同一消息再次回调时，回复 ID 和内容保持一致。
+- 使用不匹配的内部令牌重建 Python，确认 Bot 任务进入 Redis pending 且无回复。恢复令牌并重建 Worker 后，任务被重领，PostgreSQL 只保存一条带引用的回复。
+- 重启五个服务后，帖子与 Bot 回复仍在 PostgreSQL，MinIO 代理返回的图片 SHA-256 一致，Redis AOF 保留测试前的 3 条 Bot Stream 记录。
+- 分别验证管理员撤审和作者删除。两种操作后，对应帖子均从公开搜贴和历史回复返回的引用中消失，公开图片返回 `404`。
+
+普通私聊列表的查询基线如下。对每种规模请求一次 `GET /api/v1/conversations`，用户未连接 WebSocket，列表中没有引用预览。PostgreSQL 计入请求窗口内的 Go 角色 `SELECT`（含认证，排除后台 Bot outbox 轮询），Redis 取该窗口内 `INFO commandstats` 的 `EXISTS` 差值。
+
+| 返回会话数 | PostgreSQL `SELECT` | Redis `EXISTS` |
+| --- | --- | --- |
+| 1 | 8 | 1 |
+| 10 | 8 | 10 |
+| 100 | 8 | 100 |
+
+实测覆盖本次普通会话列表的命令数。批量加载维持固定数量的 SQL；在线状态走 Redis 逐项检查，调用数随返回会话数增长。
+
+固定响应服务只用于验证程序链路和引用权限。本轮未测真实 LLM 回答质量、检索评测指标、延迟与吞吐，也未切换 Final Freeze 的权威证据。Redis 已发布记录在整个 Stream 丢失时如何从 PostgreSQL 重放，仍待处理。
+
+### 干净检出复验
+
+从 `origin/orbstack` 的 `5888b63` 建立独立 worktree，支持提交 `d445a34` 只增加试跑参数化、固定响应服务 profile 和可重复执行脚本；业务代码未变。另起项目 `shareo-orbstack-clean-20261123` 和 `127.0.0.1:18090`，使用新生成的凭据、独立 PostgreSQL/Redis/MinIO/模型缓存卷，旧 `shareo-orbstack` 栈与 `18080` 未改动。
+
+Go 和 AI 镜像由该提交构建；MinIO 复用同一提交此前构建的镜像，没有重新构建。模型缓存从已有卷复制，新卷约 1.5 GiB，未重新下载权重。五个核心服务健康，`postgres-init` 退出码为 `0`，固定响应服务健康。空库只有 `shareo_bot`，帖子、消息、outbox 和两张向量表均为 0；两个数据库角色无法跨 schema 写入。
+
+合成 PNG 发帖在待审核时公开详情为 `404`、检索不可见、图片代理拒绝；审核后正文检索、语义搜图和引用回复均通过。禁用 Redis `XADD` 后 outbox 保持 `pending` 且重试增长，恢复后补发；重复回调返回相同回复 ID 和内容，数据库只有一条业务回复；错误内部令牌使任务留在 pending，恢复后重领并只提交一条带引用回复。最终 4 条 outbox 全部 `published`，4 个 `source_message_id` 各一条回复。
+
+普通私聊列表在未连接 WebSocket、无引用预览、单用户顺序请求的条件下，每种规模预热 1 次后请求 20 次：1/10/100 个会话分别产生 21/210/2103 次 Redis `EXISTS` 和 0 次 `MGET`，中位耗时为 2.472/3.208/10.142 ms，p95 为 2.927/6.552/13.174 ms。按一条命令一次请求/响应估算，往返次数同量级；这不是抓包 RTT。完整步骤、条件和演示提纲见 [OrbStack 隔离演示](operations/orbstack-demo.md)。
+
+本轮未验证真实 LLM 质量、并发吞吐、100 会话以上规模、Stream 整体丢失后的全量重放和最终冻结证据。
+
+### 验收可靠性复验
+
+审核基线仍为 `79b54f2`。本轮只修改 `scripts/orbstack_smoke.py`、运行手册和本文档，没有改变业务代码；PR #1 保持草稿。
+
+脚本现在会在任何状态写入、HTTP 写请求、SQL 写入或 Redis ACL 修改前校验目标：base URL 必须是 loopback、端口必须等于指定 Compose 项目的 Go 发布端口、容器必须属于该项目、状态目录和卷前缀必须与项目同名，并拒绝原 `shareo-orbstack` 项目。演示阶段还要求 `ai-service` 的 LLM 地址精确指向 `http://llm-fixture:8000/v1`。实测错误端口、非 loopback 和原项目名均在副作用前失败。
+
+新项目 `shareo-orbstack-fresh-20261123` 使用全新 PostgreSQL/Redis/MinIO 卷和从既有缓存只读复制的模型缓存，在 `127.0.0.1:18092` 完成空库初始化、审核检索、固定响应 Bot 引用、`XADD` 失败补发、重复回调、内部 `401` 重领和 presence 复验。五个核心服务健康，`postgres-init` 退出码为 `0`，fixture 健康且未发布宿主机端口。重复回调同时校验 HTTP 响应体和数据库唯一行；`401` 按本次 `source_message_id` 确认 Stream 条目仍 pending。
+
+PR 基线使用 `EXISTS`。普通私聊列表在单用户、无 WebSocket、无引用预览、顺序请求条件下，每种规模预热 1 次后请求 20 次；命令计数与延迟使用同一正式采样窗口。1/10/100 个会话分别产生 20/200/2000 次 `EXISTS`、0 次 `MGET`，估算往返为 20/200/2000，中位耗时为 1.929/2.693/10.911 ms，p95 为 3.010/4.582/15.319 ms。该结果是基线复验，不是 `MGET` 优化收益。
+
+未验证真实 LLM 质量、并发吞吐、100 会话以上规模、Stream 整体丢失后的全量重放和最终冻结证据。本地性能分支 `perf/chat-presence-batch`（`63b50d6`）保持独立，本轮未推送、未合并、未宣称延迟改善。
+
+### 分支提交前复验
+
+从 Git 暂存区导出不含本机数据和凭据的源码快照后，Go 格式检查、`go vet`、Go 测试和构建、Ruff、Shell 语法及示例环境的 `compose config --quiet` 均通过。Python 为 155 项通过、6 项跳过，其中 2 项依赖本地评测集、4 项依赖集成服务配置。文档结构检查通过，完整 Final Freeze 门禁仍报告权威运行指针、三轮评测和源码指纹三项缺口。
 
 ## 2026-08-12 全面工程与面试官复审（历史快照）
 

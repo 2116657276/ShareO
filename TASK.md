@@ -1,6 +1,6 @@
 # ShareO 当前状态
 
-> 更新时间：2026-08-28 | 状态：Batch 1-9 核心改进、PostgreSQL/pgvector 迁移和本机验证已完成；文档审计已完成一轮；复审后的下一轮优化计划已建立，阶段 0 待执行
+> 更新于 2026-11-23。首轮优化和独立 OrbStack 试跑已经完成，见[本轮状态](#2026-11-23-首轮优化与-orbstack-试跑)。此前各阶段记录保留为历史。
 
 ## 2026-08-12 复审与改进进度
 
@@ -169,3 +169,30 @@ Docker、Docker Compose 和 OrbStack 在上述改进完成、适用检查通过�
 任务只有同时满足“实现完成、直接相关测试通过、文档同步、无临时敏感产物、验收记录可定位”五项条件，才能从 `[~]` 或 `[ ]` 更新为 `[x]`。阶段完成后在本节补充日期、执行命令和证据入口，不用删除历史记录或覆盖失败运行。
 
 本计划不改变 ShareO 的产品范围：继续保留 Go 业务单体、Python AI 派生服务、PostgreSQL/pgvector、Redis Streams、SSR 前端和受限只读 Agent；不新增群聊、转帖、写入型 Agent、外部工具、多 Agent 或生产级高可用承诺。
+
+## 2026-11-23 首轮优化与 OrbStack 试跑
+
+- [x] 完成启动、认证、Bot 恢复和会话查询的只读评审，结论见 [工程审查](docs/REVIEW.md#2026-11-23-只读评审)。
+- [x] 修正 Go 监听端口覆盖、注册后会话写入失败响应，以及 Bot 内部 `401` 的重试和确认语义。定向回归和全量非集成测试通过。
+- [x] 用独立 `shareo-orbstack` Compose 项目启动 Go、Python、PostgreSQL 17/pgvector、Redis、MinIO。五个服务健康，数据库初始化退出码为 0。使用独立凭据、卷和合成数据，宿主机入口为 `127.0.0.1:18080`。
+- [x] 验证空库初始化、注册、发帖审核、图文检索、固定响应 Bot、WebSocket 以及试跑服务重启的持久性。复验发布失败补偿、`401` 后 Worker 重领、重复回调、撤审过滤，并测量 1/10/100 个普通会话的 SQL 与 Redis 命令数。 [验收记录](docs/REVIEW.md#2026-11-23-首轮优化与-orbstack-验证)
+
+原生入口见 [用户使用指南](docs/USER_GUIDE.md)，独立容器入口见 [运行手册](docs/operations/runbook.md#orbstack-隔离试跑)。试跑只使用合成数据。完整 Stream 丢失后重放已发布任务、会话在线状态批量读取、真实模型复评均待处理。
+
+### 2026-11-23 干净检出复验与草稿交付
+
+- [x] 从 `origin/orbstack` 的 `5888b63` 建立独立 worktree。支持的运行改动为 `d445a34`：Compose 端口、卷名前缀和镜像可配置，新增仅 `fixture` profile 启用的固定响应 LLM，以及可重复执行的 `scripts/orbstack_smoke.py`。
+- [x] 在 `shareo-orbstack-clean-20261123` 项目和 `127.0.0.1:18090` 完成新凭据、独立卷、独立模型缓存卷的真实试跑；旧 `18080` 试跑和 Homebrew 服务保持运行。
+- [x] 空库、角色 schema 隔离、待审核不可见、审核后正文/图片检索、Bot 引用、WebSocket、`XADD` 失败补发、重复回调和内部 `401` 重领均通过。最终 outbox 无 pending，每个来源消息只有一条业务回复。
+- [x] 记录 1/10/100 个普通会话的 Redis `EXISTS`、`MGET`、估算往返和 20 次接口耗时基线；完整条件和 3 分钟演示见 [OrbStack 隔离演示](docs/operations/orbstack-demo.md)。
+
+本轮不改变业务代码，也不宣称真实 LLM 质量、并发能力或生产 SLA。合并决定留给用户。
+
+### 2026-11-23 验收可靠性复验
+
+- [x] 审核基线保持 `79b54f2`。`scripts/orbstack_smoke.py` 在写入前校验 loopback、Compose 项目、发布端口、容器归属、状态目录和卷前缀；错误端口、非 loopback 和原 `shareo-orbstack` 项目均提前失败。
+- [x] 演示阶段强制 `--demo` 和本地固定响应 LLM；初始化要求五个核心服务明确 healthy、`postgres-init` 已退出且退出码为 `0`、fixture 健康。
+- [x] 在全新项目 `shareo-orbstack-fresh-20261123` 和 `127.0.0.1:18092` 复验空库、审核检索、Bot 引用、`XADD` 补发、重复回调、内部 `401` 和 presence。重复回调同时校验 HTTP 与数据库；`401` 按 `source_message_id` 验证 Stream pending。
+- [x] PR 基线 presence 使用 `EXISTS`；1/10/100 会话在 20 次请求内分别产生 20/200/2000 次命令和估算往返，中位耗时 1.929/2.693/10.911 ms，p95 为 3.010/4.582/15.319 ms。
+
+本地 `perf/chat-presence-batch`（`63b50d6`）保持独立，本轮不推送、不合并，也不把基线采样写成优化收益。复验细节见 [OrbStack 隔离演示](docs/operations/orbstack-demo.md)。

@@ -18,13 +18,13 @@ make bootstrap-postgres
 至少检查以下配置：
 
 - `config.yaml` 中的 PostgreSQL、MinIO 和 JWT 配置是否适合当前本机环境；
-- 如果修改端口，`.env` 中的 `SHAREO_APP_PORT`、`SHAREO_AI_PORT` 必须分别与 `config.yaml` 的 `server.port` 以及 `SHAREO_AI_BASE_URL`、`SHAREO_AI_GO_BASE_URL` 保持一致；当前 Go 直接启动仍以 YAML 端口为准；
+- 用 `.env` 中的 `SHAREO_APP_PORT`、`SHAREO_AI_PORT` 修改脚本启动端口，已显式配置的 `SHAREO_AI_BASE_URL`、`SHAREO_AI_GO_BASE_URL` 要同步更新。直接启动 Go 时，进程环境中的 `SHAREO_APP_PORT` 优先，未设置则使用 YAML 端口；
 - `.env` 中的 `SHAREO_INTERNAL_TOKEN` 如果已填写，必须是 Go 和 Python 共用的随机值；留空或保留示例占位符时，本机启动脚本会生成随机令牌并以 `0600` 权限保存到 `${SHAREO_LOCAL_STATE_DIR:-/tmp/shareo-local}/internal-token`。Go/Python 内部接口也会拒绝已知占位符，即使绕过启动脚本直接运行服务也不会把占位符当作有效凭证；
 - 需要使用 RAG、Agent 或真实模型评测时，再填写 `SHAREO_AI_LLM_API_KEY` 等 Provider 配置。
 
 不要把 `.env`、API Key、Token、个人图片或模型权重提交到 Git。
 
-当前支持路径不包含 Compose；内部令牌必须由环境变量显式提供，或由本机启动脚本生成并保存到状态目录。旧 Compose 文件仅作退役历史资料，不要作为日常启动入口。
+以上配置适用于原生开发入口。需要容器环境时，按 [OrbStack 隔离试跑](operations/runbook.md#orbstack-隔离试跑) 准备独立配置与数据。
 
 ## 日常启动与关闭
 
@@ -47,7 +47,7 @@ make up
 SHAREO_OPEN_BROWSER=0 make up
 ```
 
-启动成功后也可以手动访问默认地址：<http://127.0.0.1:8080>。非默认端口以 `.env` 的 `SHAREO_APP_PORT` 为准，但必须先同步 `config.yaml` 的 `server.port`。
+启动成功后也可以手动访问默认地址 <http://127.0.0.1:8080>。脚本启动的非默认端口以 `SHAREO_APP_PORT` 为准。
 
 ### 一键关闭
 
@@ -105,7 +105,7 @@ make prepare-current-ai-eval VERSION=v2
 
 ## 旧运行时
 
-MySQL、Qdrant、Colima、OrbStack 和 Docker Compose 已退役，不再由当前 Make 目标启动。旧存储可以人工保留，但新运行时完全不读取；项目内旧 `qdrant/` 源码目录已在迁移验收通过后删除。
+MySQL、Qdrant 和基于两者的旧 Compose 已退役。`make up` 使用 Homebrew 依赖，独立容器环境见 [OrbStack 隔离试跑](operations/runbook.md#orbstack-隔离试跑)。
 
 ## 常见问题
 
@@ -115,7 +115,7 @@ MySQL、Qdrant、Colima、OrbStack 和 Docker Compose 已退役，不再由当�
 
 ### 页面打不开
 
-执行 `make doctor`，再确认 `.env` 中 `SHAREO_APP_PORT`（默认 `8080`）没有被其他程序占用。也可以使用 `curl http://127.0.0.1:${SHAREO_APP_PORT:-8080}/healthz` 检查 Go 服务；如果是直接启动 Go，请先确认 `config.yaml` 的 `server.port` 与该端口一致。
+执行 `make doctor`，再确认 `.env` 中 `SHAREO_APP_PORT`（默认 `8080`）没有被其他程序占用。也可以对实际监听端口请求 `/healthz`。直接启动 Go 时，检查进程环境中的 `SHAREO_APP_PORT` 或 YAML 中的 `server.port`。
 
 ### Bot 没有回复
 

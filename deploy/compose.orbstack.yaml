@@ -1,0 +1,232 @@
+name: shareo-orbstack
+
+x-ai-build: &ai-build
+  context: ../ai-service
+  dockerfile: Dockerfile
+  args:
+    HTTP_PROXY: ${SHAREO_AI_HTTP_PROXY:-}
+    HTTPS_PROXY: ${SHAREO_AI_HTTPS_PROXY:-}
+    ALL_PROXY: ${SHAREO_AI_ALL_PROXY:-}
+    NO_PROXY: ${SHAREO_AI_NO_PROXY:-localhost,127.0.0.1,::1}
+
+x-ai-environment: &ai-environment
+  SHAREO_AI_REDIS_URL: redis://redis:6379/0
+  SHAREO_AI_DATABASE_URL: postgresql://${SHAREO_AI_DB_USER:?SHAREO_AI_DB_USER must be set}@postgres:5432/${SHAREO_PG_DATABASE:-shareo}?sslmode=disable
+  SHAREO_AI_DB_USER: ${SHAREO_AI_DB_USER:?SHAREO_AI_DB_USER must be set}
+  SHAREO_AI_DB_PASSWORD: ${SHAREO_AI_DB_PASSWORD:?SHAREO_AI_DB_PASSWORD must be set}
+  SHAREO_AI_GO_BASE_URL: http://app:8080
+  # An override deliberately breaks Go callbacks so 401 recovery can be exercised.
+  SHAREO_AI_INTERNAL_TOKEN: ${SHAREO_AI_INTERNAL_TOKEN_OVERRIDE:-${SHAREO_INTERNAL_TOKEN:?SHAREO_INTERNAL_TOKEN must be set}}
+  SHAREO_AI_MODEL_CACHE_DIR: /models
+  SHAREO_AI_TEXT_MODEL_CACHE_DIR: /models
+  SHAREO_AI_EMBEDDING_DEVICE: cpu
+  SHAREO_AI_EMBEDDING_CONCURRENCY: ${SHAREO_AI_EMBEDDING_CONCURRENCY:-1}
+  SHAREO_AI_EMBEDDING_WARMUP: "false"
+  SHAREO_AI_BOT_RECLAIM_INTERVAL_MS: ${SHAREO_AI_BOT_RECLAIM_INTERVAL_MS:-2000}
+  SHAREO_AI_BOT_MIN_IDLE_TIME_MS: ${SHAREO_AI_BOT_MIN_IDLE_TIME_MS:-2000}
+  SHAREO_AI_LLM_BASE_URL: ${SHAREO_AI_LLM_BASE_URL:-}
+  SHAREO_AI_LLM_API_KEY: ${SHAREO_AI_LLM_API_KEY:-}
+  SHAREO_AI_LLM_MODEL: ${SHAREO_AI_LLM_MODEL:-deepseek-chat}
+  SHAREO_AI_LLM_TIMEOUT_SECONDS: ${SHAREO_AI_LLM_TIMEOUT_SECONDS:-30}
+  SHAREO_AI_AGENT_ENABLED: ${SHAREO_AI_AGENT_ENABLED:-true}
+  HF_ENDPOINT: ${SHAREO_AI_HF_ENDPOINT:-https://huggingface.co}
+  HTTP_PROXY: ${SHAREO_AI_HTTP_PROXY:-}
+  HTTPS_PROXY: ${SHAREO_AI_HTTPS_PROXY:-}
+  ALL_PROXY: ${SHAREO_AI_ALL_PROXY:-}
+  NO_PROXY: ${SHAREO_AI_NO_PROXY:-localhost,127.0.0.1,::1,app,redis,postgres,minio,ai-service}
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg17
+    environment:
+      POSTGRES_DB: ${SHAREO_PG_DATABASE:-shareo}
+      POSTGRES_USER: ${SHAREO_PG_ADMIN_USER:-shareo_admin}
+      POSTGRES_PASSWORD: ${SHAREO_PG_ADMIN_PASSWORD:?SHAREO_PG_ADMIN_PASSWORD must be set}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -p 5432 -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+    restart: unless-stopped
+
+  postgres-init:
+    image: pgvector/pgvector:pg17
+    entrypoint: ["/bin/bash", "/bootstrap/scripts/bootstrap_postgres.sh"]
+    environment:
+      SHAREO_PG_HOST: postgres
+      SHAREO_PG_PORT: "5432"
+      SHAREO_PG_DATABASE: ${SHAREO_PG_DATABASE:-shareo}
+      SHAREO_PG_ADMIN_USER: ${SHAREO_PG_ADMIN_USER:-shareo_admin}
+      SHAREO_PG_ADMIN_PASSWORD: ${SHAREO_PG_ADMIN_PASSWORD:?SHAREO_PG_ADMIN_PASSWORD must be set}
+      SHAREO_DB_USER: ${SHAREO_DB_USER:-shareo_app}
+      SHAREO_DB_PASSWORD: ${SHAREO_DB_PASSWORD:?SHAREO_DB_PASSWORD must be set}
+      SHAREO_AI_DB_USER: ${SHAREO_AI_DB_USER:?SHAREO_AI_DB_USER must be set}
+      SHAREO_AI_DB_PASSWORD: ${SHAREO_AI_DB_PASSWORD:?SHAREO_AI_DB_PASSWORD must be set}
+    volumes:
+      - ../scripts/bootstrap_postgres.sh:/bootstrap/scripts/bootstrap_postgres.sh:ro
+      - ../migrations/postgres:/bootstrap/migrations/postgres:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes", "--appendfsync", "everysec", "--save", "", "--dir", "/data"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  minio:
+    image: ${SHAREO_ORBSTACK_MINIO_IMAGE:-shareo-orbstack-minio:latest}
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.minio
+      args:
+        MINIO_RELEASE: RELEASE.2025-10-15T17-29-55Z
+        HTTP_PROXY: ${SHAREO_AI_HTTP_PROXY:-}
+        HTTPS_PROXY: ${SHAREO_AI_HTTPS_PROXY:-}
+        ALL_PROXY: ${SHAREO_AI_ALL_PROXY:-}
+        NO_PROXY: ${SHAREO_AI_NO_PROXY:-localhost,127.0.0.1,::1}
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: ${SHAREO_MINIO_ACCESS_KEY:?SHAREO_MINIO_ACCESS_KEY must be set}
+      MINIO_ROOT_PASSWORD: ${SHAREO_MINIO_SECRET_KEY:?SHAREO_MINIO_SECRET_KEY must be set}
+      MINIO_BROWSER: "off"
+      MINIO_UPDATE: "off"
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:9000/minio/health/live"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 10s
+    restart: unless-stopped
+
+  app:
+    platform: linux/arm64
+    image: ${SHAREO_ORBSTACK_APP_IMAGE:-shareo-orbstack-app:latest}
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      args:
+        HTTP_PROXY: ${SHAREO_HTTP_PROXY:-}
+        HTTPS_PROXY: ${SHAREO_HTTPS_PROXY:-}
+        ALL_PROXY: ${SHAREO_ALL_PROXY:-}
+        NO_PROXY: ${SHAREO_NO_PROXY:-localhost,127.0.0.1,::1}
+    environment:
+      SHAREO_CONFIG: /app/config.yaml
+      SHAREO_SERVER_HOST: 0.0.0.0
+      SHAREO_PG_HOST: postgres
+      SHAREO_PG_PORT: "5432"
+      SHAREO_PG_DATABASE: ${SHAREO_PG_DATABASE:-shareo}
+      SHAREO_DB_USER: ${SHAREO_DB_USER:-shareo_app}
+      SHAREO_DB_PASSWORD: ${SHAREO_DB_PASSWORD:?SHAREO_DB_PASSWORD must be set}
+      SHAREO_DB_SSLMODE: disable
+      SHAREO_DB_TIMEZONE: Asia/Shanghai
+      SHAREO_JWT_SECRET: ${SHAREO_JWT_SECRET:?SHAREO_JWT_SECRET must be set}
+      SHAREO_MINIO_ACCESS_KEY: ${SHAREO_MINIO_ACCESS_KEY:?SHAREO_MINIO_ACCESS_KEY must be set}
+      SHAREO_MINIO_SECRET_KEY: ${SHAREO_MINIO_SECRET_KEY:?SHAREO_MINIO_SECRET_KEY must be set}
+      SHAREO_INTERNAL_TOKEN: ${SHAREO_INTERNAL_TOKEN:?SHAREO_INTERNAL_TOKEN must be set}
+      SHAREO_AI_BASE_URL: http://ai-service:8000
+      SHAREO_POST_SEARCH_SEMANTIC_THRESHOLD: ${SHAREO_POST_SEARCH_SEMANTIC_THRESHOLD:-0.54}
+      SHAREO_IMAGE_SEARCH_SCORE_THRESHOLD: ${SHAREO_IMAGE_SEARCH_SCORE_THRESHOLD:-0.39}
+    ports:
+      - "127.0.0.1:${SHAREO_ORBSTACK_APP_PORT:-18080}:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      postgres-init:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:8080/healthz >/dev/null"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 20s
+    restart: unless-stopped
+
+  ai-service:
+    platform: linux/arm64
+    image: ${SHAREO_ORBSTACK_AI_IMAGE:-shareo-orbstack-ai:local}
+    build: *ai-build
+    environment: *ai-environment
+    volumes:
+      - ai_model_cache:/models
+    depends_on:
+      postgres:
+        condition: service_healthy
+      postgres-init:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+      app:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+    restart: unless-stopped
+
+  llm-fixture:
+    platform: linux/arm64
+    image: ${SHAREO_ORBSTACK_AI_IMAGE:-shareo-orbstack-ai:local}
+    build: *ai-build
+    profiles: ["fixture"]
+    command:
+      - uvicorn
+      - app.testing.mock_llm:app
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=3)"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+    restart: unless-stopped
+
+  ai-warmup:
+    platform: linux/arm64
+    profiles: ["warmup"]
+    image: ${SHAREO_ORBSTACK_AI_IMAGE:-shareo-orbstack-ai:local}
+    build: *ai-build
+    environment: *ai-environment
+    volumes:
+      - ai_model_cache:/models
+    command:
+      - python
+      - -c
+      - |
+        from app.core.embedding import ImageEmbedder
+        from app.rag.embedding import TextEmbedder
+        ImageEmbedder().warmup()
+        TextEmbedder().warmup()
+    restart: "no"
+
+volumes:
+  postgres_data:
+    name: ${SHAREO_ORBSTACK_VOLUME_PREFIX:-shareo-orbstack}-postgres-data
+  redis_data:
+    name: ${SHAREO_ORBSTACK_VOLUME_PREFIX:-shareo-orbstack}-redis-data
+  minio_data:
+    name: ${SHAREO_ORBSTACK_VOLUME_PREFIX:-shareo-orbstack}-minio-data
+  ai_model_cache:
+    name: ${SHAREO_ORBSTACK_VOLUME_PREFIX:-shareo-orbstack}-ai-model-cache

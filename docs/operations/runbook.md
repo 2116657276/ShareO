@@ -4,7 +4,7 @@
 
 ## 环境与配置
 
-本机运行需要 Go 1.25.1+、Python 3.12、uv、Homebrew PostgreSQL 17（pgvector）、Redis 和 MinIO。AI 评测还需要当前配置的真实 Provider 及本机 47 条图片语料。复制 [`config.yaml.example`](../../config.yaml.example) 为 `config.yaml`，敏感配置只放在未提交的 `.env` 或环境变量中。默认 Go/AI 端口为 `8080`/`8000`；非默认端口必须同步 `.env` 与 `config.yaml` 的 `server.port`，并更新两个服务的 base URL。
+本机运行需要 Go 1.25.1+、Python 3.12、uv、Homebrew PostgreSQL 17（pgvector）、Redis 和 MinIO。AI 评测还需要当前配置的真实 Provider 及本机 47 条图片语料。复制 [`config.yaml.example`](../../config.yaml.example) 为 `config.yaml`，敏感配置只放在未提交的 `.env` 或环境变量中。默认 Go/AI 端口为 `8080`/`8000`。改变端口时，检查显式配置的跨服务 base URL 是否与生效端口一致。
 
 ```bash
 cp config.yaml.example config.yaml
@@ -28,7 +28,7 @@ make local-infra-up
 SHAREO_OPEN_BROWSER=0 make up
 ```
 
-`make up` 会加载当前 Go/AI 源码，按需启动由 ShareO 管理的进程，完成模型预热并等待 `/healthz` 和三个 capability readiness；无需再单独执行 `make warm-ai`。它不会重置 PostgreSQL、MinIO 或 Redis 数据。注意：当前 `/readyz/rag` 只检查 `index_post` consumer，`/readyz/agent` 不检查两个 Streams consumer；Bot 排障仍必须结合 Redis Streams、outbox 和 AI 日志。停止项目进程：
+`make up` 会加载当前 Go/AI 源码，按需启动由 ShareO 管理的进程，完成模型预热并等待 `/healthz` 和三个 capability readiness。`/readyz/rag` 与 `/readyz/agent` 均检查 `index_post` 和 `bot_tasks` consumer。单条 Bot 任务的进度可从 Redis Streams、outbox 和 AI 日志确认。停止项目进程可执行以下命令。
 
 ```bash
 make down
@@ -97,7 +97,38 @@ make final-evidence
 
 ## 旧运行时
 
-MySQL、Qdrant、Colima、OrbStack 和 Compose 已从当前运行时退役。旧配置、旧报告和旧运行记录只作历史对照，当前启动、健康检查、回填和 seed 脚本不会访问它们，也不提供旧向量存储的自动回滚路径。
+仓库根目录的旧 Compose 使用 MySQL 和 Qdrant，已退役。历史配置和记录保留用于对照。本机 Homebrew 路径与下面的 OrbStack 试跑各自使用独立的依赖和数据。
+
+## OrbStack 隔离试跑
+
+在 Apple Silicon 上使用 `orbstack` context 启动独立的 `shareo-orbstack` 项目。运行时包括 Go、单进程 Python、PostgreSQL 17/pgvector、Redis 和 MinIO。MinIO 从固定官方源码版本构建。浏览器入口默认为 `http://127.0.0.1:18080`，其他服务使用项目内网络。
+
+在仓库根目录执行以下命令。首次复制后，按 [`deploy/env.orbstack.example`](../../deploy/env.orbstack.example) 的说明填入独立随机凭据。已有试跑配置可以直接复用。
+
+```bash
+mkdir -p .local/shareo/orbstack
+if [ ! -e .local/shareo/orbstack/.env ]; then
+  install -m 0600 deploy/env.orbstack.example .local/shareo/orbstack/.env
+fi
+```
+
+```bash
+pilot() {
+  docker --context orbstack compose --project-name shareo-orbstack \
+    --env-file .local/shareo/orbstack/.env -f deploy/compose.orbstack.yaml "$@"
+}
+
+pilot config --quiet
+pilot up --detach --build --wait
+pilot ps --all
+curl --fail http://127.0.0.1:18080/healthz
+```
+
+`pilot ps --all` 应显示 `postgres-init` 以退出码 `0` 完成，五个长驻服务处于 `healthy`。模型缓存使用独立命名卷，首次加载需要下载模型权重。可用 `pilot --profile warmup run --rm ai-warmup` 先填充该卷。LLM 地址和密钥默认留空，此时 Bot 提示 Provider 不可用，RAG 和 Agent readiness 为降级。做固定响应验证时，将 LLM 地址指向同一试跑网络内的测试服务。
+
+需要与已有试跑并行验收时，使用隔离参数：`SHAREO_ORBSTACK_APP_PORT` 指定不同宿主机端口，`SHAREO_ORBSTACK_VOLUME_PREFIX` 指定独立卷前缀，`SHAREO_ORBSTACK_APP_IMAGE`/`SHAREO_ORBSTACK_AI_IMAGE`/`SHAREO_ORBSTACK_MINIO_IMAGE` 指定独立镜像标签。`--profile fixture` 会启动不发宿主端口的 `llm-fixture` 服务；将 `SHAREO_AI_LLM_BASE_URL` 设为 `http://llm-fixture:8000/v1` 即可走本地固定响应。完整隔离试跑、验收结果和 3 分钟演示见 [隔离演示](orbstack-demo.md)。
+
+试跑仅使用合成账号、合成图片和试跑卷。暂停时执行 `pilot --profile fixture stop`，保留卷以便继续验证。恢复时执行 `pilot --profile fixture up --detach --wait`。
 
 ## 索引运维
 
@@ -115,8 +146,8 @@ make reconcile-index APPLY=1
 |---|---|---|
 | 页面或图片 404 | Go 日志、MinIO health、对象键 | 确认 MinIO 和 Go 图片代理；数据库记录不等于对象可读 |
 | 语义搜图 503 | `/readyz/image-search`、PostgreSQL pgvector | 等待模型预热，确认 pgvector 表和 index consumer |
-| Bot 不回复 | `/readyz/rag`、AI 日志、`bot_tasks`、`bot_task_outbox` | readiness 只代表 `index_post` consumer；还要检查 `bot_tasks` 的 consumer 状态、outbox 是否 pending、LLM 配置和受控重试；重启 Go 会自动补发 |
-| Agent 不可用 | `/readyz/agent`、LLM 配置、两个 consumer 状态 | 先确认默认 RAG 和普通私聊仍可用，再核对 Agent 开关、模型/向量存储、`bot_tasks` consumer 和内部接口；当前 Agent readiness 不会替你检查 consumer |
+| Bot 不回复 | `/readyz/rag`、AI 日志、`bot_tasks`、`bot_task_outbox` | 核对 LLM、Go 与 AI 的内部令牌、队列待处理记录和 outbox。Go 重启会重扫未发布任务，Worker 会重领未 ACK 的任务。 |
+| Agent 不可用 | `/readyz/agent`、LLM 配置、两个 consumer 状态 | 先确认默认 RAG 和普通私聊仍可用，再核对 Agent 开关、模型、向量存储与内部接口。 |
 | 普通消息已落库但无实时推送 | Redis、WebSocket、`after_id` | REST 数据仍是真相；恢复 Redis 后重新连接并补偿 |
 | 评论提交或点赞报 `like_count` 不存在 | `comments.like_count`、`comment_likes` | 确认使用 `migrations/postgres/001_schema.sql` 初始化的全新 PostgreSQL 数据库；应用启动不会自动迁移 |
 | Bot 消息已落库但任务未发布 | `bot_task_outbox.status`、`next_attempt_at` | 确认 PostgreSQL schema 已初始化，检查 Go publisher 日志；不直接手工重复发送消息 |

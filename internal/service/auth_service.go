@@ -18,6 +18,7 @@ type AuthService struct {
 }
 
 var ErrAuthSessionUnavailable = errors.New("auth session unavailable")
+var ErrRegistrationSessionUnavailable = errors.New("account created but session unavailable")
 
 var (
 	ErrInvalidCredentials = errors.New("用户名或密码错误")
@@ -107,10 +108,7 @@ func (s *AuthService) Register(req RegisterReq) (*AuthResp, error) {
 
 	// Cache login state in Redis for 30-min sliding window
 	if err := repository.CacheLoginToken(context.Background(), user.ID, token, repository.LoginCacheTTL); err != nil {
-		if errors.Is(err, repository.ErrSessionStoreUnavailable) {
-			return nil, fmt.Errorf("%w: 登录服务暂不可用", ErrAuthSessionUnavailable)
-		}
-		slog.Warn("failed to cache login token", "user_id", user.ID, "err", err)
+		return nil, ErrRegistrationSessionUnavailable
 	}
 
 	return &AuthResp{Token: token, User: ToAuthUser(user)}, nil

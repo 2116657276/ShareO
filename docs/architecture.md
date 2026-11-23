@@ -1,6 +1,6 @@
 # ShareO 架构
 
-> 更新时间：2026-08-28 | 本文维护当前稳定架构和证据边界；状态与下一轮计划见 [`TASK.md`](../TASK.md) 和 [`docs/REVIEW.md`](REVIEW.md)。历史评测数字不代表当前运行时已完成三轮复评。
+> 运行入口更新于 2026-11-23。当前状态见 [`TASK.md`](../TASK.md)，验收与评测证据见 [工程审查](REVIEW.md)。
 
 ## 服务拓扑
 
@@ -19,7 +19,7 @@
                         └────────────────► 配置的 OpenAI-compatible LLM Provider
 ```
 
-本机默认入口使用 Homebrew PostgreSQL 17、Redis、MinIO 和宿主机 Python；旧 Compose、MySQL、Qdrant、Colima 和 OrbStack 路径均已退役。Uvicorn 固定单 worker，consumer 在 FastAPI lifespan 内启动，并与 API 共享 pgvector 连接池和模型。
+默认开发入口使用 Homebrew PostgreSQL 17、Redis、MinIO 和宿主机 Python。[OrbStack 隔离试跑](operations/runbook.md#orbstack-隔离试跑) 在内部网络复用相同的服务拓扑，只向宿主机发布 Go 端口。两种入口均使用单 Uvicorn worker，consumer 在 FastAPI lifespan 内启动，并与 API 共享 pgvector 连接池和模型。
 
 ## 数据与服务所有权
 

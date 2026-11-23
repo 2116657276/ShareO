@@ -13,8 +13,10 @@
 - 收藏、转帖、话题、群聊、Agent 和工具调用从当时的阶段范围移除；私人收藏后来由 ADR-009 恢复，Agent 范围由 ADR-008 修正。
 - 当前版本的范围例外由 ADR-008 定义：只允许同一 Bot 私聊入口中的只读 Agent，不恢复写入型 Agent、外部工具或多 Agent。
 - Python AI API、`index_post` consumer 和 `bot_tasks` consumer 运行在同一 FastAPI 进程中。
-- 运行时只支持宿主机 PostgreSQL 17、Redis、MinIO、Go/Python 与 Homebrew pgvector，旧 Compose 目标明确退役；Uvicorn 固定单 worker。
+- 默认开发入口使用宿主机 PostgreSQL 17、Redis、MinIO、Go/Python 与 Homebrew pgvector。旧 MySQL/Qdrant Compose 目标已退役。Uvicorn 固定单 worker。
 - Go 写运行时业务数据到 PostgreSQL `public` schema，Python 写同一实例的 `ai` schema；初始化脚本只负责 schema 与固定 Bot 引导记录，AI 不持有 `public` 表或 MinIO 凭证。
+
+2026-11-23 增加独立 [OrbStack 试跑入口](../operations/runbook.md#orbstack-隔离试跑)。试跑沿用单进程、数据库角色和服务边界，用独立凭据、命名卷和合成数据验证启动、故障恢复与 ACL。原生 Make 入口仍使用宿主机服务。
 
 ## 理由
 

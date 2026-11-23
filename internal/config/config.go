@@ -113,8 +113,9 @@ func Load(path string) (*Config, error) {
 		return nil, fmt.Errorf("failed to unmarshal config: %w", err)
 	}
 
-	// Override sensitive values from environment variables
-	applyEnvOverrides(cfg)
+	if err := applyEnvOverrides(cfg); err != nil {
+		return nil, fmt.Errorf("config validation failed: %w", err)
+	}
 
 	if err := cfg.Validate(); err != nil {
 		return nil, fmt.Errorf("config validation failed: %w", err)
@@ -123,7 +124,7 @@ func Load(path string) (*Config, error) {
 	return cfg, nil
 }
 
-// applyEnvOverrides allows environment variables to override sensitive config values.
+// applyEnvOverrides allows environment variables to override config values.
 // Supported env vars:
 //
 //	SHAREO_DB_USER           — PostgreSQL application role
@@ -136,9 +137,17 @@ func Load(path string) (*Config, error) {
 //	SHAREO_REDIS_PASSWORD    — Redis password
 //	SHAREO_TRUSTED_ORIGINS   — comma-separated exact origins for browser/WS requests
 //	SHAREO_SERVER_HOST       — Go HTTP bind host (defaults to 127.0.0.1)
-func applyEnvOverrides(cfg *Config) {
+//	SHAREO_APP_PORT          — Go HTTP listen port
+func applyEnvOverrides(cfg *Config) error {
 	if v := os.Getenv("SHAREO_SERVER_HOST"); v != "" {
 		cfg.Server.Host = v
+	}
+	if v := os.Getenv("SHAREO_APP_PORT"); v != "" {
+		port, err := strconv.Atoi(v)
+		if err != nil || port < 1 || port > 65535 {
+			return fmt.Errorf("SHAREO_APP_PORT must be an integer between 1 and 65535")
+		}
+		cfg.Server.Port = port
 	}
 	if v := os.Getenv("SHAREO_DB_USER"); v != "" {
 		cfg.Database.User = v
@@ -178,6 +187,7 @@ func applyEnvOverrides(cfg *Config) {
 	if v := os.Getenv("SHAREO_TRUSTED_ORIGINS"); v != "" {
 		cfg.Server.TrustedOrigins = strings.Split(v, ",")
 	}
+	return nil
 }
 
 // Validate checks that required config fields are present and valid.

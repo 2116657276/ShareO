@@ -1,0 +1,30 @@
+FROM golang:1.25.1-alpine AS builder
+
+ARG MINIO_RELEASE=RELEASE.2025-10-15T17-29-55Z
+ARG TARGETOS=linux
+ARG TARGETARCH=arm64
+ARG HTTP_PROXY
+ARG HTTPS_PROXY
+ARG ALL_PROXY
+ARG NO_PROXY
+
+RUN apk add --no-cache ca-certificates git
+
+ENV CGO_ENABLED=0 \
+    GOOS=${TARGETOS} \
+    GOARCH=${TARGETARCH}
+
+RUN export HTTP_PROXY="$HTTP_PROXY" HTTPS_PROXY="$HTTPS_PROXY" ALL_PROXY="$ALL_PROXY" NO_PROXY="$NO_PROXY" \
+    && go install "github.com/minio/minio@${MINIO_RELEASE}"
+
+FROM alpine:3.22
+
+RUN apk add --no-cache ca-certificates
+
+COPY --from=builder /go/bin/minio /usr/local/bin/minio
+
+ENV MINIO_UPDATE=off
+EXPOSE 9000
+
+ENTRYPOINT ["minio"]
+CMD ["server", "/data", "--console-address", ":9001"]
